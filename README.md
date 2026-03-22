@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MooSQA Radar
 
-## Getting Started
+Urednisko oblikovana spletna aplikacija za zajem novih indie izdaj iz `r/indieheads`, hitro vizualno orientacijo in skupnostno ocenjevanje od 1 do 100.
 
-First, run the development server:
+## Kaj ze deluje
+
+- avtomatski zajem javnih objav iz `https://www.reddit.com/r/indieheads/.json`
+- prepoznavanje tipov `FRESH`, `FRESH ALBUM`, `FRESH EP`, `FRESH PERFORMANCE`
+- vizualna naslovnica z "featured" sekcijo, gridom singlov in petkovo album/EP sekcijo
+- podrobna stran posamezne objave
+- anonimno glasovanje uporabnikov z lokalnim `device` cookie identifikatorjem
+- enrichment sloj za `label`, `genre`, potrjen `release date` in boljse direct listening linke
+- AI-generated enovrsticni opis skladbe oziroma izdaje z `OPENAI_API_KEY` ali lokalni fallback brez kljuca
+- SQLite + Prisma model, pripravljen za dodajanje dodatnih portalov
+- `GET /api/sync` endpoint za cron sinhronizacijo
+
+## Zagon lokalno
+
+1. Namesti odvisnosti:
+
+```bash
+npm install
+```
+
+2. Pripravi okoljske spremenljivke:
+
+```bash
+copy .env.example .env
+```
+
+Po potrebi dodaj tudi:
+
+```bash
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-5-nano
+```
+
+3. Generiraj klienta in inicializiraj bazo:
+
+```bash
+npm run db:setup
+```
+
+4. Zazeni razvojni streznik:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+5. Odpri `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Pri prvem obisku se bo aplikacija sama poskusila napolniti z zacetnimi podatki. Rocni sync lahko sprozis tudi z:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+curl "http://localhost:3000/api/sync?secret=change-me"
+```
 
-## Learn More
+## Produkcijska logika
 
-To learn more about Next.js, take a look at the following resources:
+- nastavi `CRON_SECRET`
+- v hostingu dodaj cron, ki periodicno klice `/api/sync?secret=...`
+- za skoraj takojsnjo objavo novih Reddit zapisov nastavi klic na 5 do 15 minut
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Naslednji poslovni koraki
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- dodaj enrichment za pravo zalozbo in natancen datum izida prek dodatnih glasbenih API-jev
+- razsiri model na vec virov: Bandcamp, Stereogum, BrooklynVegan, FLOOD, NME, Pitchfork
+- dodaj uporabniske profile, uredniske sezname in oglasne oziroma partnerske umestitve

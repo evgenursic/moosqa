@@ -1,0 +1,81 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum ReleaseSource {
+  REDDIT
+}
+
+enum ReleaseType {
+  SINGLE
+  ALBUM
+  EP
+  PERFORMANCE
+  LIVE_SESSION
+  CHART
+  ANNOUNCEMENT
+  OTHER
+}
+
+model Release {
+  id              String        @id @default(cuid())
+  source          ReleaseSource @default(REDDIT)
+  sourceItemId    String        @unique
+  slug            String        @unique
+  title           String
+  artistName      String?
+  projectTitle    String?
+  releaseType     ReleaseType   @default(OTHER)
+  flair           String?
+  summary         String?
+  aiSummary       String?
+  outletName      String?
+  labelName       String?
+  genreName       String?
+  releaseDate     DateTime?
+  publishedAt     DateTime
+  importedAt      DateTime      @default(now())
+  metadataEnrichedAt DateTime?
+  updatedAt       DateTime      @updatedAt
+  redditPermalink String
+  sourceUrl       String
+  imageUrl        String?
+  thumbnailUrl    String?
+  youtubeUrl      String?
+  youtubeMusicUrl String?
+  bandcampUrl     String?
+  musicbrainzReleaseId String?
+  musicbrainzArtistId  String?
+  domain          String?
+  score           Int?
+  commentCount    Int?
+  rawJson         String?
+  scoreAverage    Float         @default(0)
+  scoreCount      Int           @default(0)
+  votes           Vote[]
+
+  @@index([publishedAt(sort: Desc)])
+  @@index([releaseType, publishedAt(sort: Desc)])
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  releaseId String
+  deviceId  String
+  value     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  release   Release  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@unique([releaseId, deviceId])
+}
