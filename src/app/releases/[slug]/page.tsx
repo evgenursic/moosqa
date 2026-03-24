@@ -57,7 +57,17 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
 
             <div className="max-w-4xl border border-[var(--color-line)] bg-[var(--color-panel)] p-6 text-sm leading-7 text-black/66">
               <p className="mb-3 text-[11px] uppercase tracking-[0.18em] text-black/45">AI summary</p>
-              <p>{getDisplaySummary(release.aiSummary, release.summary)}</p>
+              <p>
+                {getDisplaySummary({
+                  aiSummary: release.aiSummary,
+                  summary: release.summary,
+                  artistName: release.artistName,
+                  projectTitle: release.projectTitle,
+                  title: release.title,
+                  releaseType: release.releaseType,
+                  genreName: release.genreName,
+                })}
+              </p>
             </div>
 
             <p className="text-[11px] uppercase tracking-[0.18em] text-black/45">

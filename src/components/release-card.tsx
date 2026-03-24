@@ -90,7 +90,15 @@ export function ReleaseCard({
         </div>
 
         <p className="mt-4 text-sm leading-6 text-black/66">
-          {getDisplaySummary(release.aiSummary, release.summary)}
+          {getDisplaySummary({
+            aiSummary: release.aiSummary,
+            summary: release.summary,
+            artistName: release.artistName,
+            projectTitle: release.projectTitle,
+            title: release.title,
+            releaseType: release.releaseType,
+            genreName: release.genreName,
+          })}
         </p>
 
         <p className="mt-4 text-[11px] uppercase tracking-[0.18em] text-black/45">

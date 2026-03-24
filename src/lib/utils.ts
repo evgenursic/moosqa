@@ -97,18 +97,23 @@ function isMeaningfulDisplayGenre(value: string) {
   return true;
 }
 
-export function getDisplaySummary(
-  aiSummary: string | null | undefined,
-  summary: string | null | undefined,
-) {
-  const normalizedAiSummary = aiSummary?.trim();
+export function getDisplaySummary(input: {
+  aiSummary: string | null | undefined;
+  summary: string | null | undefined;
+  artistName?: string | null | undefined;
+  projectTitle?: string | null | undefined;
+  title?: string | null | undefined;
+  releaseType?: ReleaseType | undefined;
+  genreName?: string | null | undefined;
+}) {
+  const normalizedAiSummary = input.aiSummary?.trim();
   if (normalizedAiSummary) {
     return normalizedAiSummary;
   }
 
-  const normalizedSummary = trimText(summary, 220);
+  const normalizedSummary = trimText(input.summary, 220);
   if (!normalizedSummary) {
-    return "Summary coming soon.";
+    return buildStaticSummaryFallback(input);
   }
 
   const loweredSummary = normalizedSummary.toLowerCase();
@@ -116,8 +121,41 @@ export function getDisplaySummary(
     loweredSummary.includes("spotted on r/indieheads") ||
     loweredSummary.includes("synced ")
   ) {
-    return "Summary coming soon.";
+    return buildStaticSummaryFallback(input);
   }
 
   return normalizedSummary;
+}
+
+function buildStaticSummaryFallback(input: {
+  artistName?: string | null | undefined;
+  projectTitle?: string | null | undefined;
+  title?: string | null | undefined;
+  releaseType?: ReleaseType | undefined;
+  genreName?: string | null | undefined;
+}) {
+  const subject = input.artistName?.trim() || input.projectTitle?.trim() || input.title?.trim() || "This release";
+  const workTitle =
+    input.artistName?.trim() && input.projectTitle?.trim()
+      ? input.projectTitle.trim()
+      : input.title?.trim() || input.projectTitle?.trim() || subject;
+  const genre = getDisplayGenre(input.genreName, input.releaseType || ReleaseType.OTHER).toLowerCase();
+
+  if (input.releaseType === ReleaseType.PERFORMANCE || input.releaseType === ReleaseType.LIVE_SESSION) {
+    if (workTitle !== subject) {
+      return `${subject} brings ${workTitle} into a live frame here, with ${genre} detail pushed closer to the room.`;
+    }
+
+    return `${subject} is captured in a live setting here, with ${genre} detail replacing studio polish.`;
+  }
+
+  if (input.releaseType === ReleaseType.ALBUM) {
+    return `${subject} is front and center on ${workTitle}, shaped around a ${genre} palette rather than a placeholder rollout blurb.`;
+  }
+
+  if (input.releaseType === ReleaseType.EP) {
+    return `${subject} uses ${workTitle} to sketch a compact ${genre} statement with enough detail to stand on its own.`;
+  }
+
+  return `${subject} pushes ${workTitle} forward through a ${genre} angle that still gives the card something concrete to say.`;
 }

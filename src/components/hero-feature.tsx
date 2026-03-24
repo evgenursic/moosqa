@@ -64,7 +64,15 @@ export function HeroFeature({ release }: HeroFeatureProps) {
             ) : null}
           </div>
           <p className="mt-5 max-w-4xl text-sm leading-7 text-black/63">
-            {getDisplaySummary(release.aiSummary, release.summary)}
+            {getDisplaySummary({
+              aiSummary: release.aiSummary,
+              summary: release.summary,
+              artistName: release.artistName,
+              projectTitle: release.projectTitle,
+              title: release.title,
+              releaseType: release.releaseType,
+              genreName: release.genreName,
+            })}
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.18em] text-black/55">

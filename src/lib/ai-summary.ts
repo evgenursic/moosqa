@@ -75,6 +75,16 @@ const GENERIC_SUMMARY_PATTERNS = [
   "feels more exposed",
   "lean into acoustic detail",
   "pointed toward a",
+  "this live setting brings",
+  "this live setting strips",
+  "this live setting leaves",
+  "this live setting gives",
+  "the tiny desk setup leaves",
+  "in the tiny desk room",
+  "the tiny desk framing",
+  "an audiotree session strips",
+  "a world cafe session",
+  "a studio session",
 ];
 
 const MOOD_CUES: Array<[RegExp, string]> = [
@@ -369,36 +379,92 @@ function extractFacts(
 function buildPerformanceSummary(facts: SummaryFacts, seed: number) {
   const setting = facts.performanceSetting || "this live setting";
   const liveStopMatch = setting.match(/^a live stop at (.+)$/i);
+  const focus =
+    facts.workTitle &&
+    facts.workTitle.toLowerCase() !== facts.subject.toLowerCase() &&
+    !isGenericPerformanceFocus(facts.workTitle)
+      ? facts.workTitle
+      : null;
+  const focusLead = focus ? `${facts.subject}'s ${focus}` : facts.subject;
 
   if (facts.guestArtist) {
+    if (setting === "this live setting") {
+      return chooseVariant(seed, [
+        `${facts.subject} and ${facts.guestArtist} pull ${focus || "the song"} into a more exposed live shape, with ${facts.detailCue || "the interplay"} doing the rest`,
+        `${facts.guestArtist} changes the balance of ${focusLead}, giving ${facts.subject} more room for ${facts.detailCue || "the arrangement"} to shift`,
+        `${facts.subject} uses ${facts.guestArtist} as a live foil here, especially once ${facts.detailCue || "the setup"} starts to loosen up`,
+      ]);
+    }
+
     return chooseVariant(seed, [
       `${capitalizeFirst(setting)} gives ${facts.subject} and ${facts.guestArtist} enough space for ${facts.detailCue || "the interplay"} to come forward`,
-      `${capitalizeFirst(setting)} keeps ${facts.subject} close to the mic while ${facts.guestArtist} changes the balance around the arrangement`,
+      `${capitalizeFirst(setting)} keeps ${focusLead} close to the mic while ${facts.guestArtist} changes the balance around the arrangement`,
       `${capitalizeFirst(setting)} sharpens the exchange between ${facts.subject} and ${facts.guestArtist}, especially through ${facts.detailCue || "the exposed setup"}`,
     ]);
   }
 
   if (liveStopMatch?.[1]) {
     return chooseVariant(seed, [
-      `At ${liveStopMatch[1]}, ${facts.subject} lets ${facts.detailCue || "the room sound"} do more of the storytelling`,
-      `At ${liveStopMatch[1]}, ${facts.subject} gets a tighter frame, which pushes ${facts.detailCue || "small arrangement details"} forward`,
-      `At ${liveStopMatch[1]}, ${facts.subject} comes through with more space around ${facts.detailCue || "the live setup"}`,
+      `At ${liveStopMatch[1]}, ${focusLead} lets ${facts.detailCue || "the room sound"} do more of the storytelling`,
+      `At ${liveStopMatch[1]}, ${facts.subject} gets a tighter frame, which pushes ${focus ? `${focus} and ${facts.detailCue || "small arrangement details"}` : facts.detailCue || "small arrangement details"} forward`,
+      `At ${liveStopMatch[1]}, ${focusLead} comes through with more space around ${facts.detailCue || "the live setup"}`,
     ]);
   }
 
   if (/tiny desk/i.test(setting)) {
     return chooseVariant(seed, [
-      `The Tiny Desk setup leaves ${facts.subject} exposed in the right way, with ${facts.detailCue || "ensemble detail"} rising to the surface`,
-      `In the Tiny Desk room, ${facts.subject} sounds more tactile, especially once ${facts.detailCue || "the arrangement"} takes over`,
-      `The Tiny Desk framing brings ${facts.subject} close enough for ${facts.detailCue || "small ensemble moves"} to register clearly`,
+      `The Tiny Desk setup gives ${focusLead} a more tactile shape, with ${facts.detailCue || "ensemble detail"} rising to the surface`,
+      `In the Tiny Desk room, ${focusLead} sounds less polished and more immediate, especially once ${facts.detailCue || "the arrangement"} takes over`,
+      `The Tiny Desk framing brings ${facts.subject} close enough for ${focus ? `${focus} and ${facts.detailCue || "small ensemble moves"}` : facts.detailCue || "small ensemble moves"} to register clearly`,
+    ]);
+  }
+
+  if (/world cafe/i.test(setting)) {
+    return chooseVariant(seed, [
+      `The World Cafe session puts ${focusLead} in a warmer room, with ${facts.detailCue || "small arrangement shifts"} carrying more of the mood`,
+      `World Cafe gives ${facts.subject} a looser frame here, letting ${focus || facts.detailCue || "the live setup"} breathe a bit longer`,
+      `In the World Cafe room, ${focusLead} feels more conversational, especially through ${facts.detailCue || "the stripped arrangement"}`,
+    ]);
+  }
+
+  if (/audiotree/i.test(setting)) {
+    return chooseVariant(seed, [
+      `Audiotree gives ${facts.subject} enough room to stretch ${focus || "the set"}, with ${facts.detailCue || "the live arrangement"} doing the heavy lifting`,
+      `The Audiotree taping makes ${focusLead} feel more physical, especially once ${facts.detailCue || "the room sound"} takes over`,
+      `On Audiotree, ${facts.subject} leans into ${facts.detailCue || "the session setup"}, which makes ${focus || "the performance"} hit differently`,
+    ]);
+  }
+
+  if (/jimmy kimmel/i.test(setting) || /late show/i.test(setting) || /late night/i.test(setting) || /fallon/i.test(setting) || /colbert/i.test(setting)) {
+    return chooseVariant(seed, [
+      `${capitalizeFirst(setting)} frames ${focusLead} with a tighter broadcast snap, leaving ${facts.detailCue || "the core arrangement"} out front`,
+      `On ${stripLeadingArticle(setting)}, ${facts.subject} keeps ${focus || "the performance"} direct, with ${facts.detailCue || "the live band"} carrying most of the punch`,
+      `${capitalizeFirst(setting)} gives ${focusLead} a brighter TV-stage edge, especially once ${facts.detailCue || "the performance details"} start to surface`,
+    ]);
+  }
+
+  if (/brodie sessions/i.test(setting) || /parfait palace/i.test(setting)) {
+    return chooseVariant(seed, [
+      `${capitalizeFirst(setting)} catches ${facts.subject} in a closer frame, which makes ${focus || facts.detailCue || "the arrangement"} feel less fixed`,
+      `In ${stripLeadingArticle(setting)}, ${focusLead} turns more intimate, with ${facts.detailCue || "the room tone"} filling in the rest`,
+      `${capitalizeFirst(setting)} lets ${facts.subject} redraw ${focus || "the song"} through ${facts.detailCue || "a more exposed setup"}`,
+    ]);
+  }
+
+  if (setting === "this live setting") {
+    return chooseVariant(seed, [
+      `${focusLead} feels more exposed in live form, with ${facts.detailCue || facts.themeCue || "the room sound"} carrying the weight`,
+      `${facts.subject} pushes ${focus || "the performance"} into a rougher live frame here, letting ${facts.detailCue || facts.themeCue || "small details"} do more of the work`,
+      `In live form, ${focusLead} trades studio neatness for ${facts.detailCue || facts.themeCue || "a more immediate feel"}`,
+      `${facts.subject} lets ${focus || "the set"} breathe more freely here, especially once ${facts.detailCue || facts.themeCue || "the live setup"} takes over`,
     ]);
   }
 
   return chooseVariant(seed, [
-    `${capitalizeFirst(setting)} brings ${facts.subject} into closer view, with ${facts.detailCue || facts.themeCue || "the arrangement"} doing more of the storytelling`,
-    `${capitalizeFirst(setting)} strips ${facts.subject} back to ${facts.detailCue || facts.themeCue || "the essentials"}, which gives the performance a different weight`,
-    `${capitalizeFirst(setting)} leaves ${facts.subject} with nowhere to hide, pushing ${facts.detailCue || facts.themeCue || "the room sound"} to the front`,
-    `${capitalizeFirst(setting)} gives ${facts.subject} a tighter frame, letting ${facts.detailCue || facts.themeCue || "small details"} reshape the performance`,
+    `${capitalizeFirst(setting)} brings ${focusLead} into closer view, with ${facts.detailCue || facts.themeCue || "the arrangement"} doing more of the storytelling`,
+    `${capitalizeFirst(setting)} strips ${focusLead} back to ${facts.detailCue || facts.themeCue || "the essentials"}, which gives the performance a different weight`,
+    `${capitalizeFirst(setting)} leaves ${focusLead} with nowhere to hide, pushing ${facts.detailCue || facts.themeCue || "the room sound"} to the front`,
+    `${capitalizeFirst(setting)} gives ${facts.subject} a tighter frame, letting ${focus ? `${focus} and ${facts.detailCue || facts.themeCue || "small details"}` : facts.detailCue || facts.themeCue || "small details"} reshape the performance`,
   ]);
 }
 
@@ -503,11 +569,17 @@ function cleanWorkTitleForSummary(value: string, releaseType: ReleaseType) {
     .replace(/\s+/g, " ")
     .trim();
 
-  cleaned = cleaned.replace(/\s+\((live|full interview|studio session).*?\)$/i, "").trim();
+  cleaned = cleaned.replace(/\s+\((?:[^)]*live[^)]*|full interview|studio session).*?\)$/i, "").trim();
   cleaned = cleaned.replace(/\s+(feat\.?|featuring)\s+.+$/i, "").trim();
 
   if (releaseType === ReleaseType.SINGLE && cleaned.includes(" / ")) {
     cleaned = cleaned.split(" / ")[0]?.trim() || cleaned;
+  }
+
+  if (releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION) {
+    cleaned = cleaned.replace(/\s+live at\s+.+$/i, "").trim();
+    cleaned = cleaned.replace(/\s+live w\/\s+.+$/i, "").trim();
+    cleaned = cleaned.replace(/\s+live with\s+.+$/i, "").trim();
   }
 
   cleaned = cleaned.replace(/\s*[/-]\s*['"]?[^'"]+['"]?\s+out\s+[A-Za-z]+\s+\d{1,2}.*$/i, "").trim();
@@ -549,7 +621,7 @@ function extractTrackCount(context: string) {
 }
 
 function extractFeaturedArtist(value: string) {
-  const match = value.match(/\b(?:feat\.?|featuring|w\/)\s+([^/()|]+?)(?=(?:\s*\/|\s*\(|\s*\||$))/i);
+  const match = value.match(/\b(?:feat\.?|featuring|w\/)\s+([^/()|]+?)(?=(?:\s+in\s+[A-Z]|\s+at\s+[A-Z]|\s*\/|\s*\(|\s*\||$))/i);
   return match?.[1]?.trim() || null;
 }
 
@@ -573,6 +645,21 @@ function extractPerformanceSetting(value: string) {
     return `a live stop at ${liveAtMatch[1].trim()}`;
   }
 
+  if (/jimmy kimmel/i.test(value)) {
+    return "a Jimmy Kimmel Live set";
+  }
+  if (/colbert|late show/i.test(value)) {
+    return "a Late Show set";
+  }
+  if (/fallon|tonight show/i.test(value)) {
+    return "a Tonight Show set";
+  }
+  if (/seth meyers|late night/i.test(value)) {
+    return "a Late Night set";
+  }
+  if (/cbs saturday morning/i.test(value)) {
+    return "a CBS Saturday Morning performance";
+  }
   if (/tiny desk/i.test(value)) {
     return "a Tiny Desk setting";
   }
@@ -584,6 +671,12 @@ function extractPerformanceSetting(value: string) {
   }
   if (/audiotree/i.test(value)) {
     return "an Audiotree session";
+  }
+  if (/brodie sessions/i.test(value)) {
+    return "a Brodie Sessions taping";
+  }
+  if (/parfait palace/i.test(value)) {
+    return "a Parfait Palace session";
   }
   if (/studio session/i.test(value)) {
     return "a studio session";
@@ -809,6 +902,21 @@ function capitalizeFirst(value: string) {
 
 function capitalizeWords(value: string) {
   return value.replace(/\b[a-z]/g, (match) => match.toUpperCase());
+}
+
+function stripLeadingArticle(value: string) {
+  return value.replace(/^(a|an|the)\s+/i, "");
+}
+
+function isGenericPerformanceFocus(value: string) {
+  const normalized = value.toLowerCase().trim();
+  return (
+    normalized === "live" ||
+    normalized === "performance" ||
+    normalized === "session" ||
+    normalized === "full session" ||
+    normalized === "tiny desk concert"
+  );
 }
 
 function finalizeSummary(value: string) {
