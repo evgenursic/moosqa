@@ -15,11 +15,16 @@ type SyncResult = {
   enriched: number;
 };
 
+type SyncOptions = {
+  enrich?: boolean;
+};
+
 declare global {
   var __moosqaHomepageSyncPromise: Promise<SyncResult> | null | undefined;
 }
 
-export async function syncIndieheadsReleases() {
+export async function syncIndieheadsReleases(options: SyncOptions = {}) {
+  const { enrich = true } = options;
   await ensureDatabase();
   const removed = await purgeFilteredReleases();
   const sanitized = await sanitizeStoredMetadata();
@@ -50,7 +55,7 @@ export async function syncIndieheadsReleases() {
     }
   }
 
-  const enriched = await enrichRecentReleases(Math.max(24, sanitized + created));
+  const enriched = enrich ? await enrichRecentReleases(Math.max(24, sanitized + created)) : 0;
 
   return {
     scanned: posts.length,
@@ -65,22 +70,19 @@ export async function syncIndieheadsReleases() {
 
 export async function refreshHomepageData() {
   await ensureDatabase();
-  const count = await prisma.release.count();
 
   try {
     await runSharedHomepageSync();
     return;
   } catch (error) {
     console.error("Homepage refresh sync failed.", error);
-
-    if (count === 0) {
-      throw error;
-    }
   }
 
   const removed = await purgeFilteredReleases();
   const sanitized = await sanitizeStoredMetadata();
-  await enrichRecentReleases(Math.max(18, removed + sanitized));
+  if (removed > 0 || sanitized > 0) {
+    await enrichRecentReleases(Math.max(18, removed + sanitized));
+  }
 }
 
 export async function ensureSeedData() {
@@ -254,7 +256,7 @@ async function runSharedHomepageSync() {
     return globalThis.__moosqaHomepageSyncPromise;
   }
 
-  const syncPromise = syncIndieheadsReleases();
+  const syncPromise = syncIndieheadsReleases({ enrich: false });
   globalThis.__moosqaHomepageSyncPromise = syncPromise;
 
   try {
