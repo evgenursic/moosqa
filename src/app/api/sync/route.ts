@@ -5,7 +5,15 @@ import { syncIndieheadsReleases } from "@/lib/sync-releases";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const secret = searchParams.get("secret") || request.headers.get("x-cron-secret");
+  const authorizationHeader = request.headers.get("authorization");
+  const bearerSecret =
+    authorizationHeader?.startsWith("Bearer ")
+      ? authorizationHeader.slice("Bearer ".length)
+      : null;
+  const secret =
+    bearerSecret ||
+    searchParams.get("secret") ||
+    request.headers.get("x-cron-secret");
 
   if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

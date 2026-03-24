@@ -1,11 +1,9 @@
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
-const PRISMA_CLIENT_SCHEMA_VERSION = "release-enrichment-v1";
-
-const adapter = new PrismaBetterSqlite3({
-  url: process.env.DATABASE_URL || "file:./prisma/dev.db",
-});
+const PRISMA_CLIENT_SCHEMA_VERSION = "postgres-production-v1";
+const runtimeDatabaseUrl =
+  process.env.DATABASE_RUNTIME_URL || process.env.DATABASE_URL;
 
 declare global {
   var prismaGlobal: PrismaClient | undefined;
@@ -18,7 +16,9 @@ const shouldCreateClient =
 
 const prismaClient: PrismaClient = shouldCreateClient
   ? new PrismaClient({
-      adapter,
+      adapter: new PrismaPg({
+        connectionString: runtimeDatabaseUrl || "",
+      }),
       log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
     })
   : (globalThis.prismaGlobal as PrismaClient);
