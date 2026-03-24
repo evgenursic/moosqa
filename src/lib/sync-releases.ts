@@ -1,9 +1,10 @@
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
-import { shouldRegenerateAiSummary } from "@/lib/ai-summary";
+import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
 import { fetchRedditPosts, normalizeRedditPost, shouldKeepReleaseRecord } from "@/lib/reddit";
 import { enrichRecentReleases } from "@/lib/release-enrichment";
+import { getDisplayGenre } from "@/lib/utils";
 
 type SyncResult = {
   scanned: number;
@@ -39,13 +40,32 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
   for (const release of releases) {
     const existing = await prisma.release.findUnique({
       where: { sourceItemId: release.sourceItemId },
-      select: { id: true },
+      select: { id: true, aiSummary: true, genreName: true },
     });
+    const fallbackGenre = existing?.genreName || getDisplayGenre(null, release.releaseType);
+    const fallbackAiSummary =
+      existing?.aiSummary ||
+      (await generateAiSummary({
+        artistName: release.artistName,
+        projectTitle: release.projectTitle,
+        title: release.title,
+        genreName: fallbackGenre,
+        releaseType: release.releaseType,
+        sourceExcerpt: release.summary,
+        sourceTitle: release.title,
+        outletName: release.outletName,
+        labelName: null,
+      }));
+    const releaseData = {
+      ...release,
+      genreName: fallbackGenre,
+      aiSummary: fallbackAiSummary,
+    };
 
     await prisma.release.upsert({
       where: { sourceItemId: release.sourceItemId },
-      update: release,
-      create: release,
+      update: releaseData,
+      create: releaseData,
     });
 
     if (existing) {

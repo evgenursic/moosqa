@@ -5,7 +5,7 @@ import { ListeningLinks } from "@/components/listening-links";
 import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { getReleaseBySlug } from "@/lib/sync-releases";
-import { formatPubDate, formatRelative, getDisplayGenre } from "@/lib/utils";
+import { formatPubDate, formatRelative, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +57,7 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
 
             <div className="max-w-4xl border border-[var(--color-line)] bg-[var(--color-panel)] p-6 text-sm leading-7 text-black/66">
               <p className="mb-3 text-[11px] uppercase tracking-[0.18em] text-black/45">AI summary</p>
-              <p>{release.aiSummary || "A short AI-generated summary will appear here once enrichment completes."}</p>
+              <p>{getDisplaySummary(release.aiSummary, release.summary)}</p>
             </div>
 
             <p className="text-[11px] uppercase tracking-[0.18em] text-black/45">

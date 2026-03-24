@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ListeningLinks } from "@/components/listening-links";
 import { ReleaseArtwork } from "@/components/release-artwork";
-import { formatPubDate, formatRelative, formatScore, getDisplayGenre } from "@/lib/utils";
+import { formatPubDate, formatRelative, formatScore, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
 
 type ReleaseCardProps = {
   release: {
@@ -15,6 +15,7 @@ type ReleaseCardProps = {
     releaseType: ReleaseType;
     imageUrl: string | null;
     thumbnailUrl?: string | null;
+    summary?: string | null;
     outletName: string | null;
     sourceUrl: string;
     youtubeUrl?: string | null;
@@ -89,8 +90,7 @@ export function ReleaseCard({
         </div>
 
         <p className="mt-4 text-sm leading-6 text-black/66">
-          {release.aiSummary ||
-            "A short AI-generated summary will appear here once metadata enrichment has completed."}
+          {getDisplaySummary(release.aiSummary, release.summary)}
         </p>
 
         <p className="mt-4 text-[11px] uppercase tracking-[0.18em] text-black/45">

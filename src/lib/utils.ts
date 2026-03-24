@@ -96,3 +96,28 @@ function isMeaningfulDisplayGenre(value: string) {
 
   return true;
 }
+
+export function getDisplaySummary(
+  aiSummary: string | null | undefined,
+  summary: string | null | undefined,
+) {
+  const normalizedAiSummary = aiSummary?.trim();
+  if (normalizedAiSummary) {
+    return normalizedAiSummary;
+  }
+
+  const normalizedSummary = trimText(summary, 220);
+  if (!normalizedSummary) {
+    return "Summary coming soon.";
+  }
+
+  const loweredSummary = normalizedSummary.toLowerCase();
+  if (
+    loweredSummary.includes("spotted on r/indieheads") ||
+    loweredSummary.includes("synced ")
+  ) {
+    return "Summary coming soon.";
+  }
+
+  return normalizedSummary;
+}

@@ -4,7 +4,7 @@ import { ReleaseType } from "@/generated/prisma/enums";
 import { ListeningLinks } from "@/components/listening-links";
 import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
-import { formatPubDate, formatRelative, getDisplayGenre } from "@/lib/utils";
+import { formatPubDate, formatRelative, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
 
 type HeroFeatureProps = {
   release: {
@@ -64,7 +64,7 @@ export function HeroFeature({ release }: HeroFeatureProps) {
             ) : null}
           </div>
           <p className="mt-5 max-w-4xl text-sm leading-7 text-black/63">
-            {release.aiSummary || "A concise AI-written overview will appear here as enriched metadata becomes available."}
+            {getDisplaySummary(release.aiSummary, release.summary)}
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.18em] text-black/55">
