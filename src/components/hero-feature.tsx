@@ -83,9 +83,6 @@ export function HeroFeature({ release }: HeroFeatureProps) {
             <span>{formatRelative(release.publishedAt)}</span>
           </div>
 
-          <p className="mt-6 text-[11px] uppercase tracking-[0.18em] text-black/45">
-            Listening / highlighted buttons work now
-          </p>
           <ListeningLinks release={release} />
 
           <div className="mt-6 flex flex-wrap gap-3">

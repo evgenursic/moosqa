@@ -1,9 +1,11 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { ListeningLinks } from "@/components/listening-links";
 import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
+import { getSiteUrl } from "@/lib/site";
 import { getReleaseBySlug } from "@/lib/sync-releases";
 import { formatPubDate, formatRelative, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
 
@@ -14,6 +16,54 @@ type ReleasePageProps = {
     slug: string;
   }>;
 };
+
+export async function generateMetadata({ params }: ReleasePageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const release = await getReleaseBySlug(slug);
+
+  if (!release) {
+    return {
+      title: "Release not found | MooSQA",
+    };
+  }
+
+  const summary = getDisplaySummary({
+    aiSummary: release.aiSummary,
+    summary: release.summary,
+    artistName: release.artistName,
+    projectTitle: release.projectTitle,
+    title: release.title,
+    releaseType: release.releaseType,
+    genreName: release.genreName,
+  });
+  const title = release.artistName && release.projectTitle
+    ? `${release.artistName} - ${release.projectTitle} | MooSQA`
+    : `${release.title} | MooSQA`;
+  const url = new URL(`/releases/${release.slug}`, getSiteUrl()).toString();
+  const image = release.imageUrl || release.thumbnailUrl || undefined;
+
+  return {
+    title,
+    description: summary,
+    alternates: {
+      canonical: url,
+    },
+    openGraph: {
+      title,
+      description: summary,
+      url,
+      siteName: "MooSQA",
+      type: "article",
+      images: image ? [{ url: image, alt: release.title }] : undefined,
+    },
+    twitter: {
+      card: image ? "summary_large_image" : "summary",
+      title,
+      description: summary,
+      images: image ? [image] : undefined,
+    },
+  };
+}
 
 export default async function ReleasePage({ params }: ReleasePageProps) {
   const { slug } = await params;
@@ -56,7 +106,7 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
             </div>
 
             <div className="max-w-4xl border border-[var(--color-line)] bg-[var(--color-panel)] p-6 text-sm leading-7 text-black/66">
-              <p className="mb-3 text-[11px] uppercase tracking-[0.18em] text-black/45">AI summary</p>
+              <p className="mb-3 text-[11px] uppercase tracking-[0.18em] text-black/45">Summary</p>
               <p>
                 {getDisplaySummary({
                   aiSummary: release.aiSummary,
@@ -70,9 +120,6 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
               </p>
             </div>
 
-            <p className="text-[11px] uppercase tracking-[0.18em] text-black/45">
-              Listening / highlighted buttons work now
-            </p>
             <ListeningLinks release={release} />
 
             <div className="flex flex-wrap gap-3">

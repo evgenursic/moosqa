@@ -1,12 +1,29 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AdvancedSearchButton, AdvancedSearchPanel } from "@/components/advanced-search";
 import { ReleaseCard } from "@/components/release-card";
 import { ReleaseExplorer } from "@/components/release-explorer";
 import { ReleaseType } from "@/generated/prisma/enums";
+import { getSiteUrl } from "@/lib/site";
 import { getHomepageData, refreshHomepageData } from "@/lib/sync-releases";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Music Radar",
+  description:
+    "Track fresh indie singles, albums, EPs and live sessions with a fast editorial feed built around r/indieheads discoveries.",
+  alternates: {
+    canonical: getSiteUrl(),
+  },
+  openGraph: {
+    title: "MooSQA | Music Radar",
+    description:
+      "Track fresh indie singles, albums, EPs and live sessions with a fast editorial feed built around r/indieheads discoveries.",
+    url: getSiteUrl(),
+  },
+};
 
 type HomePageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;

@@ -101,9 +101,6 @@ export function ReleaseCard({
           })}
         </p>
 
-        <p className="mt-4 text-[11px] uppercase tracking-[0.18em] text-black/45">
-          Listening / highlighted buttons work now
-        </p>
         <ListeningLinks release={release} compact />
 
         <div className="mt-4">
