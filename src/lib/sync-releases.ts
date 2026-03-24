@@ -1,6 +1,7 @@
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
+import { shouldRegenerateAiSummary } from "@/lib/ai-summary";
 import { fetchRedditPosts, normalizeRedditPost, shouldKeepReleaseRecord } from "@/lib/reddit";
 import { enrichRecentReleases } from "@/lib/release-enrichment";
 
@@ -49,7 +50,7 @@ export async function syncIndieheadsReleases() {
     }
   }
 
-  const enriched = await enrichRecentReleases(Math.max(12, sanitized));
+  const enriched = await enrichRecentReleases(Math.max(24, sanitized + created));
 
   return {
     scanned: posts.length,
@@ -79,7 +80,7 @@ export async function refreshHomepageData() {
 
   const removed = await purgeFilteredReleases();
   const sanitized = await sanitizeStoredMetadata();
-  await enrichRecentReleases(Math.max(6, removed + sanitized));
+  await enrichRecentReleases(Math.max(18, removed + sanitized));
 }
 
 export async function ensureSeedData() {
@@ -186,6 +187,8 @@ async function sanitizeStoredMetadata() {
     where: {
       OR: [
         { genreName: { startsWith: "http" } },
+        { genreName: { equals: "https:" } },
+        { genreName: { equals: "http:" } },
         { genreName: { contains: "schema.org" } },
         { genreName: { equals: "musicrecording" } },
         { genreName: { equals: "singlerelease" } },
@@ -195,6 +198,14 @@ async function sanitizeStoredMetadata() {
         { labelName: { contains: "schema.org" } },
         { aiSummary: { contains: "schema.googleapis.com" } },
         { aiSummary: { contains: "schema.org" } },
+        { aiSummary: { contains: "lands with a " } },
+        { aiSummary: { contains: "arrives with a focused " } },
+        { aiSummary: { contains: "easy to place on a first listen" } },
+        { aiSummary: { contains: "opening moments" } },
+        { aiSummary: { contains: "clean entry point" } },
+        { aiSummary: { contains: "rather than overloading the arrangement" } },
+        { aiSummary: { contains: "the main motif carries" } },
+        { aiSummary: { contains: "built around strong tonal contrast" } },
       ],
     },
     data: {
@@ -205,7 +216,37 @@ async function sanitizeStoredMetadata() {
     },
   });
 
-  return result.count;
+  const genericSummaryRows = await prisma.release.findMany({
+    where: {
+      aiSummary: {
+        not: null,
+      },
+    },
+    select: {
+      id: true,
+      aiSummary: true,
+    },
+  });
+
+  const genericSummaryIds = genericSummaryRows
+    .filter((release) => shouldRegenerateAiSummary(release.aiSummary))
+    .map((release) => release.id);
+
+  if (genericSummaryIds.length > 0) {
+    await prisma.release.updateMany({
+      where: {
+        id: {
+          in: genericSummaryIds,
+        },
+      },
+      data: {
+        aiSummary: null,
+        metadataEnrichedAt: null,
+      },
+    });
+  }
+
+  return result.count + genericSummaryIds.length;
 }
 
 async function runSharedHomepageSync() {

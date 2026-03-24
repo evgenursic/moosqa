@@ -16,6 +16,7 @@ type ReleaseExplorerProps = {
     projectTitle: string | null;
     releaseType: ReleaseType;
     imageUrl: string | null;
+    thumbnailUrl?: string | null;
     outletName: string | null;
     sourceUrl: string;
     youtubeUrl?: string | null;

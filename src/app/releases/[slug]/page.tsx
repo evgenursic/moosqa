@@ -90,7 +90,7 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
               title={release.title}
               artistName={release.artistName}
               projectTitle={release.projectTitle}
-              imageUrl={release.imageUrl}
+              imageUrl={release.imageUrl || release.thumbnailUrl}
               genreName={displayGenre}
               imageClassName="aspect-[4/3]"
             />

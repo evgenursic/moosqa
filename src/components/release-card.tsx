@@ -14,6 +14,7 @@ type ReleaseCardProps = {
     projectTitle: string | null;
     releaseType: ReleaseType;
     imageUrl: string | null;
+    thumbnailUrl?: string | null;
     outletName: string | null;
     sourceUrl: string;
     youtubeUrl?: string | null;
@@ -44,7 +45,7 @@ export function ReleaseCard({
           title={release.title}
           artistName={release.artistName}
           projectTitle={release.projectTitle}
-          imageUrl={release.imageUrl}
+          imageUrl={release.imageUrl || release.thumbnailUrl || null}
           genreName={displayGenre}
           imageClassName="aspect-[4/3]"
           priority={priority}

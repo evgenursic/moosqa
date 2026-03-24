@@ -5,6 +5,7 @@ const USER_AGENT =
   `MooSQA/0.3 (${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"})`;
 
 type SourceMetadata = {
+  sourceTitle?: string | null;
   sourceExcerpt?: string | null;
   genreName?: string | null;
   labelName?: string | null;
@@ -41,12 +42,25 @@ export async function resolveSourceMetadata(sourceUrl: string): Promise<SourceMe
     const hrefCandidates = extractAnchorCandidates(html, finalUrl);
     const platformLinkCandidates = await resolvePlatformCandidates(hrefCandidates);
     const jsonLd = parseJsonLd(html);
+    const sourceTitle =
+      sanitizeText(
+        getMetaContent(html, "og:title") ||
+          getMetaContent(html, "twitter:title") ||
+          findStringValue(jsonLd, ["headline"]) ||
+          findStringValue(jsonLd, ["name"]) ||
+          getDocumentTitle(html),
+      ) || null;
+    const sourceExcerpt =
+      sanitizeText(
+        getMetaContent(html, "description") ||
+          getMetaContent(html, "og:description") ||
+          findStringValue(jsonLd, ["description"]) ||
+          extractBodyExcerpt(html),
+      ) || null;
 
     return {
-      sourceExcerpt:
-        getMetaContent(html, "description") ||
-        getMetaContent(html, "og:description") ||
-        findStringValue(jsonLd, ["description"]),
+      sourceTitle,
+      sourceExcerpt,
       genreName:
         findStringValue(jsonLd, ["genre"]) ||
         (sourcePlatform === "youtube" || sourcePlatform === "youtube-music"
@@ -258,6 +272,58 @@ function findStringValue(input: unknown, path: string[]): string | null {
   }
 
   return null;
+}
+
+function getDocumentTitle(html: string) {
+  const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  return match?.[1] ? decodeHtml(match[1]) : null;
+}
+
+function extractBodyExcerpt(html: string) {
+  const matches = [...html.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)];
+  const paragraphs = matches
+    .map((match) => sanitizeText(match[1]))
+    .filter((value): value is string => Boolean(value))
+    .filter((value) => isMeaningfulExcerpt(value));
+
+  if (paragraphs.length === 0) {
+    return null;
+  }
+
+  return paragraphs.slice(0, 2).join(" ").slice(0, 320).trim();
+}
+
+function sanitizeText(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  return decodeHtml(value)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b(read more|subscribe|newsletter|cookie policy|privacy policy|all rights reserved)\b/gi, " ")
+    .trim();
+}
+
+function isMeaningfulExcerpt(value: string) {
+  if (value.length < 70) {
+    return false;
+  }
+
+  const normalized = value.toLowerCase();
+  const blocked = [
+    "javascript",
+    "newsletter",
+    "subscribe",
+    "cookie",
+    "privacy policy",
+    "advertisement",
+    "sign up",
+    "log in",
+    "accept all",
+  ];
+
+  return !blocked.some((term) => normalized.includes(term));
 }
 
 function decodeHtml(value: string) {

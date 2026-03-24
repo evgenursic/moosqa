@@ -1,6 +1,6 @@
 import { ReleaseType } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
-import { generateAiSummary } from "@/lib/ai-summary";
+import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
 import { fetchMusicMetadata, type MusicMetadata } from "@/lib/musicbrainz";
 import { detectPlatform } from "@/lib/listening-links";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
@@ -46,6 +46,14 @@ export async function enrichRecentReleases(limit = 8) {
 }
 
 function needsEnrichment(release: EnrichableRelease, wantsAi: boolean) {
+  if (!release.imageUrl && !release.thumbnailUrl) {
+    return true;
+  }
+
+  if (!isMeaningfulStoredGenre(release.genreName)) {
+    return true;
+  }
+
   if (!release.metadataEnrichedAt) {
     return true;
   }
@@ -59,7 +67,7 @@ function needsEnrichment(release: EnrichableRelease, wantsAi: boolean) {
   if (
     isCriticalStale &&
     (
-      !release.imageUrl ||
+      (!release.imageUrl && !release.thumbnailUrl) ||
       !release.genreName ||
       !release.youtubeUrl ||
       !release.youtubeMusicUrl ||
@@ -82,6 +90,10 @@ function needsEnrichment(release: EnrichableRelease, wantsAi: boolean) {
   }
 
   if (wantsAi && !release.aiSummary) {
+    return true;
+  }
+
+  if (shouldRegenerateAiSummary(release.aiSummary)) {
     return true;
   }
 
@@ -118,16 +130,27 @@ async function buildReleaseEnrichment(release: EnrichableRelease) {
     normalizeLabel(sourceMetadata.labelName) ||
     release.labelName ||
     null;
+  const summaryNeedsRefresh = shouldRegenerateAiSummary(release.aiSummary);
+  const summaryContext = [
+    sourceMetadata.sourceTitle,
+    sourceMetadata.sourceExcerpt,
+    release.summary,
+  ]
+    .filter(Boolean)
+    .join(". ");
 
   const aiSummary =
-    release.aiSummary ||
+    (!summaryNeedsRefresh && release.aiSummary) ||
     (await generateAiSummary({
       artistName: release.artistName,
       projectTitle: release.projectTitle,
       title: release.title,
       genreName,
       releaseType: release.releaseType,
-      sourceExcerpt: sourceMetadata.sourceExcerpt || release.summary,
+      sourceExcerpt: summaryContext || null,
+      sourceTitle: sourceMetadata.sourceTitle || null,
+      outletName: release.outletName || null,
+      labelName,
     }));
 
   return {
@@ -183,6 +206,11 @@ function normalizeGenre(value: string | null | undefined) {
     .replace(/\s+/g, " ")
     .trim();
 
+  if (normalized.toLowerCase().startsWith("http")) {
+    const parsedGenre = extractGenreFromUrl(normalized);
+    return parsedGenre ? parsedGenre.replace(/-/g, " ") : null;
+  }
+
   const firstMeaningfulGenre = normalized
     .split(/\s*\/\s*/)
     .map((genre) => genre.trim())
@@ -218,11 +246,11 @@ function normalizeLabel(value: string | null | undefined) {
 function scoreEnrichmentPriority(release: EnrichableRelease, wantsAi: boolean) {
   let score = 0;
 
-  if (!release.imageUrl) {
+  if (!release.imageUrl && !release.thumbnailUrl) {
     score += 10;
   }
 
-  if (!release.genreName) {
+  if (!isMeaningfulStoredGenre(release.genreName)) {
     score += 8;
   }
 
@@ -261,6 +289,24 @@ function isMeaningfulGenre(value: string) {
   }
 
   return !normalized.includes("schema.org");
+}
+
+function isMeaningfulStoredGenre(value: string | null | undefined) {
+  if (!value) {
+    return false;
+  }
+
+  return isMeaningfulGenre(value.trim());
+}
+
+function extractGenreFromUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    return parts[parts.length - 1] || null;
+  } catch {
+    return null;
+  }
 }
 
 function inferGenreFromRelease(release: EnrichableRelease) {
