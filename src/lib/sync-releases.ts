@@ -20,8 +20,14 @@ type SyncOptions = {
   enrich?: boolean;
 };
 
+type NormalizedReleaseRecord = NonNullable<ReturnType<typeof normalizeRedditPost>>;
+
+const HOMEPAGE_SYNC_POST_LIMIT = 36;
+const HOMEPAGE_SYNC_INTERVAL_MS = 90_000;
+
 declare global {
   var __moosqaHomepageSyncPromise: Promise<SyncResult> | null | undefined;
+  var __moosqaHomepageSyncCompletedAt: number | undefined;
 }
 
 export async function syncIndieheadsReleases(options: SyncOptions = {}) {
@@ -34,56 +40,10 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
     .map(normalizeRedditPost)
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
-  let created = 0;
-  let updated = 0;
-
-  for (const release of releases) {
-    const existing = await prisma.release.findUnique({
-      where: { sourceItemId: release.sourceItemId },
-      select: {
-        id: true,
-        aiSummary: true,
-        genreName: true,
-        imageUrl: true,
-        thumbnailUrl: true,
-      },
-    });
-    const fallbackGenre = existing?.genreName || getDisplayGenre(null, release.releaseType);
-    const fallbackAiSummary =
-      existing?.aiSummary ||
-      (await generateAiSummary({
-        artistName: release.artistName,
-        projectTitle: release.projectTitle,
-        title: release.title,
-        genreName: fallbackGenre,
-        releaseType: release.releaseType,
-        sourceExcerpt: release.summary,
-        sourceTitle: release.title,
-        outletName: release.outletName,
-        labelName: null,
-      }));
-    const releaseData = {
-      ...release,
-      imageUrl: release.imageUrl || existing?.imageUrl || null,
-      thumbnailUrl: release.thumbnailUrl || existing?.thumbnailUrl || release.imageUrl || existing?.imageUrl || null,
-      genreName: fallbackGenre,
-      aiSummary: fallbackAiSummary,
-    };
-
-    await prisma.release.upsert({
-      where: { sourceItemId: release.sourceItemId },
-      update: releaseData,
-      create: releaseData,
-    });
-
-    if (existing) {
-      updated += 1;
-    } else {
-      created += 1;
-    }
-  }
+  const { created, updated } = await upsertNormalizedReleases(releases);
 
   const enriched = enrich ? await enrichRecentReleases(Math.max(24, sanitized + created)) : 0;
+  globalThis.__moosqaHomepageSyncCompletedAt = Date.now();
 
   return {
     scanned: posts.length,
@@ -98,18 +58,19 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
 
 export async function refreshHomepageData() {
   await ensureDatabase();
+  const lastCompletedAt = globalThis.__moosqaHomepageSyncCompletedAt ?? 0;
+  const recentlySynced = Date.now() - lastCompletedAt < HOMEPAGE_SYNC_INTERVAL_MS;
+
+  if (recentlySynced) {
+    return;
+  }
 
   try {
     await runSharedHomepageSync();
+    globalThis.__moosqaHomepageSyncCompletedAt = Date.now();
     return;
   } catch (error) {
     console.error("Homepage refresh sync failed.", error);
-  }
-
-  const removed = await purgeFilteredReleases();
-  const sanitized = await sanitizeStoredMetadata();
-  if (removed > 0 || sanitized > 0) {
-    await enrichRecentReleases(Math.max(18, removed + sanitized));
   }
 }
 
@@ -284,7 +245,7 @@ async function runSharedHomepageSync() {
     return globalThis.__moosqaHomepageSyncPromise;
   }
 
-  const syncPromise = syncIndieheadsReleases({ enrich: false });
+  const syncPromise = syncLatestHomepageReleases();
   globalThis.__moosqaHomepageSyncPromise = syncPromise;
 
   try {
@@ -292,4 +253,92 @@ async function runSharedHomepageSync() {
   } finally {
     globalThis.__moosqaHomepageSyncPromise = null;
   }
+}
+
+async function syncLatestHomepageReleases() {
+  const posts = await fetchRedditPosts();
+  const releases = posts
+    .map(normalizeRedditPost)
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .slice(0, HOMEPAGE_SYNC_POST_LIMIT);
+
+  const { created, updated } = await upsertNormalizedReleases(releases);
+
+  return {
+    scanned: posts.length,
+    matched: releases.length,
+    created,
+    updated,
+    removed: 0,
+    sanitized: 0,
+    enriched: 0,
+  };
+}
+
+async function upsertNormalizedReleases(releases: NormalizedReleaseRecord[]) {
+  let created = 0;
+  let updated = 0;
+
+  for (const release of releases) {
+    const existing = await prisma.release.findUnique({
+      where: { sourceItemId: release.sourceItemId },
+      select: {
+        id: true,
+        aiSummary: true,
+        genreName: true,
+        imageUrl: true,
+        thumbnailUrl: true,
+      },
+    });
+
+    const releaseData = await buildReleaseDataForUpsert(release, existing);
+
+    await prisma.release.upsert({
+      where: { sourceItemId: release.sourceItemId },
+      update: releaseData,
+      create: releaseData,
+    });
+
+    if (existing) {
+      updated += 1;
+    } else {
+      created += 1;
+    }
+  }
+
+  return { created, updated };
+}
+
+async function buildReleaseDataForUpsert(
+  release: NormalizedReleaseRecord,
+  existing: {
+    id: string;
+    aiSummary: string | null;
+    genreName: string | null;
+    imageUrl: string | null;
+    thumbnailUrl: string | null;
+  } | null,
+) {
+  const fallbackGenre = existing?.genreName || getDisplayGenre(null, release.releaseType);
+  const fallbackAiSummary =
+    existing?.aiSummary ||
+    (await generateAiSummary({
+      artistName: release.artistName,
+      projectTitle: release.projectTitle,
+      title: release.title,
+      genreName: fallbackGenre,
+      releaseType: release.releaseType,
+      sourceExcerpt: release.summary,
+      sourceTitle: release.title,
+      outletName: release.outletName,
+      labelName: null,
+    }));
+
+  return {
+    ...release,
+    imageUrl: release.imageUrl || existing?.imageUrl || null,
+    thumbnailUrl: release.thumbnailUrl || existing?.thumbnailUrl || release.imageUrl || existing?.imageUrl || null,
+    genreName: fallbackGenre,
+    aiSummary: fallbackAiSummary,
+  };
 }
