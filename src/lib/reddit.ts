@@ -7,6 +7,8 @@ const REDDIT_URLS = [
   "https://www.reddit.com/r/indieheads/.json?limit=100&raw_json=1",
 ];
 const USER_AGENT = "moosqa/0.1 (+https://moosqa.local)";
+const BROWSER_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 
 type RedditListing = {
   data?: {
@@ -61,34 +63,59 @@ export type NormalizedRelease = {
 
 export async function fetchRedditPosts() {
   let lastError: Error | null = null;
+  const headerVariants = getRedditHeaderVariants();
 
   for (const redditUrl of REDDIT_URLS) {
-    try {
-      const response = await fetch(redditUrl, {
-        headers: {
-          "User-Agent": process.env.REDDIT_USER_AGENT || USER_AGENT,
-          Accept: "application/json",
-        },
-        cache: "no-store",
-        next: { revalidate: 0 },
-      });
+    for (const headers of headerVariants) {
+      try {
+        const response = await fetch(redditUrl, {
+          headers,
+          cache: "no-store",
+          next: { revalidate: 0 },
+        });
 
-      if (!response.ok) {
-        lastError = new Error(`Reddit sync failed with status ${response.status} for ${redditUrl}`);
-        continue;
-      }
+        if (!response.ok) {
+          lastError = new Error(`Reddit sync failed with status ${response.status} for ${redditUrl}`);
+          continue;
+        }
 
-      const payload = (await response.json()) as RedditListing;
-      const posts = payload.data?.children?.map((child) => child.data) ?? [];
-      if (posts.length > 0) {
-        return posts;
+        const payload = (await response.json()) as RedditListing;
+        const posts = payload.data?.children?.map((child) => child.data) ?? [];
+        if (posts.length > 0) {
+          return posts;
+        }
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
       }
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
     }
   }
 
   throw lastError || new Error("Reddit sync failed for all endpoints.");
+}
+
+function getRedditHeaderVariants() {
+  const configuredAgent = process.env.REDDIT_USER_AGENT || USER_AGENT;
+  const commonHeaders = {
+    Accept: "application/json,text/plain,*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+    Referer: "https://www.reddit.com/",
+  };
+
+  const variants = [
+    {
+      "User-Agent": configuredAgent,
+      ...commonHeaders,
+    },
+  ];
+
+  if (configuredAgent !== BROWSER_USER_AGENT) {
+    variants.push({
+      "User-Agent": BROWSER_USER_AGENT,
+      ...commonHeaders,
+    });
+  }
+
+  return variants;
 }
 
 export function normalizeRedditPost(post: RedditPost): NormalizedRelease | null {
