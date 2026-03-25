@@ -288,7 +288,7 @@ export function shouldKeepReleaseRecord(input: {
   }
 
   if (input.releaseType === ReleaseType.PERFORMANCE) {
-    return hasLiveContext(title);
+    return true;
   }
 
   if (title.includes("interview")) {
@@ -305,21 +305,4 @@ function isRedditHostedOnly(sourceUrl: string) {
   } catch {
     return false;
   }
-}
-
-function hasLiveContext(title: string) {
-  const liveIndicators = [
-    "live",
-    "performance",
-    "session",
-    "kexp",
-    "tiny desk",
-    "world cafe",
-    "audiotree",
-    "live at",
-    "tv performance",
-    "full performance",
-  ];
-
-  return liveIndicators.some((indicator) => title.includes(indicator));
 }
