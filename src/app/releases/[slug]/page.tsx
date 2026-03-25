@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 import { ListeningLinks } from "@/components/listening-links";
 import { RatingMeter } from "@/components/rating-meter";
@@ -11,6 +12,8 @@ import { formatPubDate, formatRelative, getDisplayGenre, getDisplaySummary } fro
 
 export const dynamic = "force-dynamic";
 
+const getCachedReleaseBySlug = cache(async (slug: string) => getReleaseBySlug(slug));
+
 type ReleasePageProps = {
   params: Promise<{
     slug: string;
@@ -19,7 +22,7 @@ type ReleasePageProps = {
 
 export async function generateMetadata({ params }: ReleasePageProps): Promise<Metadata> {
   const { slug } = await params;
-  const release = await getReleaseBySlug(slug);
+  const release = await getCachedReleaseBySlug(slug);
 
   if (!release) {
     return {
@@ -67,7 +70,7 @@ export async function generateMetadata({ params }: ReleasePageProps): Promise<Me
 
 export default async function ReleasePage({ params }: ReleasePageProps) {
   const { slug } = await params;
-  const release = await getReleaseBySlug(slug);
+  const release = await getCachedReleaseBySlug(slug);
 
   if (!release) {
     notFound();
