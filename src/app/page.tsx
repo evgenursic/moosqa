@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 
 import { ReleaseCard } from "@/components/release-card";
 import { ReleaseExplorer } from "@/components/release-explorer";
+import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { ReleaseType } from "@/generated/prisma/enums";
+import { dedupeReleasesForDisplay } from "@/lib/display-dedupe";
 import { getSiteUrl } from "@/lib/site";
 import { getHomepageData, refreshHomepageData } from "@/lib/sync-releases";
 
@@ -39,23 +41,25 @@ export default async function Home({ searchParams }: HomePageProps) {
   );
   await refreshHomepageData();
   const { releases, performances } = await getHomepageData();
+  const displayReleases = dedupeReleasesForDisplay(releases);
+  const displayPerformances = dedupeReleasesForDisplay(performances);
 
-  const latestReleases = releases.slice(0, 15);
-  const rankedStories = [...releases]
+  const latestReleases = displayReleases.slice(0, 15);
+  const rankedStories = [...displayReleases]
     .filter((release) => release.scoreCount > 0)
     .sort((left, right) => right.scoreAverage - left.scoreAverage)
     .slice(0, 8);
-  const topRated = rankedStories.length > 0 ? rankedStories : releases.slice(0, 8);
-  const topEngaged = [...releases]
+  const topRated = rankedStories.length > 0 ? rankedStories : displayReleases.slice(0, 8);
+  const topEngaged = [...displayReleases]
     .sort((left, right) => getEngagementScore(right) - getEngagementScore(left))
     .slice(0, 8);
-  const albumReleases = releases
+  const albumReleases = displayReleases
     .filter((release) => release.releaseType === ReleaseType.ALBUM)
     .slice(0, 12);
-  const epReleases = releases
+  const epReleases = displayReleases
     .filter((release) => release.releaseType === ReleaseType.EP)
     .slice(0, 12);
-  const liveReleases = performances.slice(0, 12);
+  const liveReleases = displayPerformances.slice(0, 12);
 
   return (
     <main className="editorial-shell flex-1 px-4 pb-10 pt-4 md:px-8">
@@ -64,7 +68,7 @@ export default async function Home({ searchParams }: HomePageProps) {
 
         {hasSearchResults ? (
           <ReleaseExplorer
-            releases={releases.map((release) => ({
+            releases={displayReleases.map((release) => ({
               ...release,
               summary: release.summary,
               publishedAt: release.publishedAt.toISOString(),
@@ -140,6 +144,8 @@ export default async function Home({ searchParams }: HomePageProps) {
           title="Live performances"
           releases={liveReleases}
         />
+
+        <SiteFooter />
       </div>
     </main>
   );
