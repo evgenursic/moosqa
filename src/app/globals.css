@@ -28,12 +28,14 @@
 html {
   scroll-behavior: smooth;
   scroll-padding-top: 7rem;
+  overflow-x: clip;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-space-mono), monospace;
+  overflow-x: clip;
   background-image:
     radial-gradient(circle at top left, rgba(248, 250, 255, 0.76), transparent 26%),
     radial-gradient(circle at top right, rgba(207, 220, 245, 0.52), transparent 24%),
@@ -55,6 +57,7 @@ img {
 
 .editorial-shell {
   position: relative;
+  overflow-x: clip;
 }
 
 .editorial-shell::before {

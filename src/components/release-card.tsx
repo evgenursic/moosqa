@@ -40,8 +40,8 @@ export function ReleaseCard({
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
 
   return (
-    <article className="border-t border-[var(--color-line)] pt-6">
-      <Link href={`/releases/${release.slug}`} className="block">
+    <article className="min-w-0 border-t border-[var(--color-line)] pt-6">
+      <Link href={`/releases/${release.slug}`} className="block min-w-0">
         <ReleaseArtwork
           title={release.title}
           artistName={release.artistName}
@@ -71,18 +71,18 @@ export function ReleaseCard({
           <h3
             className={
               compact
-                ? "mt-3 text-[2.15rem] leading-[0.94] text-[var(--color-ink)] serif-display"
-                : "mt-3 text-[3rem] leading-[0.94] text-[var(--color-ink)] serif-display"
+                ? "mt-3 break-words text-[2rem] leading-[0.94] text-[var(--color-ink)] serif-display md:text-[2.15rem]"
+                : "mt-3 break-words text-[2.35rem] leading-[0.94] text-[var(--color-ink)] serif-display md:text-[3rem]"
             }
           >
             {release.artistName || release.projectTitle || release.title}
           </h3>
-          <p className="mt-3 text-lg leading-7 text-black/68 serif-display">
+          <p className="mt-3 break-words text-lg leading-7 text-black/68 serif-display">
             {release.artistName && release.projectTitle ? release.projectTitle : release.title}
           </p>
         </Link>
 
-        <div className="mt-4 flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.18em] text-black/55">
+        <div className="mt-4 flex flex-wrap gap-3 break-words text-[11px] uppercase tracking-[0.18em] text-black/55">
           <span>{release.outletName || "Source pending"}</span>
           <span>
             Community {formatScore(release.scoreAverage || 0)} / {release.scoreCount} ratings

@@ -53,7 +53,7 @@ export function SiteHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-[var(--color-line)] bg-[var(--color-paper)] backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-[var(--color-line)] bg-[var(--color-paper)]">
         <div className="border-b border-[var(--color-soft-line)] px-4 py-4 md:px-6 lg:px-8 lg:py-8">
           <div className="flex items-center justify-between gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-start lg:gap-8">
             <div className="flex items-center gap-3 lg:block">
@@ -61,7 +61,7 @@ export function SiteHeader() {
                 type="button"
                 onClick={() => setMenuOpen(true)}
                 aria-label="Open navigation menu"
-                className="inline-flex h-11 w-11 items-center justify-center border border-[var(--color-line)] bg-[var(--color-paper)] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)] lg:hidden"
+                className="inline-flex h-11 w-11 items-center justify-center text-[var(--color-ink)] transition hover:text-[var(--color-accent-strong)] lg:hidden"
               >
                 <Menu size={20} strokeWidth={1.8} />
               </button>
@@ -102,7 +102,7 @@ export function SiteHeader() {
                 <AdvancedSearchButton className="inline-flex items-center justify-center transition hover:opacity-70" />
               </div>
 
-              <AdvancedSearchButton className="inline-flex h-11 w-11 items-center justify-center border border-[var(--color-line)] bg-[var(--color-paper)] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)] lg:hidden" />
+              <AdvancedSearchButton className="inline-flex h-11 w-11 items-center justify-center text-[var(--color-ink)] transition hover:text-[var(--color-accent-strong)] lg:hidden" />
             </div>
           </div>
         </div>

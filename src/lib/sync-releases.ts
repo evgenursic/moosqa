@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
 import { fetchRedditPosts, normalizeRedditPost, shouldKeepReleaseRecord } from "@/lib/reddit";
 import { enrichRecentReleases } from "@/lib/release-enrichment";
+import { resolveSourceMetadata } from "@/lib/source-metadata";
 import { getDisplayGenre } from "@/lib/utils";
 
 type SyncResult = {
@@ -319,7 +320,13 @@ async function buildReleaseDataForUpsert(
     thumbnailUrl: string | null;
   } | null,
 ) {
-  const fallbackGenre = existing?.genreName || getDisplayGenre(null, release.releaseType);
+  const sourceMetadata =
+    !release.imageUrl && !existing?.imageUrl
+      ? await resolveSourceMetadata(release.sourceUrl)
+      : null;
+  const fallbackGenre =
+    existing?.genreName ||
+    getDisplayGenre(sourceMetadata?.genreName, release.releaseType);
   const fallbackAiSummary =
     existing?.aiSummary ||
     (await generateAiSummary({
@@ -336,8 +343,14 @@ async function buildReleaseDataForUpsert(
 
   return {
     ...release,
-    imageUrl: release.imageUrl || existing?.imageUrl || null,
-    thumbnailUrl: release.thumbnailUrl || existing?.thumbnailUrl || release.imageUrl || existing?.imageUrl || null,
+    imageUrl: release.imageUrl || existing?.imageUrl || sourceMetadata?.sourceImageUrl || null,
+    thumbnailUrl:
+      release.thumbnailUrl ||
+      existing?.thumbnailUrl ||
+      release.imageUrl ||
+      existing?.imageUrl ||
+      sourceMetadata?.sourceImageUrl ||
+      null,
     genreName: fallbackGenre,
     aiSummary: fallbackAiSummary,
   };
