@@ -24,11 +24,9 @@ type SyncOptions = {
 type NormalizedReleaseRecord = NonNullable<ReturnType<typeof normalizeRedditPost>>;
 
 const HOMEPAGE_SYNC_POST_LIMIT = 36;
-const HOMEPAGE_SYNC_INTERVAL_MS = 90_000;
 
 declare global {
   var __moosqaHomepageSyncPromise: Promise<SyncResult> | null | undefined;
-  var __moosqaHomepageSyncCompletedAt: number | undefined;
 }
 
 export async function syncIndieheadsReleases(options: SyncOptions = {}) {
@@ -44,7 +42,6 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
   const { created, updated } = await upsertNormalizedReleases(releases);
 
   const enriched = enrich ? await enrichRecentReleases(Math.max(24, sanitized + created)) : 0;
-  globalThis.__moosqaHomepageSyncCompletedAt = Date.now();
 
   return {
     scanned: posts.length,
@@ -59,16 +56,9 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
 
 export async function refreshHomepageData() {
   await ensureDatabase();
-  const lastCompletedAt = globalThis.__moosqaHomepageSyncCompletedAt ?? 0;
-  const recentlySynced = Date.now() - lastCompletedAt < HOMEPAGE_SYNC_INTERVAL_MS;
-
-  if (recentlySynced) {
-    return;
-  }
 
   try {
     await runSharedHomepageSync();
-    globalThis.__moosqaHomepageSyncCompletedAt = Date.now();
     return;
   } catch (error) {
     console.error("Homepage refresh sync failed.", error);

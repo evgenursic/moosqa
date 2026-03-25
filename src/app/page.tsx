@@ -8,6 +8,7 @@ import { getSiteUrl } from "@/lib/site";
 import { getHomepageData, refreshHomepageData } from "@/lib/sync-releases";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export const metadata: Metadata = {
   title: "Music Radar",
