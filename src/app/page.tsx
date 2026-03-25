@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
-import { AdvancedSearchButton, AdvancedSearchPanel } from "@/components/advanced-search";
 import { ReleaseCard } from "@/components/release-card";
 import { ReleaseExplorer } from "@/components/release-explorer";
+import { SiteHeader } from "@/components/site-header";
 import { ReleaseType } from "@/generated/prisma/enums";
 import { getSiteUrl } from "@/lib/site";
 import { getHomepageData, refreshHomepageData } from "@/lib/sync-releases";
@@ -60,34 +59,7 @@ export default async function Home({ searchParams }: HomePageProps) {
   return (
     <main className="editorial-shell flex-1 px-4 pb-10 pt-4 md:px-8">
       <div className="mx-auto max-w-[1760px] bg-[var(--color-paper)] px-2 md:px-4">
-        <header className="border-b border-[var(--color-line)] py-8">
-          <div className="grid items-start gap-8 lg:grid-cols-[1fr_auto_1fr]">
-            <nav className="flex flex-wrap gap-x-8 gap-y-3 text-sm uppercase tracking-[0.18em] text-[var(--color-ink)]">
-              <a href="#latest">Latest</a>
-              <a href="#top-rated">Top rated</a>
-              <a href="#top-engaged">Top engaged</a>
-              <a href="https://www.reddit.com/r/indieheads/" target="_blank" rel="noreferrer">
-                Indieheads
-              </a>
-            </nav>
-
-            <div className="text-center">
-              <Link href="/" className="inline-block">
-                <p className="text-6xl leading-none text-[var(--color-ink)] serif-display md:text-7xl">MooSQA</p>
-                <p className="mt-2 text-xs uppercase tracking-[0.65em] text-black/60">Music Radar</p>
-              </Link>
-            </div>
-
-            <div className="flex flex-wrap justify-start gap-x-8 gap-y-3 text-sm uppercase tracking-[0.18em] text-[var(--color-ink)] lg:justify-end">
-              <a href="#albums">Albums</a>
-              <a href="#eps">EPs</a>
-              <a href="#performances">Live</a>
-              <AdvancedSearchButton className="inline-flex items-center justify-center transition hover:opacity-70" />
-            </div>
-          </div>
-
-          <AdvancedSearchPanel />
-        </header>
+        <SiteHeader />
 
         {hasSearchResults ? (
           <ReleaseExplorer

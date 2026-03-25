@@ -27,6 +27,7 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 7rem;
 }
 
 body {
@@ -109,6 +110,10 @@ img {
 }
 
 @media (min-width: 1024px) {
+  html {
+    scroll-padding-top: 10rem;
+  }
+
   .story-grid {
     grid-template-columns: minmax(0, 1.4fr) minmax(19rem, 0.8fr);
   }

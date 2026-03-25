@@ -118,17 +118,17 @@ export function ReleaseExplorer({ releases }: ReleaseExplorerProps) {
   const visibleReleases = filteredReleases.slice(0, visibleCount);
 
   return (
-    <section className="border-t border-[var(--color-line)] py-10" id="explore">
-      <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+    <section className="border-t border-[var(--color-line)] py-8 md:py-10" id="explore">
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="section-kicker text-black/43">Search results</p>
-          <h2 className="mt-3 text-6xl leading-none text-[var(--color-ink)] serif-display">
-            Filtered radar feed.
+          <h2 className="mt-3 text-4xl leading-none text-[var(--color-ink)] serif-display md:text-5xl">
+            Matching releases.
           </h2>
         </div>
 
-        <div className="w-full max-w-xl border border-[var(--color-line)] bg-[var(--color-panel)] p-4 text-sm leading-7 text-black/62">
-          Results update directly from the editorial search bar above and keep loading as you scroll.
+        <div className="w-full max-w-xl border border-[var(--color-line)] bg-[var(--color-panel)] px-4 py-3 text-sm leading-7 text-black/62">
+          Search updates from the header above and keeps loading more results as you scroll.
         </div>
       </div>
 

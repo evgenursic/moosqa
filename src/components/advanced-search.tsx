@@ -51,7 +51,7 @@ export function AdvancedSearchButton({ className }: AdvancedSearchButtonProps) {
     <button
       type="button"
       onClick={openSearch}
-      aria-label="Open advanced search"
+      aria-label="Open search"
       aria-expanded={isOpen}
       aria-controls="advanced-search"
       className={`${className ?? ""} ${isOpen ? "opacity-100" : ""}`.trim()}
@@ -180,27 +180,30 @@ function AdvancedSearchForm({
   }
 
   return (
-    <section id="advanced-search" className="mt-8 scroll-mt-12">
-      <form onSubmit={submit} className="overflow-hidden border border-black bg-[#040507] text-white shadow-[0_28px_70px_rgba(5,8,14,0.18)]">
-        <div className="px-4 py-5 md:px-8 md:py-7">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="section-kicker text-white/54">Advanced search</p>
+    <section id="advanced-search" className="mt-4 scroll-mt-24">
+      <form
+        onSubmit={submit}
+        className="border border-[var(--color-line)] bg-[var(--color-paper)] shadow-[0_18px_40px_rgba(29,34,48,0.06)]"
+      >
+        <div className="px-4 py-4 md:px-5 md:py-5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="section-kicker text-black/44">Search</p>
 
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setShowFilters((current) => !current)}
-                className="inline-flex items-center gap-2 border border-white/18 px-3 py-2 text-[11px] uppercase tracking-[0.22em] text-white/78 transition hover:border-white/38 hover:text-white"
+                className="inline-flex min-h-10 items-center gap-2 border border-[var(--color-line)] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-black/66 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
               >
                 <SlidersHorizontal size={14} strokeWidth={1.9} />
-                {showFilters ? "Hide filters" : "Advanced filters"}
+                {showFilters ? "Hide filters" : "Filters"}
               </button>
 
               {hasDraftCriteria ? (
                 <button
                   type="button"
                   onClick={clearSearch}
-                  className="inline-flex items-center justify-center border border-white/18 px-3 py-2 text-[11px] uppercase tracking-[0.22em] text-white/78 transition hover:border-white/38 hover:text-white"
+                  className="inline-flex min-h-10 items-center justify-center border border-[var(--color-line)] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-black/66 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
                 >
                   Clear
                 </button>
@@ -209,93 +212,75 @@ function AdvancedSearchForm({
               <button
                 type="button"
                 onClick={closeSearch}
-                aria-label="Close advanced search"
-                className="inline-flex items-center justify-center border border-white/18 px-3 py-2 text-white/78 transition hover:border-white/38 hover:text-white"
+                aria-label="Close search"
+                className="inline-flex h-10 w-10 items-center justify-center border border-[var(--color-line)] text-black/66 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
               >
-                <X size={18} strokeWidth={1.9} />
+                <X size={17} strokeWidth={1.9} />
               </button>
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:gap-6">
-            <div>
-              <label htmlFor="advanced-query" className="sr-only">
-                Search artists, tracks, albums, EPs, live sessions, genres, labels, and summaries
-              </label>
-              <div className="border-b border-white/72 pb-4">
-                <input
-                  ref={inputRef}
-                  id="advanced-query"
-                  name="q"
-                  type="search"
-                  inputMode="search"
-                  autoComplete="off"
-                  enterKeyHint="search"
-                  value={queryValue}
-                  onChange={(event) => setQueryValue(event.target.value)}
-                  placeholder="Search the full music radar"
-                  className="editorial-search-input w-full bg-transparent text-[clamp(3.2rem,8.2vw,7.1rem)] leading-[0.9] tracking-[-0.04em] text-white outline-none placeholder:text-white/28 serif-display"
-                />
-              </div>
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[minmax(0,1fr)_auto_auto]">
+            <label
+              htmlFor="advanced-query"
+              className="flex min-h-14 items-center gap-3 border border-[var(--color-line)] bg-white px-4 text-[var(--color-ink)]"
+            >
+              <Search size={20} strokeWidth={1.8} className="shrink-0 text-black/52" />
+              <input
+                ref={inputRef}
+                id="advanced-query"
+                name="q"
+                type="search"
+                inputMode="search"
+                autoComplete="off"
+                enterKeyHint="search"
+                value={queryValue}
+                onChange={(event) => setQueryValue(event.target.value)}
+                placeholder="Search artists, tracks, albums, EPs, live sessions"
+                className="editorial-search-input min-w-0 flex-1 bg-transparent text-base text-[var(--color-ink)] outline-none placeholder:text-black/36"
+              />
+            </label>
 
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-[0.22em] text-white/52">
-                <span>Artists</span>
-                <span className="h-px w-5 bg-white/18" />
-                <span>Tracks</span>
-                <span className="h-px w-5 bg-white/18" />
-                <span>Albums</span>
-                <span className="h-px w-5 bg-white/18" />
-                <span>EPs</span>
-                <span className="h-px w-5 bg-white/18" />
-                <span>Live sessions</span>
-              </div>
-            </div>
+            <button
+              type="submit"
+              className="group inline-flex min-h-14 items-center justify-between gap-4 border border-[var(--color-ink)] bg-[var(--color-ink)] px-5 py-3 text-sm uppercase tracking-[0.22em] text-white transition hover:bg-[var(--color-accent-strong)] hover:border-[var(--color-accent-strong)] xl:min-w-40 xl:justify-center"
+            >
+              <span>Search</span>
+              <ArrowRight
+                size={18}
+                strokeWidth={1.8}
+                className="transition-transform group-hover:translate-x-1"
+              />
+            </button>
 
-            <div className="flex flex-col gap-3 lg:items-end">
-              <button
-                type="submit"
-                className="group inline-flex min-h-16 w-full items-center justify-between gap-5 border border-white/28 px-5 py-4 text-sm uppercase tracking-[0.24em] text-white transition hover:border-white hover:bg-white hover:text-black lg:min-h-24 lg:w-24 lg:justify-center lg:px-0"
-              >
-                <span className="lg:hidden">Search</span>
-                <ArrowRight
-                  size={34}
-                  strokeWidth={1.6}
-                  className="transition-transform group-hover:translate-x-1"
-                />
-              </button>
-
-              <a
-                href="#explore"
-                className="inline-flex items-center justify-center text-[11px] uppercase tracking-[0.22em] text-white/56 transition hover:text-white"
-              >
-                Jump to results
-              </a>
+            <div className="hidden items-center justify-end text-[11px] uppercase tracking-[0.2em] text-black/46 xl:flex">
+              <span>Artists</span>
+              <span className="mx-3 h-px w-5 bg-[var(--color-line)]" />
+              <span>Releases</span>
+              <span className="mx-3 h-px w-5 bg-[var(--color-line)]" />
+              <span>Genres</span>
             </div>
           </div>
-
-          <p className="mt-5 max-w-3xl text-sm leading-7 text-white/64">
-            Search across artist names, release titles, projects, genres, labels, source stories, editorial copy, and AI summaries.
-          </p>
 
           {hasDraftCriteria ? (
-            <div className="mt-4 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.2em] text-white/58">
+            <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-black/54">
               {queryValue.trim() ? (
-                <span className="border border-white/14 px-3 py-2">
+                <span className="border border-[var(--color-soft-line)] bg-white px-3 py-2">
                   Query: {queryValue.trim()}
                 </span>
               ) : null}
               {typeValue ? (
-                <span className="border border-white/14 px-3 py-2">
+                <span className="border border-[var(--color-soft-line)] bg-white px-3 py-2">
                   Type: {typeValue.replace("_", " ")}
                 </span>
               ) : null}
               {platformValue ? (
-                <span className="border border-white/14 px-3 py-2">
+                <span className="border border-[var(--color-soft-line)] bg-white px-3 py-2">
                   Platform: {platformValue}
                 </span>
               ) : null}
               {directOnlyValue ? (
-                <span className="border border-white/14 px-3 py-2">
+                <span className="border border-[var(--color-soft-line)] bg-white px-3 py-2">
                   Working links only
                 </span>
               ) : null}
@@ -303,11 +288,11 @@ function AdvancedSearchForm({
           ) : null}
 
           {showFilters ? (
-            <div className="mt-6 grid gap-4 border-t border-white/12 pt-5 md:grid-cols-2 xl:grid-cols-[minmax(13rem,0.68fr)_minmax(13rem,0.68fr)_auto]">
+            <div className="mt-4 grid gap-3 border-t border-[var(--color-soft-line)] pt-4 md:grid-cols-2 xl:grid-cols-[minmax(12rem,0.72fr)_minmax(12rem,0.72fr)_auto]">
               <div>
                 <label
                   htmlFor="advanced-type"
-                  className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-white/52"
+                  className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-black/48"
                 >
                   Release type
                 </label>
@@ -316,7 +301,7 @@ function AdvancedSearchForm({
                   name="type"
                   value={typeValue}
                   onChange={(event) => setTypeValue(event.target.value)}
-                  className="w-full border border-white/18 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition focus:border-white/46"
+                  className="w-full border border-[var(--color-line)] bg-white px-4 py-3 text-sm text-[var(--color-ink)] outline-none transition focus:border-[var(--color-accent-strong)]"
                 >
                   <option value="">All release types</option>
                   <option value="SINGLE">Singles</option>
@@ -329,7 +314,7 @@ function AdvancedSearchForm({
               <div>
                 <label
                   htmlFor="advanced-platform"
-                  className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-white/52"
+                  className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-black/48"
                 >
                   Platform
                 </label>
@@ -338,7 +323,7 @@ function AdvancedSearchForm({
                   name="platform"
                   value={platformValue}
                   onChange={(event) => setPlatformValue(event.target.value)}
-                  className="w-full border border-white/18 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition focus:border-white/46"
+                  className="w-full border border-[var(--color-line)] bg-white px-4 py-3 text-sm text-[var(--color-ink)] outline-none transition focus:border-[var(--color-accent-strong)]"
                 >
                   <option value="">Any platform</option>
                   <option value="youtube">YouTube</option>
@@ -350,13 +335,13 @@ function AdvancedSearchForm({
               </div>
 
               <div className="flex items-end md:col-span-2 xl:col-span-1">
-                <label className="flex w-full items-center gap-3 border border-white/18 bg-white/[0.04] px-4 py-3 text-sm text-white">
+                <label className="flex min-h-12 w-full items-center gap-3 border border-[var(--color-line)] bg-white px-4 py-3 text-sm text-[var(--color-ink)]">
                   <input
                     type="checkbox"
                     name="direct"
                     checked={directOnlyValue}
                     onChange={(event) => setDirectOnlyValue(event.target.checked)}
-                    className="h-4 w-4 accent-white"
+                    className="h-4 w-4 accent-[var(--color-accent-strong)]"
                   />
                   Working links only
                 </label>
