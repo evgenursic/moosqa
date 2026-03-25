@@ -40,7 +40,13 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
   for (const release of releases) {
     const existing = await prisma.release.findUnique({
       where: { sourceItemId: release.sourceItemId },
-      select: { id: true, aiSummary: true, genreName: true },
+      select: {
+        id: true,
+        aiSummary: true,
+        genreName: true,
+        imageUrl: true,
+        thumbnailUrl: true,
+      },
     });
     const fallbackGenre = existing?.genreName || getDisplayGenre(null, release.releaseType);
     const fallbackAiSummary =
@@ -58,6 +64,8 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
       }));
     const releaseData = {
       ...release,
+      imageUrl: release.imageUrl || existing?.imageUrl || null,
+      thumbnailUrl: release.thumbnailUrl || existing?.thumbnailUrl || release.imageUrl || existing?.imageUrl || null,
       genreName: fallbackGenre,
       aiSummary: fallbackAiSummary,
     };
