@@ -1,4 +1,5 @@
 import { ReleaseType } from "@/generated/prisma/enums";
+import { buildGenreProfile } from "@/lib/genre-profile";
 
 const MUSICBRAINZ_API = "https://musicbrainz.org/ws/2";
 const COVER_ART_ARCHIVE_API = "https://coverartarchive.org";
@@ -111,8 +112,7 @@ export async function fetchMusicMetadata(
   input: ReleaseMatchInput,
 ): Promise<MusicMetadata> {
   const match = await searchBestRelease(input);
-  const fallbackArtist =
-    !match && input.artistName ? await searchBestArtist(input.artistName) : null;
+  const fallbackArtist = input.artistName ? await searchBestArtist(input.artistName) : null;
 
   if (!match && !fallbackArtist) {
     return {};
@@ -147,9 +147,10 @@ export async function fetchMusicMetadata(
 }
 
 async function searchBestRelease(input: ReleaseMatchInput) {
-  const title = input.projectTitle || input.title;
+  const title = cleanReleaseSearchTitle(input.projectTitle || input.title);
+  const artistName = cleanArtistSearchName(input.artistName);
   const queryParts = [
-    input.artistName ? `artist:"${escapeQuery(input.artistName)}"` : null,
+    artistName ? `artist:"${escapeQuery(artistName)}"` : null,
     title ? `release:"${escapeQuery(title)}"` : null,
   ].filter(Boolean);
 
@@ -176,7 +177,8 @@ async function searchBestRelease(input: ReleaseMatchInput) {
 }
 
 async function searchBestArtist(artistName: string) {
-  const query = `artist:"${escapeQuery(artistName)}"`;
+  const cleanedArtistName = cleanArtistSearchName(artistName);
+  const query = `artist:"${escapeQuery(cleanedArtistName)}"`;
   const searchUrl =
     `${MUSICBRAINZ_API}/artist/?query=${encodeURIComponent(query)}&fmt=json&limit=5`;
   const payload = await fetchMusicBrainzJson<MusicBrainzArtistSearchResponse>(searchUrl);
@@ -284,27 +286,23 @@ function getGenreName(
   artist: MusicBrainzArtistResponse | null,
   fallbackArtist?: NonNullable<MusicBrainzArtistSearchResponse["artists"]>[number] | null,
 ) {
-  const genreCandidates = [
-    ...(release?.genres || []),
-    ...(release?.["release-group"]?.genres || []),
-    ...(artist?.genres || []),
-    ...(fallbackArtist?.genres || []),
-  ];
-
-  const topGenre = genreCandidates.sort((left, right) => (right.count || 0) - (left.count || 0))[0];
-  if (topGenre?.name) {
-    return topGenre.name;
-  }
-
-  const tagCandidates = [
-    ...(release?.tags || []),
-    ...(release?.["release-group"]?.tags || []),
-    ...(artist?.tags || []),
-    ...(fallbackArtist?.tags || []),
+  const weightedNames = [
+    ...rankNamedCandidates(release?.genres),
+    ...rankNamedCandidates(release?.["release-group"]?.genres),
+    ...rankNamedCandidates(artist?.genres),
+    ...rankNamedCandidates(fallbackArtist?.genres),
+    ...rankNamedCandidates(release?.tags),
+    ...rankNamedCandidates(release?.["release-group"]?.tags),
+    ...rankNamedCandidates(artist?.tags),
+    ...rankNamedCandidates(fallbackArtist?.tags),
   ];
 
   return (
-    tagCandidates.sort((left, right) => (right.count || 0) - (left.count || 0))[0]?.name || null
+    buildGenreProfile({
+      explicitGenres: weightedNames,
+      text: [release?.title].filter(Boolean).join(". "),
+      limit: 3,
+    }) || null
   );
 }
 
@@ -355,8 +353,45 @@ function parseReleaseDate(value: string | undefined) {
   return null;
 }
 
+function rankNamedCandidates(
+  values:
+    | Array<{ name?: string; count?: number }>
+    | undefined,
+) {
+  return (values || [])
+    .filter((entry) => Boolean(entry.name))
+    .sort((left, right) => (right.count || 0) - (left.count || 0))
+    .slice(0, 6)
+    .map((entry) => entry.name as string);
+}
+
 function escapeQuery(value: string) {
   return value.replace(/"/g, "");
+}
+
+function cleanArtistSearchName(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  return value
+    .replace(/,.+$/, "")
+    .replace(/\s+(?:&|and)\s+.+$/i, "")
+    .replace(/\b(feat\.?|featuring|ft\.?)\b.*$/i, "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanReleaseSearchTitle(value: string) {
+  return value
+    .replace(/\((official|music|lyric|visualizer|audio|video)[^)]+\)/gi, " ")
+    .replace(/\b(official music video|official video|lyric video|visualizer|official audio)\b/gi, " ")
+    .replace(/\((19|20)\d{2}\)/g, " ")
+    .replace(/\s+\/\s+['"].*?\bout\b.*$/i, " ")
+    .replace(/\bout\s+[a-z]+\s+\d{1,2}.*$/i, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function normalizeText(value: string) {

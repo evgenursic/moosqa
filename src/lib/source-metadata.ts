@@ -1,4 +1,5 @@
 import { detectPlatform } from "@/lib/listening-links";
+import { buildGenreProfile } from "@/lib/genre-profile";
 
 const USER_AGENT =
   process.env.SOURCE_FETCH_USER_AGENT ||
@@ -7,6 +8,7 @@ const USER_AGENT =
 type SourceMetadata = {
   sourceTitle?: string | null;
   sourceExcerpt?: string | null;
+  artistNameHint?: string | null;
   genreName?: string | null;
   labelName?: string | null;
   sourceImageUrl?: string | null;
@@ -15,7 +17,24 @@ type SourceMetadata = {
   bandcampUrl?: string | null;
 };
 
-export async function resolveSourceMetadata(sourceUrl: string): Promise<SourceMetadata> {
+type ResolveSourceOptions = {
+  artistName?: string | null;
+  projectTitle?: string | null;
+  title?: string | null;
+};
+
+export async function resolveSourceMetadata(
+  sourceUrl: string,
+  options: ResolveSourceOptions = {},
+): Promise<SourceMetadata> {
+  return resolveSourceMetadataInternal(sourceUrl, options, 0);
+}
+
+async function resolveSourceMetadataInternal(
+  sourceUrl: string,
+  options: ResolveSourceOptions,
+  depth: number,
+): Promise<SourceMetadata> {
   try {
     const response = await fetch(sourceUrl, {
       headers: {
@@ -30,11 +49,17 @@ export async function resolveSourceMetadata(sourceUrl: string): Promise<SourceMe
     const platformLinks = detectDirectPlatformUrls([finalUrl]);
     const sourcePlatform = detectPlatform(finalUrl);
     const fallbackSourceImage = resolveSourceArtworkFromUrl(finalUrl);
+    const youtubeOEmbed =
+      sourcePlatform === "youtube" || sourcePlatform === "youtube-music"
+        ? await resolveYouTubeOEmbedMetadata(finalUrl)
+        : null;
 
     if (!contentType.includes("text/html")) {
       return {
+        artistNameHint: youtubeOEmbed?.artistName || null,
         ...platformLinks,
-        sourceImageUrl: fallbackSourceImage,
+        sourceTitle: youtubeOEmbed?.title || null,
+        sourceImageUrl: youtubeOEmbed?.thumbnailUrl || fallbackSourceImage,
       };
     }
 
@@ -42,13 +67,19 @@ export async function resolveSourceMetadata(sourceUrl: string): Promise<SourceMe
     const hrefCandidates = extractAnchorCandidates(html, finalUrl);
     const platformLinkCandidates = await resolvePlatformCandidates(hrefCandidates);
     const jsonLd = parseJsonLd(html);
+    const rawLabelName =
+      findStringValue(jsonLd, ["recordLabel", "name"]) ||
+      findStringValue(jsonLd, ["publisher", "name"]) ||
+      null;
     const sourceTitle =
       sanitizeText(
         getMetaContent(html, "og:title") ||
           getMetaContent(html, "twitter:title") ||
           findStringValue(jsonLd, ["headline"]) ||
           findStringValue(jsonLd, ["name"]) ||
-          getDocumentTitle(html),
+          getDocumentTitle(html) ||
+          youtubeOEmbed?.title ||
+          "",
       ) || null;
     const sourceExcerpt =
       sanitizeText(
@@ -57,33 +88,60 @@ export async function resolveSourceMetadata(sourceUrl: string): Promise<SourceMe
           findStringValue(jsonLd, ["description"]) ||
           extractBodyExcerpt(html),
       ) || null;
+    const rawGenreCandidates = [
+      sourcePlatform !== "youtube" && sourcePlatform !== "youtube-music"
+        ? getMetaContent(html, "keywords")
+        : null,
+      ...findStringValues(jsonLd, ["keywords"]),
+      ...findStringValues(jsonLd, ["genre"]),
+      ...extractBandcampTags(html),
+    ];
+    const genreName =
+      buildGenreProfile({
+        explicitGenres: rawGenreCandidates,
+        text: [sourceTitle, sourceExcerpt].filter(Boolean).join(". "),
+        labelName: rawLabelName,
+      }) || null;
+    const sourceImageUrl =
+      resolveUrl(
+        getMetaContent(html, "og:image") ||
+          getMetaContent(html, "twitter:image") ||
+          getLinkHref(html, "image_src") ||
+          findStringValue(jsonLd, ["image"]) ||
+          "",
+        finalUrl,
+      ) ||
+      youtubeOEmbed?.thumbnailUrl ||
+      fallbackSourceImage ||
+      null;
 
-    return {
+    const baseMetadata: SourceMetadata = {
       sourceTitle,
       sourceExcerpt,
-      genreName:
-        findStringValue(jsonLd, ["genre"]) ||
-        (sourcePlatform === "youtube" || sourcePlatform === "youtube-music"
-          ? null
-          : getMetaContent(html, "keywords")) ||
-        findStringValue(jsonLd, ["keywords"]) ||
-        null,
-      labelName:
-        findStringValue(jsonLd, ["recordLabel", "name"]) ||
-        findStringValue(jsonLd, ["publisher", "name"]) ||
-        null,
-      sourceImageUrl:
-        resolveUrl(
-          getMetaContent(html, "og:image") || getMetaContent(html, "twitter:image") || "",
-          finalUrl,
-        ) ||
-        fallbackSourceImage ||
-        null,
-      youtubeUrl: platformLinkCandidates.youtubeUrl || platformLinks.youtubeUrl || null,
+      artistNameHint: youtubeOEmbed?.artistName || null,
+      genreName,
+      labelName: rawLabelName,
+      sourceImageUrl,
+      youtubeUrl: platformLinks.youtubeUrl || platformLinkCandidates.youtubeUrl || null,
       youtubeMusicUrl:
-        platformLinkCandidates.youtubeMusicUrl || platformLinks.youtubeMusicUrl || null,
-      bandcampUrl: platformLinkCandidates.bandcampUrl || platformLinks.bandcampUrl || null,
+        platformLinks.youtubeMusicUrl || platformLinkCandidates.youtubeMusicUrl || null,
+      bandcampUrl: platformLinks.bandcampUrl || platformLinkCandidates.bandcampUrl || null,
     };
+
+    if (
+      sourcePlatform === "bandcamp" &&
+      depth === 0 &&
+      isBandcampCatalogUrl(finalUrl) &&
+      needsDeeperBandcampMetadata(baseMetadata)
+    ) {
+      const matchedBandcampUrl = findBestBandcampDiscographyUrl(html, finalUrl, options);
+      if (matchedBandcampUrl && matchedBandcampUrl !== finalUrl) {
+        const deepMetadata = await resolveSourceMetadataInternal(matchedBandcampUrl, options, depth + 1);
+        return mergeSourceMetadata(baseMetadata, deepMetadata);
+      }
+    }
+
+    return baseMetadata;
   } catch {
     return {};
   }
@@ -125,6 +183,51 @@ function extractAnchorCandidates(html: string, baseUrl: string) {
   }
 
   return candidates;
+}
+
+function extractBandcampTags(html: string) {
+  return [...html.matchAll(/<a[^>]+class=["'][^"']*\btag\b[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi)]
+    .map((match) => sanitizeText(match[1]))
+    .filter((value): value is string => Boolean(value));
+}
+
+function findBestBandcampDiscographyUrl(
+  html: string,
+  baseUrl: string,
+  options: ResolveSourceOptions,
+) {
+  const entries = [...html.matchAll(/<li[^>]+class="music-grid-item[\s\S]*?<\/li>/gi)]
+    .map((match) => {
+      const block = match[0];
+      const href = resolveUrl(
+        block.match(/<a[^>]+href="([^"]+)"/i)?.[1] || "",
+        baseUrl,
+      );
+      const title = sanitizeText(
+        block.match(/<p class="title">\s*([\s\S]*?)<\/p>/i)?.[1] || "",
+      );
+
+      return href && title ? { href, title } : null;
+    })
+    .filter((entry): entry is { href: string; title: string } => Boolean(entry));
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  const hints = buildBandcampTitleHints(options);
+  let bestEntry = entries[0];
+  let bestScore = -1;
+
+  for (const entry of entries) {
+    const score = scoreBandcampDiscographyEntry(entry.title, hints);
+    if (score > bestScore) {
+      bestEntry = entry;
+      bestScore = score;
+    }
+  }
+
+  return bestEntry.href;
 }
 
 async function resolvePlatformCandidates(candidates: Array<{ href: string; text: string }>) {
@@ -274,6 +377,42 @@ function findStringValue(input: unknown, path: string[]): string | null {
   return null;
 }
 
+function findStringValues(input: unknown, path: string[]): string[] {
+  if (input === null || input === undefined) {
+    return [];
+  }
+
+  if (path.length === 0) {
+    if (typeof input === "string") {
+      return [input];
+    }
+
+    if (Array.isArray(input)) {
+      return input.flatMap((item) => findStringValues(item, []));
+    }
+
+    return [];
+  }
+
+  if (Array.isArray(input)) {
+    return input.flatMap((item) => findStringValues(item, path));
+  }
+
+  if (typeof input !== "object") {
+    return [];
+  }
+
+  const current = input as Record<string, unknown>;
+  const [head, ...tail] = path;
+  const next = current[head];
+
+  if (next === null || next === undefined) {
+    return Object.values(current).flatMap((value) => findStringValues(value, path));
+  }
+
+  return findStringValues(next, tail);
+}
+
 function getDocumentTitle(html: string) {
   const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   return match?.[1] ? decodeHtml(match[1]) : null;
@@ -335,6 +474,97 @@ function decodeHtml(value: string) {
     .replace(/&gt;/g, ">");
 }
 
+function getLinkHref(html: string, relValue: string) {
+  const escapedRel = relValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const patterns = [
+    new RegExp(`<link[^>]+rel=["']${escapedRel}["'][^>]+href=["']([^"']+)["']`, "i"),
+    new RegExp(`<link[^>]+href=["']([^"']+)["'][^>]+rel=["']${escapedRel}["']`, "i"),
+  ];
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match?.[1]) {
+      return decodeHtml(match[1]);
+    }
+  }
+
+  return null;
+}
+
+function mergeSourceMetadata(base: SourceMetadata, deep: SourceMetadata): SourceMetadata {
+  return {
+    sourceTitle: deep.sourceTitle || base.sourceTitle || null,
+    sourceExcerpt: deep.sourceExcerpt || base.sourceExcerpt || null,
+    artistNameHint: deep.artistNameHint || base.artistNameHint || null,
+    genreName:
+      deep.genreName && deep.genreName !== "music"
+        ? deep.genreName
+        : base.genreName || null,
+    labelName: deep.labelName || base.labelName || null,
+    sourceImageUrl: deep.sourceImageUrl || base.sourceImageUrl || null,
+    youtubeUrl: deep.youtubeUrl || base.youtubeUrl || null,
+    youtubeMusicUrl: deep.youtubeMusicUrl || base.youtubeMusicUrl || null,
+    bandcampUrl: deep.bandcampUrl || base.bandcampUrl || null,
+  };
+}
+
+function buildBandcampTitleHints(options: ResolveSourceOptions) {
+  const candidates = [options.projectTitle, options.title]
+    .flatMap((value) =>
+      (value || "")
+        .split(/\s*\/\s*/)
+        .map((part) => cleanHint(part))
+        .filter(Boolean),
+    )
+    .filter((value, index, values) => values.indexOf(value) === index);
+
+  return candidates;
+}
+
+function cleanHint(value: string) {
+  return normalizeWhitespace(
+    value
+      .replace(/\((official|music|lyric|visualizer|audio|video)[^)]+\)/gi, " ")
+      .replace(/\b(official music video|official video|lyric video|visualizer|official audio)\b/gi, " ")
+      .replace(/\((19|20)\d{2}\)/g, " ")
+      .replace(/\bout\s+[a-z]+\s+\d{1,2}.*$/i, " ")
+      .replace(/[()[\]{}]/g, " ")
+      .replace(/[!"'`]+/g, "")
+      .trim(),
+  ).toLowerCase();
+}
+
+function scoreBandcampDiscographyEntry(title: string, hints: string[]) {
+  if (hints.length === 0) {
+    return 0;
+  }
+
+  const normalizedTitle = cleanHint(title);
+  let score = 0;
+
+  for (const hint of hints) {
+    if (!hint) {
+      continue;
+    }
+
+    if (normalizedTitle === hint) {
+      score += 12;
+      continue;
+    }
+
+    if (normalizedTitle.includes(hint)) {
+      score += 8;
+      continue;
+    }
+
+    if (hint.includes(normalizedTitle) && normalizedTitle.length >= 4) {
+      score += 6;
+    }
+  }
+
+  return score;
+}
+
 function resolveUrl(href: string, baseUrl: string) {
   if (!href) {
     return null;
@@ -347,6 +577,33 @@ function resolveUrl(href: string, baseUrl: string) {
   }
 }
 
+function isBandcampCatalogUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.includes("bandcamp.com")) {
+      return false;
+    }
+
+    const pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+    return pathname === "/" || pathname === "/music";
+  } catch {
+    return false;
+  }
+}
+
+function needsDeeperBandcampMetadata(metadata: SourceMetadata) {
+  if (!metadata.sourceImageUrl) {
+    return true;
+  }
+
+  if (!metadata.genreName) {
+    return true;
+  }
+
+  const normalizedGenre = metadata.genreName.toLowerCase().trim();
+  return normalizedGenre === "music" || normalizedGenre === "indie / alternative";
+}
+
 function resolveSourceArtworkFromUrl(url: string) {
   const youtubeId = extractYouTubeId(url);
   if (youtubeId) {
@@ -354,6 +611,10 @@ function resolveSourceArtworkFromUrl(url: string) {
   }
 
   return null;
+}
+
+function normalizeWhitespace(value: string) {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 function extractYouTubeId(url: string) {
@@ -388,4 +649,42 @@ function extractYouTubeId(url: string) {
   }
 
   return null;
+}
+
+async function resolveYouTubeOEmbedMetadata(url: string) {
+  const youtubeId = extractYouTubeId(url);
+  const normalizedUrl = youtubeId
+    ? `https://www.youtube.com/watch?v=${youtubeId}`
+    : url;
+
+  try {
+    const response = await fetch(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(normalizedUrl)}&format=json`,
+      {
+        headers: {
+          "User-Agent": USER_AGENT,
+        },
+        cache: "no-store",
+      },
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as {
+      title?: string;
+      author_name?: string;
+      thumbnail_url?: string;
+    };
+
+    return {
+      title: sanitizeText(payload.title || "") || null,
+      artistName:
+        sanitizeText((payload.author_name || "").replace(/\s+-\s+Topic$/i, "")) || null,
+      thumbnailUrl: payload.thumbnail_url || null,
+    };
+  } catch {
+    return null;
+  }
 }

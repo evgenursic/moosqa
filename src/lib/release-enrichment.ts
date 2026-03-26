@@ -1,6 +1,9 @@
 import { ReleaseType } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
+import { searchBandcampRelease } from "@/lib/bandcamp-search";
+import { getGenreOverride } from "@/lib/genre-overrides";
+import { buildGenreProfile, isSpecificGenreProfile } from "@/lib/genre-profile";
 import { fetchMusicMetadata, type MusicMetadata } from "@/lib/musicbrainz";
 import { detectPlatform } from "@/lib/listening-links";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
@@ -101,14 +104,63 @@ function needsEnrichment(release: EnrichableRelease, wantsAi: boolean) {
 }
 
 async function buildReleaseEnrichment(release: EnrichableRelease) {
-  const sourceMetadata = await resolveSourceMetadata(release.sourceUrl);
-  const musicMetadata = await fetchMusicMetadata({
+  const sourceMetadata = await resolveSourceMetadata(release.sourceUrl, {
     artistName: release.artistName,
+    projectTitle: release.projectTitle,
+    title: release.title,
+  });
+  const canonicalArtistName: string | null =
+    shouldUseArtistHint(release.artistName, sourceMetadata.artistNameHint)
+      ? (sourceMetadata.artistNameHint ?? null)
+      : (release.artistName ?? null);
+  const musicMetadata = await fetchMusicMetadata({
+    artistName: canonicalArtistName,
     projectTitle: release.projectTitle,
     title: release.title,
     releaseType: release.releaseType,
     sourceUrl: release.sourceUrl,
   }).catch(() => ({}) as MusicMetadata);
+  const fallbackBandcampMetadata =
+    musicMetadata.bandcampUrl &&
+    musicMetadata.bandcampUrl !== release.sourceUrl &&
+    (
+      !sourceMetadata.sourceImageUrl ||
+      !sourceMetadata.genreName ||
+      !isSpecificGenreProfile(sourceMetadata.genreName)
+    )
+      ? await resolveSourceMetadata(musicMetadata.bandcampUrl, {
+          artistName: release.artistName,
+          projectTitle: release.projectTitle,
+          title: release.title,
+        })
+      : null;
+  const hasSpecificResolvedGenre =
+    isSpecificGenreProfile(sourceMetadata.genreName) ||
+    isSpecificGenreProfile(fallbackBandcampMetadata?.genreName);
+  const hasResolvedArtwork =
+    Boolean(sourceMetadata.sourceImageUrl) || Boolean(fallbackBandcampMetadata?.sourceImageUrl);
+  const shouldSearchBandcampRelease =
+    detectPlatform(release.sourceUrl) !== "bandcamp" &&
+    (!hasResolvedArtwork || !hasSpecificResolvedGenre);
+  const searchedBandcampResult =
+    shouldSearchBandcampRelease
+      ? await searchBandcampRelease({
+          artistName: release.artistName,
+          projectTitle: release.projectTitle,
+          title: release.title,
+          releaseType: release.releaseType,
+        })
+      : null;
+  const searchedBandcampMetadata =
+    searchedBandcampResult?.url &&
+    searchedBandcampResult.url !== release.sourceUrl &&
+    searchedBandcampResult.url !== musicMetadata.bandcampUrl
+      ? await resolveSourceMetadata(searchedBandcampResult.url, {
+          artistName: release.artistName,
+          projectTitle: release.projectTitle,
+          title: release.title,
+        })
+      : null;
 
   const sourcePlatform = detectPlatform(release.sourceUrl);
 
@@ -122,18 +174,27 @@ async function buildReleaseEnrichment(release: EnrichableRelease) {
   const genreName =
     normalizeGenre(musicMetadata.genreName) ||
     normalizeGenre(sourceMetadata.genreName) ||
+    normalizeGenre(fallbackBandcampMetadata?.genreName) ||
+    normalizeGenre(searchedBandcampMetadata?.genreName) ||
+    getGenreOverride(release) ||
     inferGenreFromRelease(release) ||
     release.genreName ||
     null;
   const labelName =
     normalizeLabel(musicMetadata.labelName) ||
     normalizeLabel(sourceMetadata.labelName) ||
+    normalizeLabel(fallbackBandcampMetadata?.labelName) ||
+    normalizeLabel(searchedBandcampMetadata?.labelName) ||
     release.labelName ||
     null;
   const summaryNeedsRefresh = shouldRegenerateAiSummary(release.aiSummary);
   const summaryContext = [
     sourceMetadata.sourceTitle,
     sourceMetadata.sourceExcerpt,
+    fallbackBandcampMetadata?.sourceTitle,
+    fallbackBandcampMetadata?.sourceExcerpt,
+    searchedBandcampMetadata?.sourceTitle,
+    searchedBandcampMetadata?.sourceExcerpt,
     release.summary,
   ]
     .filter(Boolean)
@@ -161,18 +222,25 @@ async function buildReleaseEnrichment(release: EnrichableRelease) {
     youtubeUrl:
       directYouTube ||
       sourceMetadata.youtubeUrl ||
+      fallbackBandcampMetadata?.youtubeUrl ||
+      searchedBandcampMetadata?.youtubeUrl ||
       musicMetadata.youtubeUrl ||
       release.youtubeUrl ||
       null,
     youtubeMusicUrl:
       directYouTubeMusic ||
       sourceMetadata.youtubeMusicUrl ||
+      fallbackBandcampMetadata?.youtubeMusicUrl ||
+      searchedBandcampMetadata?.youtubeMusicUrl ||
       musicMetadata.youtubeMusicUrl ||
       release.youtubeMusicUrl ||
       null,
     bandcampUrl:
       directBandcamp ||
       sourceMetadata.bandcampUrl ||
+      fallbackBandcampMetadata?.bandcampUrl ||
+      searchedBandcampMetadata?.bandcampUrl ||
+      searchedBandcampResult?.url ||
       musicMetadata.bandcampUrl ||
       release.bandcampUrl ||
       null,
@@ -185,6 +253,8 @@ async function buildReleaseEnrichment(release: EnrichableRelease) {
       musicMetadata.coverArtUrl ||
       musicMetadata.thumbnailArtUrl ||
       sourceMetadata.sourceImageUrl ||
+      fallbackBandcampMetadata?.sourceImageUrl ||
+      searchedBandcampMetadata?.sourceImageUrl ||
       release.thumbnailUrl ||
       null,
     thumbnailUrl:
@@ -192,6 +262,8 @@ async function buildReleaseEnrichment(release: EnrichableRelease) {
       musicMetadata.thumbnailArtUrl ||
       musicMetadata.coverArtUrl ||
       sourceMetadata.sourceImageUrl ||
+      fallbackBandcampMetadata?.sourceImageUrl ||
+      searchedBandcampMetadata?.sourceImageUrl ||
       null,
   };
 }
@@ -201,28 +273,24 @@ function normalizeGenre(value: string | null | undefined) {
     return null;
   }
 
-  const normalized = value
-    .replace(/,/g, " / ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const normalized = value.replace(/,/g, " / ").replace(/\s+/g, " ").trim();
 
   if (normalized.toLowerCase().startsWith("http")) {
     const parsedGenre = extractGenreFromUrl(normalized);
     return parsedGenre ? parsedGenre.replace(/-/g, " ") : null;
   }
 
-  const firstMeaningfulGenre = normalized
+  const meaningfulGenres = normalized
     .split(/\s*\/\s*/)
     .map((genre) => genre.trim())
-    .find((genre) => genre && isMeaningfulGenre(genre));
+    .filter((genre) => genre && isMeaningfulGenre(genre));
 
-  if (!firstMeaningfulGenre) {
+  if (meaningfulGenres.length === 0) {
     return null;
   }
 
-  return firstMeaningfulGenre.length > 48
-    ? firstMeaningfulGenre.slice(0, 48).trim()
-    : firstMeaningfulGenre;
+  const joined = [...new Set(meaningfulGenres)].slice(0, 3).join(" / ");
+  return joined.length > 80 ? joined.slice(0, 80).trim() : joined;
 }
 
 function normalizeLabel(value: string | null | undefined) {
@@ -296,7 +364,7 @@ function isMeaningfulStoredGenre(value: string | null | undefined) {
     return false;
   }
 
-  return isMeaningfulGenre(value.trim());
+  return isMeaningfulGenre(value.trim()) && isSpecificGenreProfile(value.trim());
 }
 
 function extractGenreFromUrl(value: string) {
@@ -316,28 +384,12 @@ function inferGenreFromRelease(release: EnrichableRelease) {
     return "Live / Session";
   }
 
-  if (haystack.includes("shoegaze") || haystack.includes("dream pop")) {
-    return "Dream Pop";
-  }
-
-  if (haystack.includes("post-punk") || haystack.includes("punk")) {
-    return "Post-Punk";
-  }
-
-  if (haystack.includes("synth") || haystack.includes("electronic")) {
-    return "Electronic";
-  }
-
-  if (haystack.includes("folk") || haystack.includes("americana")) {
-    return "Indie Folk";
-  }
-
-  if (haystack.includes("metal")) {
-    return "Metal";
-  }
-
-  if (haystack.includes("hip hop") || haystack.includes("rap")) {
-    return "Hip-Hop";
+  const inferredGenre = buildGenreProfile({
+    text: haystack,
+    limit: 2,
+  });
+  if (inferredGenre) {
+    return inferredGenre;
   }
 
   if (
@@ -349,4 +401,31 @@ function inferGenreFromRelease(release: EnrichableRelease) {
   }
 
   return null;
+}
+
+function shouldUseArtistHint(
+  currentArtistName: string | null | undefined,
+  artistHint: string | null | undefined,
+) {
+  if (!artistHint) {
+    return false;
+  }
+
+  const normalizedHint = artistHint.trim().toLowerCase();
+  if (!normalizedHint) {
+    return false;
+  }
+
+  if (
+    /\b(vevo|official|records|recordings|music|tv|channel)\b/i.test(normalizedHint) ||
+    normalizedHint.endsWith("vevo")
+  ) {
+    return false;
+  }
+
+  if (!currentArtistName) {
+    return true;
+  }
+
+  return !currentArtistName.toLowerCase().includes(normalizedHint);
 }

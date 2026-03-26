@@ -2,6 +2,7 @@ import { ReleaseType } from "@/generated/prisma/enums";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
 import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
+import { getGenreOverride } from "@/lib/genre-overrides";
 import { fetchRedditPosts, normalizeRedditPost, shouldKeepReleaseRecord } from "@/lib/reddit";
 import { enrichRecentReleases } from "@/lib/release-enrichment";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
@@ -339,26 +340,61 @@ async function buildReleaseDataForUpsert(
   options: { lightweight?: boolean } = {},
 ) {
   if (options.lightweight) {
+    const shouldHydrateSourceMetadata =
+      (
+        (!release.imageUrl && !existing?.imageUrl && !existing?.thumbnailUrl) ||
+        !existing?.genreName ||
+        existing.genreName === "Indie / Alternative" ||
+        existing.genreName === "Alternative"
+      );
+    const sourceMetadata = shouldHydrateSourceMetadata
+      ? await resolveSourceMetadata(release.sourceUrl, {
+          artistName: release.artistName,
+          projectTitle: release.projectTitle,
+          title: release.title,
+        })
+      : null;
+
     return {
       ...release,
-      imageUrl: release.imageUrl || existing?.imageUrl || existing?.thumbnailUrl || null,
+      imageUrl:
+        release.imageUrl ||
+        existing?.imageUrl ||
+        existing?.thumbnailUrl ||
+        sourceMetadata?.sourceImageUrl ||
+        null,
       thumbnailUrl:
         release.thumbnailUrl ||
         existing?.thumbnailUrl ||
         release.imageUrl ||
         existing?.imageUrl ||
+        sourceMetadata?.sourceImageUrl ||
         null,
-      genreName: existing?.genreName || getDisplayGenre(null, release.releaseType),
+      genreName:
+        (
+          existing?.genreName &&
+          existing.genreName !== "Indie / Alternative" &&
+          existing.genreName !== "Alternative"
+        )
+          ? existing.genreName
+          : sourceMetadata?.genreName ||
+            getGenreOverride(release) ||
+            getDisplayGenre(null, release.releaseType),
       aiSummary: existing?.aiSummary || null,
     };
   }
 
   const sourceMetadata =
     !release.imageUrl && !existing?.imageUrl
-      ? await resolveSourceMetadata(release.sourceUrl)
+      ? await resolveSourceMetadata(release.sourceUrl, {
+          artistName: release.artistName,
+          projectTitle: release.projectTitle,
+          title: release.title,
+        })
       : null;
   const fallbackGenre =
     existing?.genreName ||
+    getGenreOverride(release) ||
     getDisplayGenre(sourceMetadata?.genreName, release.releaseType);
   const fallbackAiSummary =
     existing?.aiSummary ||
