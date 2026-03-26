@@ -19,7 +19,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await syncIndieheadsReleases();
+  const wantsEnrichment =
+    searchParams.get("enrich") === "1" || searchParams.get("deep") === "1";
+  const result = await syncIndieheadsReleases({
+    enrich: wantsEnrichment,
+    lightweight: true,
+  });
   revalidatePath("/");
 
   return NextResponse.json({

@@ -6,6 +6,7 @@ const REDDIT_URLS = [
   "https://api.reddit.com/r/indieheads/new?limit=100&raw_json=1",
   "https://www.reddit.com/r/indieheads/.json?limit=100&raw_json=1",
 ];
+const REDDIT_RSS_URL = "https://www.reddit.com/r/indieheads/new.rss";
 const USER_AGENT = "moosqa/0.1 (+https://moosqa.local)";
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
@@ -64,6 +65,7 @@ export type NormalizedRelease = {
 export async function fetchRedditPosts() {
   let lastError: Error | null = null;
   const headerVariants = getRedditHeaderVariants();
+  let jsonPosts: RedditPost[] = [];
 
   for (const redditUrl of REDDIT_URLS) {
     for (const headers of headerVariants) {
@@ -82,12 +84,34 @@ export async function fetchRedditPosts() {
         const payload = (await response.json()) as RedditListing;
         const posts = payload.data?.children?.map((child) => child.data) ?? [];
         if (posts.length > 0) {
-          return posts;
+          jsonPosts = posts;
+          break;
         }
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
       }
     }
+
+    if (jsonPosts.length > 0) {
+      break;
+    }
+  }
+
+  try {
+    const rssPosts = await fetchRedditPostsFromRss(headerVariants);
+    if (rssPosts.length > 0) {
+      if (jsonPosts.length > 0) {
+        return mergeRedditPostLists(jsonPosts, rssPosts);
+      }
+
+      return rssPosts;
+    }
+  } catch (error) {
+    lastError = error instanceof Error ? error : new Error(String(error));
+  }
+
+  if (jsonPosts.length > 0) {
+    return jsonPosts;
   }
 
   throw lastError || new Error("Reddit sync failed for all endpoints.");
@@ -116,6 +140,179 @@ function getRedditHeaderVariants() {
   }
 
   return variants;
+}
+
+async function fetchRedditPostsFromRss(headerVariants: Array<Record<string, string>>) {
+  let lastError: Error | null = null;
+
+  for (const headers of headerVariants) {
+    try {
+      const response = await fetch(REDDIT_RSS_URL, {
+        headers: {
+          ...headers,
+          Accept: "application/atom+xml,application/xml,text/xml;q=0.9,*/*;q=0.8",
+        },
+        cache: "no-store",
+        next: { revalidate: 0 },
+      });
+
+      if (!response.ok) {
+        lastError = new Error(`Reddit RSS sync failed with status ${response.status}`);
+        continue;
+      }
+
+      const xml = await response.text();
+      const posts = parseRedditRssFeed(xml);
+      if (posts.length > 0) {
+        return posts;
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  throw lastError || new Error("Reddit RSS sync failed.");
+}
+
+function parseRedditRssFeed(xml: string) {
+  const entries = [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/gi)];
+  return entries
+    .map((match) => parseRedditRssEntry(match[1]))
+    .filter((item): item is RedditPost => item !== null);
+}
+
+function parseRedditRssEntry(entryXml: string): RedditPost | null {
+  const title = decodeRssValue(extractXmlContent(entryXml, "title") || "").trim();
+  const permalinkUrl = decodeRssValue(extractXmlAttribute(entryXml, "link", "href") || "");
+  const publishedRaw =
+    extractXmlContent(entryXml, "published") || extractXmlContent(entryXml, "updated");
+  const contentHtml = decodeRssValue(extractXmlContent(entryXml, "content") || "");
+  const postId =
+    extractXmlContent(entryXml, "id")?.match(/t3_([a-z0-9]+)/i)?.[1] ||
+    permalinkUrl.match(/comments\/([a-z0-9]+)\//i)?.[1] ||
+    null;
+
+  if (!title || !publishedRaw || !postId || !permalinkUrl) {
+    return null;
+  }
+
+  const publishedAt = new Date(publishedRaw);
+  if (Number.isNaN(publishedAt.getTime())) {
+    return null;
+  }
+
+  const contentLinks = extractRssLinks(contentHtml);
+  const sourceUrl = contentLinks.find((url) => !isRedditUrl(url)) || permalinkUrl;
+  const thumbnailUrl =
+    decodeRssValue(extractXmlAttribute(entryXml, "media:thumbnail", "url") || "") ||
+    extractRssImageUrl(contentHtml) ||
+    undefined;
+
+  return {
+    id: postId,
+    title,
+    created_utc: Math.floor(publishedAt.getTime() / 1000),
+    permalink: toRedditPermalink(permalinkUrl),
+    url: sourceUrl,
+    thumbnail: thumbnailUrl,
+    link_flair_text: null,
+    selftext: undefined,
+    domain: inferDomain(sourceUrl),
+    score: undefined,
+    num_comments: undefined,
+    preview: thumbnailUrl
+      ? {
+          images: [
+            {
+              source: {
+                url: thumbnailUrl,
+              },
+            },
+          ],
+        }
+      : undefined,
+  };
+}
+
+function extractXmlContent(xml: string, tagName: string) {
+  const escapedTagName = tagName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = xml.match(new RegExp(`<${escapedTagName}[^>]*>([\\s\\S]*?)<\\/${escapedTagName}>`, "i"));
+  return match?.[1] ?? null;
+}
+
+function extractXmlAttribute(xml: string, tagName: string, attributeName: string) {
+  const escapedTagName = tagName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedAttributeName = attributeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = xml.match(
+    new RegExp(`<${escapedTagName}[^>]*\\s${escapedAttributeName}="([^"]+)"[^>]*/?>`, "i"),
+  );
+  return match?.[1] ?? null;
+}
+
+function extractRssLinks(contentHtml: string) {
+  return [...contentHtml.matchAll(/href="([^"]+)"/gi)]
+    .map((match) => decodeRssValue(match[1]))
+    .filter(Boolean);
+}
+
+function extractRssImageUrl(contentHtml: string) {
+  const match = contentHtml.match(/<img[^>]+src="([^"]+)"/i);
+  return match?.[1] ? decodeRssValue(match[1]) : null;
+}
+
+function decodeRssValue(value: string) {
+  let decoded = value;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const next = decodeHtmlEntities(decoded).replace(/&#32;/g, " ").replace(/&#x2F;/gi, "/");
+    if (next === decoded) {
+      break;
+    }
+    decoded = next;
+  }
+  return decoded.trim();
+}
+
+function isRedditUrl(url: string) {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "");
+    return hostname === "reddit.com" || hostname.endsWith(".reddit.com");
+  } catch {
+    return false;
+  }
+}
+
+function toRedditPermalink(url: string) {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return url;
+  }
+}
+
+function inferDomain(url: string) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return undefined;
+  }
+}
+
+function mergeRedditPostLists(primary: RedditPost[], secondary: RedditPost[]) {
+  const merged = new Map<string, RedditPost>();
+
+  for (const post of secondary) {
+    merged.set(post.id, post);
+  }
+
+  for (const post of primary) {
+    merged.set(post.id, {
+      ...merged.get(post.id),
+      ...post,
+    });
+  }
+
+  return [...merged.values()].sort((left, right) => right.created_utc - left.created_utc);
 }
 
 export function normalizeRedditPost(post: RedditPost): NormalizedRelease | null {

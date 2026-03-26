@@ -12,6 +12,7 @@ type SyncResult = {
   matched: number;
   created: number;
   updated: number;
+  failed: number;
   removed: number;
   sanitized: number;
   enriched: number;
@@ -19,6 +20,7 @@ type SyncResult = {
 
 type SyncOptions = {
   enrich?: boolean;
+  lightweight?: boolean;
 };
 
 type NormalizedReleaseRecord = NonNullable<ReturnType<typeof normalizeRedditPost>>;
@@ -30,7 +32,7 @@ declare global {
 }
 
 export async function syncIndieheadsReleases(options: SyncOptions = {}) {
-  const { enrich = true } = options;
+  const { enrich = true, lightweight = true } = options;
   await ensureDatabase();
   const removed = await purgeFilteredReleases();
   const sanitized = await sanitizeStoredMetadata();
@@ -39,15 +41,16 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
     .map(normalizeRedditPost)
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
-  const { created, updated } = await upsertNormalizedReleases(releases);
+  const { created, updated, failed } = await upsertNormalizedReleases(releases, { lightweight });
 
-  const enriched = enrich ? await enrichRecentReleases(Math.max(24, sanitized + created)) : 0;
+  const enriched = enrich ? await enrichRecentReleases(Math.max(12, sanitized + created)) : 0;
 
   return {
     scanned: posts.length,
     matched: releases.length,
     created,
     updated,
+    failed,
     removed,
     sanitized,
     enriched,
@@ -253,51 +256,75 @@ async function syncLatestHomepageReleases() {
     .filter((item): item is NonNullable<typeof item> => item !== null)
     .slice(0, HOMEPAGE_SYNC_POST_LIMIT);
 
-  const { created, updated } = await upsertNormalizedReleases(releases);
+  const { created, updated, failed } = await upsertNormalizedReleases(releases, {
+    lightweight: true,
+  });
 
   return {
     scanned: posts.length,
     matched: releases.length,
     created,
     updated,
+    failed,
     removed: 0,
     sanitized: 0,
     enriched: 0,
   };
 }
 
-async function upsertNormalizedReleases(releases: NormalizedReleaseRecord[]) {
+async function upsertNormalizedReleases(
+  releases: NormalizedReleaseRecord[],
+  options: { lightweight?: boolean } = {},
+) {
+  const { lightweight = false } = options;
   let created = 0;
   let updated = 0;
+  let failed = 0;
+  const existingReleases = await prisma.release.findMany({
+    where: {
+      sourceItemId: {
+        in: releases.map((release) => release.sourceItemId),
+      },
+    },
+    select: {
+      id: true,
+      sourceItemId: true,
+      aiSummary: true,
+      genreName: true,
+      imageUrl: true,
+      thumbnailUrl: true,
+    },
+  });
+  const existingBySourceItemId = new Map(
+    existingReleases.map((release) => [release.sourceItemId, release]),
+  );
 
   for (const release of releases) {
-    const existing = await prisma.release.findUnique({
-      where: { sourceItemId: release.sourceItemId },
-      select: {
-        id: true,
-        aiSummary: true,
-        genreName: true,
-        imageUrl: true,
-        thumbnailUrl: true,
-      },
-    });
+    try {
+      const existing = existingBySourceItemId.get(release.sourceItemId) || null;
 
-    const releaseData = await buildReleaseDataForUpsert(release, existing);
+      const releaseData = await buildReleaseDataForUpsert(release, existing, {
+        lightweight,
+      });
 
-    await prisma.release.upsert({
-      where: { sourceItemId: release.sourceItemId },
-      update: releaseData,
-      create: releaseData,
-    });
+      await prisma.release.upsert({
+        where: { sourceItemId: release.sourceItemId },
+        update: releaseData,
+        create: releaseData,
+      });
 
-    if (existing) {
-      updated += 1;
-    } else {
-      created += 1;
+      if (existing) {
+        updated += 1;
+      } else {
+        created += 1;
+      }
+    } catch (error) {
+      failed += 1;
+      console.error(`Failed to upsert release ${release.sourceItemId}.`, error);
     }
   }
 
-  return { created, updated };
+  return { created, updated, failed };
 }
 
 async function buildReleaseDataForUpsert(
@@ -309,7 +336,23 @@ async function buildReleaseDataForUpsert(
     imageUrl: string | null;
     thumbnailUrl: string | null;
   } | null,
+  options: { lightweight?: boolean } = {},
 ) {
+  if (options.lightweight) {
+    return {
+      ...release,
+      imageUrl: release.imageUrl || existing?.imageUrl || existing?.thumbnailUrl || null,
+      thumbnailUrl:
+        release.thumbnailUrl ||
+        existing?.thumbnailUrl ||
+        release.imageUrl ||
+        existing?.imageUrl ||
+        null,
+      genreName: existing?.genreName || getDisplayGenre(null, release.releaseType),
+      aiSummary: existing?.aiSummary || null,
+    };
+  }
+
   const sourceMetadata =
     !release.imageUrl && !existing?.imageUrl
       ? await resolveSourceMetadata(release.sourceUrl)
