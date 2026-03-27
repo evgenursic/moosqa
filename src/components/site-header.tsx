@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { Menu, X } from "lucide-react";
 
 import { AdvancedSearchButton, AdvancedSearchPanel } from "@/components/advanced-search";
@@ -10,23 +11,26 @@ type NavLink = {
   href: string;
   label: string;
   external?: boolean;
+  sectionId?: string;
 };
 
 const leftLinks: NavLink[] = [
-  { href: "/#latest", label: "Latest" },
-  { href: "/#top-rated", label: "Top rated" },
-  { href: "/#top-engaged", label: "Top engaged" },
+  { href: "/#latest", label: "Latest", sectionId: "latest" },
+  { href: "/#top-rated", label: "Top rated", sectionId: "top-rated" },
+  { href: "/#top-engaged", label: "Top engaged", sectionId: "top-engaged" },
   { href: "https://www.reddit.com/r/indieheads/", label: "Indieheads", external: true },
 ];
 
 const rightLinks: NavLink[] = [
-  { href: "/#albums", label: "Albums" },
-  { href: "/#eps", label: "EPs" },
-  { href: "/#live", label: "Live" },
+  { href: "/#albums", label: "Albums", sectionId: "albums" },
+  { href: "/#eps", label: "EPs", sectionId: "eps" },
+  { href: "/#live", label: "Live", sectionId: "live" },
 ];
 
 export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     if (!menuOpen) {
@@ -51,6 +55,67 @@ export function SiteHeader() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, []);
 
+  function handleSectionNavigation(link: NavLink) {
+    if (!link.sectionId) {
+      return;
+    }
+
+    setMenuOpen(false);
+
+    if (pathname === "/") {
+      const target = document.getElementById(link.sectionId);
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        window.history.replaceState(null, "", `/#${link.sectionId}`);
+        return;
+      }
+    }
+
+    router.push(link.href, { scroll: true });
+  }
+
+  function renderNavLink(link: NavLink, className?: string) {
+    if (link.external) {
+      return (
+        <a
+          key={link.label}
+          href={link.href}
+          target="_blank"
+          rel="noreferrer"
+          onClick={() => setMenuOpen(false)}
+          className={className}
+        >
+          {link.label}
+        </a>
+      );
+    }
+
+    if (link.sectionId) {
+      return (
+        <button
+          key={link.label}
+          type="button"
+          onClick={() => handleSectionNavigation(link)}
+          className={className}
+        >
+          {link.label}
+        </button>
+      );
+    }
+
+    return (
+      <Link
+        key={link.label}
+        href={link.href}
+        prefetch={false}
+        onClick={() => setMenuOpen(false)}
+        className={className}
+      >
+        {link.label}
+      </Link>
+    );
+  }
+
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-[var(--color-line)] bg-[var(--color-paper)]">
@@ -67,17 +132,7 @@ export function SiteHeader() {
               </button>
 
               <nav className="hidden flex-wrap gap-x-8 gap-y-3 text-sm uppercase tracking-[0.18em] text-[var(--color-ink)] lg:flex">
-                {leftLinks.map((link) =>
-                  link.external ? (
-                    <a key={link.label} href={link.href} target="_blank" rel="noreferrer">
-                      {link.label}
-                    </a>
-                  ) : (
-                    <Link key={link.label} href={link.href} prefetch={false}>
-                      {link.label}
-                    </Link>
-                  ),
-                )}
+                {leftLinks.map((link) => renderNavLink(link))}
               </nav>
             </div>
 
@@ -94,11 +149,7 @@ export function SiteHeader() {
 
             <div className="flex items-center justify-end gap-2 lg:block">
               <div className="hidden flex-wrap justify-end gap-x-8 gap-y-3 text-sm uppercase tracking-[0.18em] text-[var(--color-ink)] lg:flex">
-                {rightLinks.map((link) => (
-                  <Link key={link.label} href={link.href} prefetch={false}>
-                    {link.label}
-                  </Link>
-                ))}
+                {rightLinks.map((link) => renderNavLink(link))}
                 <AdvancedSearchButton className="inline-flex items-center justify-center transition hover:opacity-70" />
               </div>
 
@@ -136,28 +187,7 @@ export function SiteHeader() {
 
             <nav className="mt-5 grid gap-2 text-sm uppercase tracking-[0.18em] text-[var(--color-ink)]">
               {[...leftLinks, ...rightLinks].map((link) =>
-                link.external ? (
-                  <a
-                    key={link.label}
-                    href={link.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={() => setMenuOpen(false)}
-                    className="border border-[var(--color-soft-line)] px-4 py-3"
-                  >
-                    {link.label}
-                  </a>
-                ) : (
-                  <Link
-                    key={link.label}
-                    href={link.href}
-                    prefetch={false}
-                    onClick={() => setMenuOpen(false)}
-                    className="border border-[var(--color-soft-line)] px-4 py-3"
-                  >
-                    {link.label}
-                  </Link>
-                ),
+                renderNavLink(link, "border border-[var(--color-soft-line)] px-4 py-3 text-left"),
               )}
             </nav>
           </div>

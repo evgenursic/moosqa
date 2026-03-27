@@ -67,7 +67,7 @@ export default async function Home({ searchParams }: HomePageProps) {
           />
         ) : null}
 
-        <section id="latest" className="py-10">
+        <section id="latest" className="scroll-mt-32 py-10 md:scroll-mt-40 lg:scroll-mt-52">
           <div className="mb-8">
             <p className="section-kicker text-black/43">Latest posts</p>
             <h1 className="mt-3 text-6xl leading-none text-[var(--color-ink)] serif-display">
@@ -160,7 +160,10 @@ function ReleaseCardSection({ section, releases }: ReleaseCardSectionProps) {
   const definition = releaseSectionDefinitions[section];
 
   return (
-    <section id={definition.homeId} className="border-t border-[var(--color-line)] py-10">
+    <section
+      id={definition.homeId}
+      className="scroll-mt-32 border-t border-[var(--color-line)] py-10 md:scroll-mt-40 lg:scroll-mt-52"
+    >
       <div className="mb-8">
         <p className="section-kicker text-black/43">{definition.title}</p>
       </div>
