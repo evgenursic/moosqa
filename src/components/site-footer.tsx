@@ -1,20 +1,31 @@
 import Link from "next/link";
 
-const footerColumns = [
+type FooterLink = {
+  href: string;
+  label: string;
+  external?: boolean;
+};
+
+type FooterColumn = {
+  title: string;
+  links: FooterLink[];
+};
+
+const footerColumns: FooterColumn[] = [
   {
     title: "Radar",
     links: [
-      { href: "#latest", label: "Latest posts" },
-      { href: "#top-rated", label: "Top rated" },
-      { href: "#top-engaged", label: "Top engaged" },
+      { href: "/#latest", label: "Latest posts" },
+      { href: "/#top-rated", label: "Top rated" },
+      { href: "/#top-engaged", label: "Top engaged" },
     ],
   },
   {
     title: "Releases",
     links: [
-      { href: "#albums", label: "Albums" },
-      { href: "#eps", label: "EPs" },
-      { href: "#performances", label: "Live sessions" },
+      { href: "/#albums", label: "Albums" },
+      { href: "/#eps", label: "EPs" },
+      { href: "/#live", label: "Live sessions" },
     ],
   },
   {
@@ -35,7 +46,7 @@ export function SiteFooter() {
       <div className="mx-auto max-w-[1760px] px-6 py-10 md:px-8 lg:px-10 lg:py-14">
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
           <div>
-            <Link href="/" className="inline-block">
+            <Link href="/" prefetch={false} className="inline-block">
               <p className="text-5xl leading-none text-white serif-display md:text-6xl">MooSQA</p>
               <p className="mt-2 text-[11px] uppercase tracking-[0.42em] text-white/58">
                 Music Radar
@@ -59,9 +70,9 @@ export function SiteFooter() {
                         {link.label}
                       </a>
                     ) : (
-                      <a key={link.label} href={link.href}>
+                      <Link key={link.label} href={link.href} prefetch={false}>
                         {link.label}
-                      </a>
+                      </Link>
                     ),
                   )}
                 </div>
@@ -72,7 +83,9 @@ export function SiteFooter() {
 
         <div className="mt-10 border-t border-white/12 pt-5 text-[11px] uppercase tracking-[0.16em] text-white/46 md:flex md:items-center md:justify-between">
           <p>© {year} MooSQA beta</p>
-          <p className="mt-3 md:mt-0">Editorial discovery feed for new singles, albums, EPs, and live sessions.</p>
+          <p className="mt-3 md:mt-0">
+            Editorial discovery feed for new singles, albums, EPs, and live sessions.
+          </p>
         </div>
       </div>
     </footer>

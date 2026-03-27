@@ -4,6 +4,9 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowRight, Search, SlidersHorizontal, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+const SEARCH_PATHNAME = "/";
+const SEARCH_KEYS = ["q", "type", "platform", "direct", "search"] as const;
+
 type AdvancedSearchButtonProps = {
   className?: string;
 };
@@ -22,7 +25,7 @@ export function AdvancedSearchButton({ className }: AdvancedSearchButtonProps) {
   const isOpen = searchState === "open" || (searchState !== "closed" && hasCriteria);
 
   function openSearch() {
-    if (isOpen) {
+    if (isOpen && pathname === SEARCH_PATHNAME) {
       requestAnimationFrame(() => {
         document.getElementById("advanced-search")?.scrollIntoView({
           behavior: "smooth",
@@ -33,11 +36,16 @@ export function AdvancedSearchButton({ className }: AdvancedSearchButtonProps) {
       return;
     }
 
-    const nextParams = new URLSearchParams(searchParams.toString());
+    const nextParams = getSearchOnlyParams(searchParams.toString());
     nextParams.set("search", "open");
 
-    const href = nextParams.toString() ? `${pathname}?${nextParams}` : pathname;
-    router.replace(href, { scroll: false });
+    const href = nextParams.toString() ? `${SEARCH_PATHNAME}?${nextParams}` : SEARCH_PATHNAME;
+    if (pathname === SEARCH_PATHNAME) {
+      router.replace(href, { scroll: false });
+    } else {
+      router.push(href);
+      return;
+    }
 
     requestAnimationFrame(() => {
       document.getElementById("advanced-search")?.scrollIntoView({
@@ -62,8 +70,8 @@ export function AdvancedSearchButton({ className }: AdvancedSearchButtonProps) {
 }
 
 export function AdvancedSearchPanel() {
-  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchParamsString = getSearchOnlyParams(searchParams.toString()).toString();
 
   const query = searchParams.get("q") || "";
   const type = searchParams.get("type") || "";
@@ -80,8 +88,8 @@ export function AdvancedSearchPanel() {
   return (
     <AdvancedSearchForm
       key={[query, type, platform, direct ? "1" : "", searchState || ""].join("|")}
-      pathname={pathname}
-      searchParamsString={searchParams.toString()}
+      pathname={SEARCH_PATHNAME}
+      searchParamsString={searchParamsString}
       query={query}
       type={type}
       platform={platform}
@@ -361,4 +369,18 @@ function setParam(params: URLSearchParams, key: string, value: string) {
   }
 
   params.delete(key);
+}
+
+function getSearchOnlyParams(searchParamsString: string) {
+  const sourceParams = new URLSearchParams(searchParamsString);
+  const nextParams = new URLSearchParams();
+
+  for (const key of SEARCH_KEYS) {
+    const value = sourceParams.get(key);
+    if (value) {
+      nextParams.set(key, value);
+    }
+  }
+
+  return nextParams;
 }

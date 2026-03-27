@@ -1,3 +1,5 @@
+import { Zap } from "lucide-react";
+
 import { getListeningLinks } from "@/lib/listening-links";
 import { cn } from "@/lib/utils";
 
@@ -47,8 +49,12 @@ export function ListeningLinks({
             {link.label}
           </span>
           {link.isDirect ? (
-            <span className="rounded-full border border-[#d8c788] bg-[#f7e8b5] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-[#3f3210]">
-              Working now
+            <span
+              aria-label="Direct link available"
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#15803d] bg-[#22c55e] text-white shadow-[0_0_0_1px_rgba(21,128,61,0.14),0_8px_18px_rgba(34,197,94,0.24)]"
+            >
+              <Zap size={11} strokeWidth={2.6} />
+              <span className="sr-only">Direct link available</span>
             </span>
           ) : (
             <span

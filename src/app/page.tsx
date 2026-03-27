@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { ReleaseCard } from "@/components/release-card";
 import { ReleaseExplorer } from "@/components/release-explorer";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { ReleaseType } from "@/generated/prisma/enums";
-import { dedupeReleasesForDisplay } from "@/lib/display-dedupe";
+import {
+  getHomepageSectionsData,
+  getSearchReleases,
+  type ReleaseListingItem,
+  type ReleaseSectionKey,
+  releaseSectionDefinitions,
+} from "@/lib/release-sections";
 import { getSiteUrl } from "@/lib/site";
-import { getHomepageData, refreshHomepageData } from "@/lib/sync-releases";
+import { refreshHomepageData } from "@/lib/sync-releases";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -40,26 +46,11 @@ export default async function Home({ searchParams }: HomePageProps) {
       getSearchParamValue(resolvedSearchParams.direct),
   );
   await refreshHomepageData();
-  const { releases, performances } = await getHomepageData();
-  const displayReleases = dedupeReleasesForDisplay(releases);
-  const displayPerformances = dedupeReleasesForDisplay(performances);
-
-  const latestReleases = displayReleases.slice(0, 15);
-  const rankedStories = [...displayReleases]
-    .filter((release) => release.scoreCount > 0)
-    .sort((left, right) => right.scoreAverage - left.scoreAverage)
-    .slice(0, 8);
-  const topRated = rankedStories.length > 0 ? rankedStories : displayReleases.slice(0, 8);
-  const topEngaged = [...displayReleases]
-    .sort((left, right) => getEngagementScore(right) - getEngagementScore(left))
-    .slice(0, 8);
-  const albumReleases = displayReleases
-    .filter((release) => release.releaseType === ReleaseType.ALBUM)
-    .slice(0, 12);
-  const epReleases = displayReleases
-    .filter((release) => release.releaseType === ReleaseType.EP)
-    .slice(0, 12);
-  const liveReleases = displayPerformances.slice(0, 12);
+  const [sections, searchReleases] = await Promise.all([
+    getHomepageSectionsData(),
+    hasSearchResults ? getSearchReleases() : Promise.resolve([] as ReleaseListingItem[]),
+  ]);
+  const latestReleases = sections.latest;
 
   return (
     <main className="editorial-shell flex-1 px-4 pb-10 pt-4 md:px-8">
@@ -68,7 +59,7 @@ export default async function Home({ searchParams }: HomePageProps) {
 
         {hasSearchResults ? (
           <ReleaseExplorer
-            releases={displayReleases.map((release) => ({
+            releases={searchReleases.map((release) => ({
               ...release,
               summary: release.summary,
               publishedAt: release.publishedAt.toISOString(),
@@ -113,36 +104,33 @@ export default async function Home({ searchParams }: HomePageProps) {
               ))}
             </div>
           ) : null}
+
+          <SectionReadMore section="latest" className="mt-8" />
         </section>
 
         <ReleaseCardSection
-          id="top-rated"
-          title="Top rated"
-          releases={topRated}
+          section="top-rated"
+          releases={sections.topRated}
         />
 
         <ReleaseCardSection
-          id="top-engaged"
-          title="Top engaged on Indieheads"
-          releases={topEngaged}
+          section="top-engaged"
+          releases={sections.topEngaged}
         />
 
         <ReleaseCardSection
-          id="albums"
-          title="Albums"
-          releases={albumReleases}
+          section="albums"
+          releases={sections.albums}
         />
 
         <ReleaseCardSection
-          id="eps"
-          title="EPs"
-          releases={epReleases}
+          section="eps"
+          releases={sections.eps}
         />
 
         <ReleaseCardSection
-          id="performances"
-          title="Live performances"
-          releases={liveReleases}
+          section="live"
+          releases={sections.live}
         />
 
         <SiteFooter />
@@ -159,48 +147,22 @@ function getSearchParamValue(value: string | string[] | undefined) {
   return value || "";
 }
 
-function getEngagementScore(release: {
-  score: number | null;
-  commentCount: number | null;
-}) {
-  return (release.commentCount ?? 0) * 4 + (release.score ?? 0);
-}
-
 type ReleaseCardSectionProps = {
-  id: string;
-  title: string;
-  releases: Array<{
-    id: string;
-    slug: string;
-    title: string;
-    artistName: string | null;
-    projectTitle: string | null;
-    releaseType: ReleaseType;
-    imageUrl: string | null;
-    thumbnailUrl?: string | null;
-    outletName: string | null;
-    sourceUrl: string;
-    youtubeUrl?: string | null;
-    youtubeMusicUrl?: string | null;
-    bandcampUrl?: string | null;
-    labelName?: string | null;
-    genreName?: string | null;
-    aiSummary?: string | null;
-    publishedAt: Date;
-    scoreAverage: number;
-    scoreCount: number;
-  }>;
+  section: ReleaseSectionKey;
+  releases: ReleaseListingItem[];
 };
 
-function ReleaseCardSection({ id, title, releases }: ReleaseCardSectionProps) {
+function ReleaseCardSection({ section, releases }: ReleaseCardSectionProps) {
   if (releases.length === 0) {
     return null;
   }
 
+  const definition = releaseSectionDefinitions[section];
+
   return (
-    <section id={id} className="border-t border-[var(--color-line)] py-10">
+    <section id={definition.homeId} className="border-t border-[var(--color-line)] py-10">
       <div className="mb-8">
-        <p className="section-kicker text-black/43">{title}</p>
+        <p className="section-kicker text-black/43">{definition.title}</p>
       </div>
 
       <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
@@ -213,6 +175,30 @@ function ReleaseCardSection({ id, title, releases }: ReleaseCardSectionProps) {
           />
         ))}
       </div>
+
+      <SectionReadMore section={section} className="mt-8" />
     </section>
+  );
+}
+
+function SectionReadMore({
+  section,
+  className,
+}: {
+  section: ReleaseSectionKey;
+  className?: string;
+}) {
+  const definition = releaseSectionDefinitions[section];
+
+  return (
+    <div className={className}>
+      <Link
+        href={`/browse/${section}`}
+        prefetch={false}
+        className="inline-flex items-center border border-[var(--color-line)] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+      >
+        {definition.readMoreLabel}
+      </Link>
+    </div>
   );
 }

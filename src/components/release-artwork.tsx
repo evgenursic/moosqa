@@ -9,22 +9,17 @@ type ReleaseArtworkProps = {
   genreName?: string | null;
   className?: string;
   imageClassName?: string;
-  badgeClassName?: string;
   priority?: boolean;
 };
 
 export function ReleaseArtwork({
   title,
-  artistName,
-  projectTitle,
   imageUrl,
   genreName,
   className,
   imageClassName,
-  badgeClassName,
   priority = false,
 }: ReleaseArtworkProps) {
-  const displayTitle = artistName || projectTitle || title;
   const accent = getArtworkAccent(genreName);
 
   return (
@@ -35,19 +30,14 @@ export function ReleaseArtwork({
           alt={title}
           className={cn("h-full w-full object-cover", imageClassName)}
           loading={priority ? "eager" : "lazy"}
+          decoding="async"
+          fetchPriority={priority ? "high" : "low"}
         />
       ) : (
-        <div className={cn("flex h-full min-h-[18rem] items-end p-6", accent, imageClassName)}>
-          <div className="max-w-[22rem]">
-            <p className="section-kicker text-white/60">{genreName || "New release"}</p>
-            <p className="mt-3 text-4xl leading-[0.92] text-white serif-display">{displayTitle}</p>
-          </div>
+        <div className={cn("relative h-full min-h-[18rem]", accent, imageClassName)}>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(255,255,255,0.34),transparent_22%),radial-gradient(circle_at_78%_26%,rgba(255,255,255,0.22),transparent_20%),linear-gradient(140deg,rgba(255,255,255,0.12),transparent_42%,rgba(18,28,48,0.16))]" />
         </div>
       )}
-
-      <div className={cn("absolute left-4 top-4 border border-black/10 bg-[var(--color-paper)]/92 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] backdrop-blur", badgeClassName)}>
-        {genreName || "Genre pending"}
-      </div>
     </div>
   );
 }

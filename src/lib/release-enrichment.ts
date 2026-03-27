@@ -171,11 +171,41 @@ async function buildReleaseEnrichment(release: EnrichableRelease) {
   const directBandcamp =
     sourcePlatform === "bandcamp" ? release.sourceUrl : null;
 
+  const genreCandidates = [
+    normalizeGenre(musicMetadata.genreName),
+    normalizeGenre(sourceMetadata.genreName),
+    normalizeGenre(fallbackBandcampMetadata?.genreName),
+    normalizeGenre(searchedBandcampMetadata?.genreName),
+    normalizeGenre(release.genreName),
+  ];
+  const specificGenreCandidate = genreCandidates.find((candidate) =>
+    candidate ? isSpecificGenreProfile(candidate) : false,
+  );
+  const profiledGenre =
+    buildGenreProfile({
+      explicitGenres: genreCandidates,
+      text: [
+        sourceMetadata.sourceTitle,
+        sourceMetadata.sourceExcerpt,
+        fallbackBandcampMetadata?.sourceTitle,
+        fallbackBandcampMetadata?.sourceExcerpt,
+        searchedBandcampMetadata?.sourceTitle,
+        searchedBandcampMetadata?.sourceExcerpt,
+        release.summary,
+        release.aiSummary,
+        release.title,
+        release.projectTitle,
+      ]
+        .filter(Boolean)
+        .join(". "),
+      artistName: canonicalArtistName || release.artistName,
+      labelName: normalizeLabel(musicMetadata.labelName) || normalizeLabel(sourceMetadata.labelName),
+      limit: 3,
+    }) || null;
   const genreName =
-    normalizeGenre(musicMetadata.genreName) ||
-    normalizeGenre(sourceMetadata.genreName) ||
-    normalizeGenre(fallbackBandcampMetadata?.genreName) ||
-    normalizeGenre(searchedBandcampMetadata?.genreName) ||
+    specificGenreCandidate ||
+    (profiledGenre && isSpecificGenreProfile(profiledGenre) ? profiledGenre : null) ||
+    genreCandidates.find(Boolean) ||
     getGenreOverride(release) ||
     inferGenreFromRelease(release) ||
     release.genreName ||

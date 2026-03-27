@@ -39,6 +39,7 @@ export function ReleaseBrief({
   return (
     <Link
       href={`/releases/${release.slug}`}
+      prefetch={false}
       className={cn(
         "grid grid-cols-[6.5rem_1fr] gap-4 border-t border-[var(--color-line)] pt-4 first:border-t-0 first:pt-0",
         className,
@@ -52,7 +53,6 @@ export function ReleaseBrief({
         genreName={displayGenre}
         className="h-[6.5rem]"
         imageClassName="h-full"
-        badgeClassName="hidden"
       />
 
       <div className="min-w-0">

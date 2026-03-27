@@ -13,16 +13,16 @@ type NavLink = {
 };
 
 const leftLinks: NavLink[] = [
-  { href: "#latest", label: "Latest" },
-  { href: "#top-rated", label: "Top rated" },
-  { href: "#top-engaged", label: "Top engaged" },
+  { href: "/#latest", label: "Latest" },
+  { href: "/#top-rated", label: "Top rated" },
+  { href: "/#top-engaged", label: "Top engaged" },
   { href: "https://www.reddit.com/r/indieheads/", label: "Indieheads", external: true },
 ];
 
 const rightLinks: NavLink[] = [
-  { href: "#albums", label: "Albums" },
-  { href: "#eps", label: "EPs" },
-  { href: "#performances", label: "Live" },
+  { href: "/#albums", label: "Albums" },
+  { href: "/#eps", label: "EPs" },
+  { href: "/#live", label: "Live" },
 ];
 
 export function SiteHeader() {
@@ -73,9 +73,9 @@ export function SiteHeader() {
                       {link.label}
                     </a>
                   ) : (
-                    <a key={link.label} href={link.href}>
+                    <Link key={link.label} href={link.href} prefetch={false}>
                       {link.label}
-                    </a>
+                    </Link>
                   ),
                 )}
               </nav>
@@ -95,9 +95,9 @@ export function SiteHeader() {
             <div className="flex items-center justify-end gap-2 lg:block">
               <div className="hidden flex-wrap justify-end gap-x-8 gap-y-3 text-sm uppercase tracking-[0.18em] text-[var(--color-ink)] lg:flex">
                 {rightLinks.map((link) => (
-                  <a key={link.label} href={link.href}>
+                  <Link key={link.label} href={link.href} prefetch={false}>
                     {link.label}
-                  </a>
+                  </Link>
                 ))}
                 <AdvancedSearchButton className="inline-flex items-center justify-center transition hover:opacity-70" />
               </div>
@@ -148,14 +148,15 @@ export function SiteHeader() {
                     {link.label}
                   </a>
                 ) : (
-                  <a
+                  <Link
                     key={link.label}
                     href={link.href}
+                    prefetch={false}
                     onClick={() => setMenuOpen(false)}
                     className="border border-[var(--color-soft-line)] px-4 py-3"
                   >
                     {link.label}
-                  </a>
+                  </Link>
                 ),
               )}
             </nav>

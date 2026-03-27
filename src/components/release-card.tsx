@@ -41,7 +41,7 @@ export function ReleaseCard({
 
   return (
     <article className="min-w-0 border-t border-[var(--color-line)] pt-6">
-      <Link href={`/releases/${release.slug}`} className="block min-w-0">
+      <Link href={`/releases/${release.slug}`} prefetch={false} className="block min-w-0">
         <ReleaseArtwork
           title={release.title}
           artistName={release.artistName}
@@ -67,7 +67,7 @@ export function ReleaseCard({
         <p className="section-kicker text-black/43">
           {release.releaseType.replace("_", " ")} / {formatPubDate(release.publishedAt)} / {formatRelative(release.publishedAt)}
         </p>
-        <Link href={`/releases/${release.slug}`} className="block">
+        <Link href={`/releases/${release.slug}`} prefetch={false} className="block">
           <h3
             className={
               compact
@@ -106,6 +106,7 @@ export function ReleaseCard({
         <div className="mt-4">
           <Link
             href={`/releases/${release.slug}`}
+            prefetch={false}
             className="inline-flex items-center border border-[var(--color-line)] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:border-[var(--color-ink)]"
           >
             Open and rate

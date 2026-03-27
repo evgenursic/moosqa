@@ -2,6 +2,7 @@ import { ReleaseType } from "@/generated/prisma/enums";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
 import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
+import { buildGenreProfile, isSpecificGenreProfile } from "@/lib/genre-profile";
 import { getGenreOverride } from "@/lib/genre-overrides";
 import { fetchRedditPosts, normalizeRedditPost, shouldKeepReleaseRecord } from "@/lib/reddit";
 import { enrichRecentReleases } from "@/lib/release-enrichment";
@@ -370,16 +371,12 @@ async function buildReleaseDataForUpsert(
         existing?.imageUrl ||
         sourceMetadata?.sourceImageUrl ||
         null,
-      genreName:
-        (
-          existing?.genreName &&
-          existing.genreName !== "Indie / Alternative" &&
-          existing.genreName !== "Alternative"
-        )
-          ? existing.genreName
-          : sourceMetadata?.genreName ||
-            getGenreOverride(release) ||
-            getDisplayGenre(null, release.releaseType),
+      genreName: resolvePreferredGenre({
+        currentGenre: existing?.genreName || null,
+        fallbackGenre: sourceMetadata?.genreName || null,
+        release,
+        sourceMetadata,
+      }),
       aiSummary: existing?.aiSummary || null,
     };
   }
@@ -392,10 +389,12 @@ async function buildReleaseDataForUpsert(
           title: release.title,
         })
       : null;
-  const fallbackGenre =
-    existing?.genreName ||
-    getGenreOverride(release) ||
-    getDisplayGenre(sourceMetadata?.genreName, release.releaseType);
+  const fallbackGenre = resolvePreferredGenre({
+    currentGenre: existing?.genreName || null,
+    fallbackGenre: sourceMetadata?.genreName || null,
+    release,
+    sourceMetadata,
+  });
   const fallbackAiSummary =
     existing?.aiSummary ||
     (await generateAiSummary({
@@ -423,4 +422,47 @@ async function buildReleaseDataForUpsert(
     genreName: fallbackGenre,
     aiSummary: fallbackAiSummary,
   };
+}
+
+function resolvePreferredGenre(input: {
+  currentGenre: string | null;
+  fallbackGenre: string | null;
+  release: NormalizedReleaseRecord;
+  sourceMetadata?: {
+    sourceTitle?: string | null;
+    sourceExcerpt?: string | null;
+    labelName?: string | null;
+  } | null;
+}) {
+  const specificStoredGenre = input.currentGenre?.trim();
+  if (specificStoredGenre && isSpecificGenreProfile(specificStoredGenre)) {
+    return specificStoredGenre;
+  }
+
+  const specificFallbackGenre = input.fallbackGenre?.trim();
+  if (specificFallbackGenre && isSpecificGenreProfile(specificFallbackGenre)) {
+    return specificFallbackGenre;
+  }
+
+  const synthesizedGenre = buildGenreProfile({
+    explicitGenres: [input.currentGenre, input.fallbackGenre],
+    text: [
+      input.release.title,
+      input.release.projectTitle,
+      input.release.summary,
+      input.sourceMetadata?.sourceTitle,
+      input.sourceMetadata?.sourceExcerpt,
+    ]
+      .filter(Boolean)
+      .join(". "),
+    artistName: input.release.artistName,
+    labelName: input.sourceMetadata?.labelName || null,
+    limit: 3,
+  });
+
+  if (synthesizedGenre) {
+    return synthesizedGenre;
+  }
+
+  return getGenreOverride(input.release) || getDisplayGenre(null, input.release.releaseType);
 }
