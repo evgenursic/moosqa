@@ -103,7 +103,7 @@ function needsEnrichment(release: EnrichableRelease, wantsAi: boolean) {
   return false;
 }
 
-async function buildReleaseEnrichment(release: EnrichableRelease) {
+export async function buildReleaseEnrichment(release: EnrichableRelease) {
   const sourceMetadata = await resolveSourceMetadata(release.sourceUrl, {
     artistName: release.artistName,
     projectTitle: release.projectTitle,
@@ -178,6 +178,7 @@ async function buildReleaseEnrichment(release: EnrichableRelease) {
     normalizeGenre(searchedBandcampMetadata?.genreName),
     normalizeGenre(release.genreName),
   ];
+  const overrideGenre = getGenreOverride(release);
   const specificGenreCandidate = genreCandidates.find((candidate) =>
     candidate ? isSpecificGenreProfile(candidate) : false,
   );
@@ -199,14 +200,16 @@ async function buildReleaseEnrichment(release: EnrichableRelease) {
         .filter(Boolean)
         .join(". "),
       artistName: canonicalArtistName || release.artistName,
+      projectTitle: release.projectTitle,
+      title: release.title,
       labelName: normalizeLabel(musicMetadata.labelName) || normalizeLabel(sourceMetadata.labelName),
       limit: 3,
     }) || null;
   const genreName =
+    overrideGenre ||
     specificGenreCandidate ||
     (profiledGenre && isSpecificGenreProfile(profiledGenre) ? profiledGenre : null) ||
     genreCandidates.find(Boolean) ||
-    getGenreOverride(release) ||
     inferGenreFromRelease(release) ||
     release.genreName ||
     null;
@@ -408,6 +411,11 @@ function extractGenreFromUrl(value: string) {
 }
 
 function inferGenreFromRelease(release: EnrichableRelease) {
+  const overrideGenre = getGenreOverride(release);
+  if (overrideGenre) {
+    return overrideGenre;
+  }
+
   const haystack = `${release.title} ${release.projectTitle || ""} ${release.artistName || ""}`.toLowerCase();
 
   if (release.releaseType === ReleaseType.PERFORMANCE) {
@@ -416,18 +424,13 @@ function inferGenreFromRelease(release: EnrichableRelease) {
 
   const inferredGenre = buildGenreProfile({
     text: haystack,
+    artistName: release.artistName,
+    projectTitle: release.projectTitle,
+    title: release.title,
     limit: 2,
   });
   if (inferredGenre) {
     return inferredGenre;
-  }
-
-  if (
-    release.releaseType === ReleaseType.ALBUM ||
-    release.releaseType === ReleaseType.EP ||
-    release.releaseType === ReleaseType.SINGLE
-  ) {
-    return "Indie / Alternative";
   }
 
   return null;

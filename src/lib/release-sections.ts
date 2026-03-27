@@ -2,6 +2,7 @@ import { ReleaseType } from "@/generated/prisma/enums";
 import { ensureDatabase } from "@/lib/database";
 import { dedupeReleasesForDisplay } from "@/lib/display-dedupe";
 import { buildGenreProfile, isSpecificGenreProfile } from "@/lib/genre-profile";
+import { getGenreOverride } from "@/lib/genre-overrides";
 import { prisma } from "@/lib/prisma";
 
 export type ReleaseSectionKey =
@@ -318,8 +319,9 @@ function refineDisplayGenre(release: ReleaseListingItem): ReleaseListingItem {
     return release;
   }
 
+  const overrideGenre = getGenreOverride(release);
   const refinedGenre = buildGenreProfile({
-    explicitGenres: [release.genreName],
+    explicitGenres: [overrideGenre, release.genreName],
     text: [
       release.title,
       release.projectTitle,
@@ -330,9 +332,18 @@ function refineDisplayGenre(release: ReleaseListingItem): ReleaseListingItem {
       .filter(Boolean)
       .join(". "),
     artistName: release.artistName,
+    projectTitle: release.projectTitle,
+    title: release.title,
     labelName: release.labelName,
     limit: 3,
   });
+
+  if (overrideGenre) {
+    return {
+      ...release,
+      genreName: overrideGenre,
+    };
+  }
 
   if (!refinedGenre || (!isSpecificGenreProfile(refinedGenre) && release.genreName)) {
     return release;

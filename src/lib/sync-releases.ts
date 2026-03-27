@@ -173,6 +173,13 @@ async function sanitizeStoredMetadata() {
   const result = await prisma.release.updateMany({
     where: {
       OR: [
+        { genreName: { equals: "Indie / Alternative" } },
+        { genreName: { equals: "Alternative / Indie" } },
+        { genreName: { equals: "alternative / indie" } },
+        { genreName: { equals: "indie / alternative" } },
+        { genreName: { equals: "Alternative" } },
+        { genreName: { equals: "alternative" } },
+        { genreName: { equals: "Indie Alternative" } },
         { genreName: { startsWith: "http" } },
         { genreName: { equals: "https:" } },
         { genreName: { equals: "http:" } },
@@ -456,13 +463,20 @@ function resolvePreferredGenre(input: {
       .filter(Boolean)
       .join(". "),
     artistName: input.release.artistName,
+    projectTitle: input.release.projectTitle,
+    title: input.release.title,
     labelName: input.sourceMetadata?.labelName || null,
     limit: 3,
   });
+
+  const overrideGenre = getGenreOverride(input.release);
+  if (overrideGenre) {
+    return overrideGenre;
+  }
 
   if (synthesizedGenre) {
     return synthesizedGenre;
   }
 
-  return getGenreOverride(input.release) || getDisplayGenre(null, input.release.releaseType);
+  return getDisplayGenre(null, input.release.releaseType);
 }

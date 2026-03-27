@@ -2,6 +2,8 @@ type GenreProfileOptions = {
   explicitGenres?: Array<string | null | undefined>;
   text?: string | null | undefined;
   artistName?: string | null | undefined;
+  projectTitle?: string | null | undefined;
+  title?: string | null | undefined;
   labelName?: string | null | undefined;
   limit?: number;
 };
@@ -18,13 +20,11 @@ const WEAK_GENRES = new Set([
   "indie / alternative",
   "rock",
   "pop",
-  "arabic",
   "electronic",
   "folk",
-  "indonesian",
-  "melayu",
   "world",
   "world music",
+  "experimental",
   "music",
 ]);
 
@@ -34,167 +34,428 @@ const BLOCKED_GENRES = new Set([
   "album",
   "single",
   "ep",
-  "habibi funk",
+  "track",
+  "record",
+  "recording",
   "music streaming",
   "spotify",
-  "track",
   "tidal",
   "youtube",
   "youtube music",
+  "video",
+  "vocalist",
+  "artists",
+  "artist",
+  "official",
+  "official video",
+  "official audio",
+  "official visualiser",
+  "official visualizer",
+  "lyric video",
+  "visualizer",
+  "audio",
+  "albumrelease",
+  "eprelease",
+  "singlerelease",
+  "musicrecording",
+  "habibi funk",
   "new york",
-  "stockholm",
-  "berlin",
-  "london",
-  "los angeles",
-  "chicago",
-  "austin",
-  "texas",
-  "california",
   "brooklyn",
   "new jersey",
   "new york city",
   "nyc",
-  "united states",
+  "los angeles",
+  "chicago",
+  "berlin",
+  "london",
+  "london uk",
+  "austin",
+  "texas",
+  "california",
+  "serbia",
   "sweden",
+  "united kingdom",
+  "united states",
+  "eurovision 2023 artists",
+  "provided to youtube by",
+]);
+
+const KNOWN_SINGLE_WORD_GENRES = new Set([
+  "ambient",
+  "americana",
+  "arabic",
+  "balearic",
+  "chillwave",
+  "coldwave",
+  "darkwave",
+  "disco",
+  "drone",
+  "electropop",
+  "emo",
+  "experimental",
+  "folk",
+  "garage",
+  "hardcore",
+  "house",
+  "indietronica",
+  "jungle",
+  "krautrock",
+  "metal",
+  "new wave",
+  "pop",
+  "punk",
+  "rock",
+  "shoegaze",
+  "slowcore",
+  "soul",
+  "techno",
+]);
+
+const KNOWN_GENRE_PARTS = new Set([
+  "acoustic",
+  "alternative",
+  "ambient",
+  "americana",
+  "art",
+  "avant",
+  "baroque",
+  "bass",
+  "bedroom",
+  "breakbeat",
+  "britpop",
+  "chamber",
+  "chillwave",
+  "coldwave",
+  "cosmic",
+  "dance",
+  "dark",
+  "darkwave",
+  "disco",
+  "doom",
+  "dream",
+  "drone",
+  "electroacoustic",
+  "electronic",
+  "electropop",
+  "emo",
+  "experimental",
+  "folk",
+  "free",
+  "funk",
+  "garage",
+  "gaze",
+  "glitch",
+  "hardcore",
+  "hip",
+  "hop",
+  "house",
+  "indian",
+  "indie",
+  "industrial",
+  "jangle",
+  "jazz",
+  "jungle",
+  "latin",
+  "math",
+  "melodic",
+  "metal",
+  "minimal",
+  "modular",
+  "neo",
+  "noise",
+  "nu",
+  "outsider",
+  "pop",
+  "post",
+  "psych",
+  "psychedelic",
+  "punk",
+  "r&b",
+  "r",
+  "rock",
+  "sample",
+  "shoegaze",
+  "singer",
+  "slow",
+  "slowcore",
+  "soul",
+  "space",
+  "spiritual",
+  "synth",
+  "trip",
 ]);
 
 const GENRE_ALIASES: Record<string, string[]> = {
+  "alt country": ["alt-country"],
+  "alt pop": ["alternative pop"],
+  "alt r&b": ["alternative r&b"],
   "alt rock": ["alternative rock"],
   "alt-pop": ["alternative pop"],
-  "alt pop": ["alternative pop"],
+  "alt-country": ["alt-country"],
   "alternative": ["alternative"],
   "alternative pop": ["alternative pop"],
+  "alternative r & b": ["alternative r&b"],
+  "alternative r and b": ["alternative r&b"],
+  "alternative r&b": ["alternative r&b"],
+  "alternative rock": ["alternative rock"],
+  "ambient": ["ambient"],
+  "ambient electronic": ["ambient electronic"],
+  "americana": ["americana"],
   "arabic": ["arabic"],
   "arabic funk": ["arabic funk"],
+  "art folk": ["art folk"],
+  "art pop": ["art pop"],
+  "art rock": ["art rock"],
+  "artpop": ["art pop"],
+  "avant doom": ["avant-doom"],
+  "avant-doom": ["avant-doom"],
+  "avant-garde electronic": ["avant-garde electronic"],
+  "baroque pop": ["baroque pop"],
   "baroque-pop": ["baroque pop"],
+  "bedroom pop": ["bedroom pop"],
   "bedroom-pop": ["bedroom pop"],
-  "dance punk": ["dance-punk"],
+  "breakbeat hardcore": ["breakbeat hardcore"],
+  "chamber folk": ["chamber folk"],
+  "chamber pop": ["chamber pop"],
+  "chillwave": ["chillwave"],
+  "coldwave": ["coldwave"],
+  "contemporary folk": ["indie folk"],
+  "cosmic americana": ["cosmic Americana"],
+  "dance pop": ["dance-pop"],
   "dance rock": ["dance-rock"],
+  "dance punk": ["dance-punk"],
+  "dance-pop": ["dance-pop"],
+  "dance-punk": ["dance-punk"],
+  "dance-rock": ["dance-rock"],
+  "dark pop": ["dark pop"],
+  "darkwave": ["darkwave"],
+  "deep house": ["deep house"],
   "disco grooves": ["disco"],
+  "dream folk": ["dream folk"],
   "dream pop": ["dream pop"],
   "dream-pop": ["dream pop"],
+  "dreamgaze": ["dreamgaze"],
+  "drone": ["drone"],
+  "doomgaze": ["doomgaze"],
+  "drum and bass": ["drum and bass"],
+  "drum n bass": ["drum and bass"],
+  "electro acoustic": ["electroacoustic"],
   "electro pop": ["electropop"],
+  "electro thrash": ["electro-thrash"],
   "electro-pop": ["electropop"],
+  "electro-thrash": ["electro-thrash"],
+  "electroacoustic": ["electroacoustic"],
   "electronic pop": ["electropop"],
+  "electropop": ["electropop"],
+  "emo": ["emo"],
+  "emo pop": ["emo pop"],
+  "emo rap": ["emo rap"],
   "emo rock": ["emo", "emo rock"],
+  "experimental electronic": ["experimental electronic"],
+  "experimental hip hop": ["experimental hip-hop"],
+  "experimental pop": ["experimental pop"],
+  "experimental hip-hop": ["experimental hip-hop"],
   "folk pop": ["folk pop"],
   "folk rock": ["folk rock"],
-  "groovy rock": ["dance-rock"],
+  "free jazz": ["free jazz"],
+  "garage punk": ["garage punk"],
+  "garage rock": ["garage rock"],
+  "glitch pop": ["glitch pop"],
+  "hard rock": ["hard rock"],
+  "hardcore punk": ["hardcore punk"],
   "hip hop": ["hip-hop"],
   "hip-hop": ["hip-hop"],
+  "indian classical": ["indian classical"],
   "indie folk": ["indie folk"],
-  "indie groove": ["dance-rock", "indie rock"],
   "indie pop": ["indie pop"],
   "indie rock": ["indie rock"],
-  "indie rock pop": ["indie rock", "indie pop"],
   "indie synth-pop": ["indie pop", "synth-pop"],
   "indietronica": ["indietronica"],
+  "industrial metal": ["industrial metal"],
+  "industrial pop": ["industrial pop"],
+  "industrial techno": ["industrial techno"],
   "jangle pop": ["jangle pop"],
   "jangle-pop": ["jangle pop"],
   "jazz funk": ["jazz-funk"],
   "jazz-funk": ["jazz-funk"],
+  "jungle": ["jungle"],
+  "latin alternative": ["latin alternative"],
+  "latin rock": ["latin rock"],
   "math rock": ["math rock"],
   "melayu": ["melayu"],
+  "melodic hardcore": ["melodic hardcore"],
+  "minimal synth": ["minimal synth"],
+  "modular ambient": ["modular ambient"],
   "neo psychedelia": ["neo-psychedelia"],
+  "neo soul": ["neo-soul"],
   "neo-psychedelia": ["neo-psychedelia"],
+  "neo-soul": ["neo-soul"],
+  "new wave": ["new wave"],
   "noise pop": ["noise pop"],
   "noise rock": ["noise rock"],
+  "nu jazz": ["nu jazz"],
+  "nu-jazz": ["nu jazz"],
+  "outsider house": ["outsider house"],
+  "pop punk": ["pop punk"],
+  "pop rock": ["pop rock"],
+  "post britpop": ["post-britpop"],
   "post hardcore": ["post-hardcore"],
   "post punk": ["post-punk"],
-  "post-punk": ["post-punk"],
   "post rock": ["post-rock"],
-  "psych rock": ["psychedelic rock"],
+  "post-britpop": ["post-britpop"],
+  "post-hardcore": ["post-hardcore"],
+  "post-punk": ["post-punk"],
+  "post-rock": ["post-rock"],
+  "power pop": ["power pop"],
+  "psych folk": ["psychedelic folk"],
   "psych pop": ["psychedelic pop"],
+  "psych rock": ["psychedelic rock"],
+  "psychedelic folk": ["psychedelic folk"],
   "psychedelic funk": ["psychedelic funk"],
+  "psychedelic hip hop": ["psychedelic hip-hop"],
+  "psychedelic hip-hop": ["psychedelic hip-hop"],
+  "psychedelic pop": ["psychedelic pop"],
   "psychedelic rock": ["psychedelic rock"],
+  "punk": ["punk rock"],
+  "punk rock": ["punk rock"],
+  "r & b": ["r&b"],
+  "r and b": ["r&b"],
   "r&b": ["r&b"],
   "rock n roll": ["rock and roll"],
   "rock and roll": ["rock and roll"],
+  "sample based house": ["sample-based house"],
+  "sample-based house": ["sample-based house"],
   "shoegazer": ["shoegaze"],
   "shoegaze": ["shoegaze"],
   "singer songwriter": ["singer-songwriter"],
   "singer-songwriter": ["singer-songwriter"],
   "slowcore": ["slowcore"],
   "slowgaze": ["slowgaze"],
+  "sophisti-pop": ["sophisti-pop"],
+  "soulful house": ["soulful house"],
+  "space rock": ["space rock"],
+  "spiritual jazz": ["spiritual jazz"],
   "synth pop": ["synth-pop"],
   "synth-pop": ["synth-pop"],
-  "electro thrash": ["electro-thrash"],
-  "industrial metal": ["industrial metal"],
-  "industrial techno": ["industrial techno"],
-  "avant doom": ["avant-doom"],
-  "avant-doom": ["avant-doom"],
-  "doomgaze": ["doomgaze"],
-  "dreamgaze": ["dreamgaze"],
-  "drum and bass": ["drum and bass"],
-  "uk techno": ["uk techno"],
   "trip hop": ["trip-hop"],
+  "trip-hop": ["trip-hop"],
+  "uk techno": ["uk techno"],
   "world": ["world"],
 };
 
 const TEXT_GENRE_PATTERNS: Array<[RegExp, string]> = [
+  [/\balt(?:ernative)?[- ]country\b/i, "alt-country"],
   [/\balternative pop\b/i, "alternative pop"],
+  [/\balternative rock\b/i, "alternative rock"],
+  [/\bart folk\b/i, "art folk"],
   [/\bart pop\b/i, "art pop"],
+  [/\bart rock\b/i, "art rock"],
+  [/\bart[- ]pop\b/i, "art pop"],
+  [/\bavant[- ]garde electronic\b/i, "avant-garde electronic"],
   [/\bbalearic\b/i, "balearic"],
-  [/\bbedroom pop\b/i, "bedroom pop"],
+  [/\bbaroque[- ]pop\b/i, "baroque pop"],
+  [/\bbedroom[- ]pop\b/i, "bedroom pop"],
+  [/\bbreakbeat hardcore\b/i, "breakbeat hardcore"],
+  [/\bchamber folk\b/i, "chamber folk"],
   [/\bchamber pop\b/i, "chamber pop"],
+  [/\bchillwave\b/i, "chillwave"],
   [/\bcoldwave\b/i, "coldwave"],
+  [/\bcosmic americana\b/i, "cosmic Americana"],
+  [/\bdance[- ]pop\b/i, "dance-pop"],
   [/\bdance[- ]punk\b/i, "dance-punk"],
   [/\bdance[- ]rock\b/i, "dance-rock"],
+  [/\bdark pop\b/i, "dark pop"],
   [/\bdarkwave\b/i, "darkwave"],
+  [/\bdeep house\b/i, "deep house"],
   [/\bdisco\b/i, "disco"],
   [/\bdowntempo\b/i, "downtempo"],
+  [/\bdream[- ]folk\b/i, "dream folk"],
   [/\bdream[- ]pop\b/i, "dream pop"],
-  [/\bdream folk\b/i, "dream folk"],
   [/\bdreamgaze\b/i, "dreamgaze"],
   [/\bdrone\b/i, "drone"],
   [/\bdoomgaze\b/i, "doomgaze"],
-  [/\bemo\b/i, "emo"],
-  [/\belectropop\b/i, "electropop"],
+  [/\bdrum (?:and|n) bass\b/i, "drum and bass"],
+  [/\belectro[- ]acoustic\b/i, "electroacoustic"],
   [/\belectro[- ]thrash\b/i, "electro-thrash"],
+  [/\belectro(?:pop| pop)\b/i, "electropop"],
+  [/\bemo pop\b/i, "emo pop"],
+  [/\bemo rap\b/i, "emo rap"],
+  [/\bemo\b/i, "emo"],
+  [/\bexperimental electronic\b/i, "experimental electronic"],
+  [/\bexperimental hip[- ]hop\b/i, "experimental hip-hop"],
   [/\bexperimental pop\b/i, "experimental pop"],
   [/\bfolk pop\b/i, "folk pop"],
   [/\bfolk rock\b/i, "folk rock"],
+  [/\bfree jazz\b/i, "free jazz"],
+  [/\bgarage punk\b/i, "garage punk"],
   [/\bgarage rock\b/i, "garage rock"],
   [/\bglitch pop\b/i, "glitch pop"],
+  [/\bhard rock\b/i, "hard rock"],
+  [/\bhardcore punk\b/i, "hardcore punk"],
   [/\bhip[- ]hop\b/i, "hip-hop"],
+  [/\bhindustani classical\b/i, "indian classical"],
+  [/\bindian classical\b/i, "indian classical"],
   [/\bindie folk\b/i, "indie folk"],
   [/\bindie pop\b/i, "indie pop"],
   [/\bindie rock\b/i, "indie rock"],
   [/\bindietronica\b/i, "indietronica"],
+  [/\bindustrial metal\b/i, "industrial metal"],
+  [/\bindustrial pop\b/i, "industrial pop"],
+  [/\bindustrial techno\b/i, "industrial techno"],
   [/\bjangle pop\b/i, "jangle pop"],
   [/\bjazz[- ]funk\b/i, "jazz-funk"],
+  [/\bjungle\b/i, "jungle"],
   [/\bkrautrock\b/i, "krautrock"],
+  [/\blatin alternative\b/i, "latin alternative"],
+  [/\blatin rock\b/i, "latin rock"],
   [/\bmath rock\b/i, "math rock"],
+  [/\bmelodic hardcore\b/i, "melodic hardcore"],
+  [/\bminimal synth\b/i, "minimal synth"],
+  [/\bmodular ambient\b/i, "modular ambient"],
   [/\bneo[- ]psychedelia\b/i, "neo-psychedelia"],
+  [/\bneo[- ]soul\b/i, "neo-soul"],
   [/\bnew wave\b/i, "new wave"],
   [/\bnoise pop\b/i, "noise pop"],
   [/\bnoise rock\b/i, "noise rock"],
-  [/\bindustrial metal\b/i, "industrial metal"],
-  [/\bindustrial techno\b/i, "industrial techno"],
+  [/\bnu[- ]jazz\b/i, "nu jazz"],
+  [/\boutsider house\b/i, "outsider house"],
+  [/\bpop punk\b/i, "pop punk"],
+  [/\bpop rock\b/i, "pop rock"],
+  [/\bpost[- ]britpop\b/i, "post-britpop"],
   [/\bpost[- ]hardcore\b/i, "post-hardcore"],
   [/\bpost[- ]punk\b/i, "post-punk"],
   [/\bpost[- ]rock\b/i, "post-rock"],
   [/\bpower pop\b/i, "power pop"],
+  [/\bpsychedelic folk\b/i, "psychedelic folk"],
   [/\bpsychedelic funk\b/i, "psychedelic funk"],
+  [/\bpsychedelic hip[- ]hop\b/i, "psychedelic hip-hop"],
   [/\bpsychedelic pop\b/i, "psychedelic pop"],
   [/\bpsychedelic rock\b/i, "psychedelic rock"],
+  [/\bpunk rock\b/i, "punk rock"],
   [/\br&b\b/i, "r&b"],
+  [/\bsample[- ]based house\b/i, "sample-based house"],
   [/\bshoegaze\b/i, "shoegaze"],
-  [/\bslowgaze\b/i, "slowgaze"],
   [/\bsinger[- ]songwriter\b/i, "singer-songwriter"],
   [/\bslowcore\b/i, "slowcore"],
-  [/\bsoul\b/i, "soul"],
+  [/\bslowgaze\b/i, "slowgaze"],
+  [/\bsophisti[- ]pop\b/i, "sophisti-pop"],
+  [/\bsoulful house\b/i, "soulful house"],
   [/\bspace rock\b/i, "space rock"],
+  [/\bspiritual jazz\b/i, "spiritual jazz"],
   [/\bsynth[- ]pop\b/i, "synth-pop"],
   [/\btrip[- ]hop\b/i, "trip-hop"],
   [/\buk techno\b/i, "uk techno"],
-  [/\bdrum and bass\b/i, "drum and bass"],
 ];
 
 export function buildGenreProfile(options: GenreProfileOptions) {
   const limit = options.limit || 3;
   const weightedGenres = new Map<string, WeightedGenre>();
-  const excludedPhrases = buildExcludedPhrases(options.artistName, options.labelName);
+  const excludedPhrases = buildExcludedPhrases(
+    options.artistName,
+    options.labelName,
+    options.projectTitle,
+    options.title,
+  );
   const explicitGenreText = normalizeWhitespace(
     (options.explicitGenres || []).filter(Boolean).join(". "),
   );
@@ -227,10 +488,9 @@ export function buildGenreProfile(options: GenreProfileOptions) {
       return right.name.length - left.name.length;
     })
     .map((entry) => entry.name);
-  const ordered = [
-    ...sorted.filter((genre) => !isWeakGenre(genre)),
-    ...sorted.filter((genre) => isWeakGenre(genre)),
-  ];
+
+  const hasSpecificCandidates = sorted.some((genre) => !isWeakGenre(genre));
+  const ordered = hasSpecificCandidates ? sorted.filter((genre) => !isWeakGenre(genre)) : sorted;
 
   const selected: string[] = [];
   for (const candidate of ordered) {
@@ -272,7 +532,12 @@ function addWeightedGenre(
   excludedPhrases: Set<string>,
 ) {
   const normalized = normalizeGenreName(candidate);
-  if (!normalized || excludedPhrases.has(normalized) || BLOCKED_GENRES.has(normalized)) {
+  if (
+    !normalized ||
+    excludedPhrases.has(normalized) ||
+    BLOCKED_GENRES.has(normalized) ||
+    !looksGenreLike(normalized)
+  ) {
     return;
   }
 
@@ -292,9 +557,11 @@ function addWeightedGenre(
 function buildExcludedPhrases(
   artistName: string | null | undefined,
   labelName: string | null | undefined,
+  projectTitle: string | null | undefined,
+  title: string | null | undefined,
 ) {
   const phrases = new Set<string>();
-  for (const value of [artistName, labelName]) {
+  for (const value of [artistName, labelName, projectTitle, title]) {
     if (!value) {
       continue;
     }
@@ -347,20 +614,114 @@ function extractGenresFromText(text: string) {
     }
   }
 
-  if (/\barab/i.test(text) && /\bfunk\b/i.test(text)) {
-    matches.add("arabic funk");
+  if (/\bavant[- ]garde\b/i.test(text) && /\belectronic\b/i.test(text)) {
+    matches.add("avant-garde electronic");
+    matches.add("experimental electronic");
   }
 
-  if (/\bindonesian\b/i.test(text) && /\bpsychedelic\b/i.test(text) && /\bfunk\b/i.test(text)) {
-    matches.add("indonesian psychedelic funk");
+  if (/\bambient\b/i.test(text) && /\belectronic\b/i.test(text)) {
+    matches.add("ambient electronic");
   }
 
-  if (/\bindustrial\b/i.test(text) && /\bmetal\b/i.test(text)) {
-    matches.add("industrial metal");
+  if (/\bmodular\b/i.test(text) && /\bambient\b/i.test(text)) {
+    matches.add("modular ambient");
   }
 
-  if (/\bindustrial\b/i.test(text) && /\btechno\b/i.test(text)) {
-    matches.add("industrial techno");
+  if (/\belectroacoustic\b/i.test(text) || (/\belectro\b/i.test(text) && /\bacoustic\b/i.test(text))) {
+    matches.add("electroacoustic");
+  }
+
+  if (/\bfree\b/i.test(text) && /\bjazz\b/i.test(text)) {
+    matches.add("free jazz");
+  }
+
+  if (/\bspiritual\b/i.test(text) && /\bjazz\b/i.test(text)) {
+    matches.add("spiritual jazz");
+  }
+
+  if (/\bjungle\b/i.test(text) && /\bdrum (?:and|n) bass\b/i.test(text)) {
+    matches.add("jungle");
+    matches.add("drum and bass");
+  }
+
+  if (/\balt\b/i.test(text) && /\brock\b/i.test(text)) {
+    matches.add("alternative rock");
+  }
+
+  if (/\balt\b/i.test(text) && /\br&b\b/i.test(text)) {
+    matches.add("alternative r&b");
+  }
+
+  if (/\bhip[- ]hop\b/i.test(text) && /\bpsychedelic\b/i.test(text)) {
+    matches.add("psychedelic hip-hop");
+  }
+
+  if (/\bpsychedelic\b/i.test(text) && /\bfolk\b/i.test(text)) {
+    matches.add("psychedelic folk");
+  }
+
+  if (/\bpsychedelic\b/i.test(text) && /\bpop\b/i.test(text)) {
+    matches.add("psychedelic pop");
+  }
+
+  if (/\bpsychedelic\b/i.test(text) && /\brock\b/i.test(text)) {
+    matches.add("psychedelic rock");
+  }
+
+  if (/\bhouse\b/i.test(text) && /\bsoulful\b/i.test(text)) {
+    matches.add("soulful house");
+  }
+
+  if (/\bhouse\b/i.test(text) && /\bsample(?:d|[- ])based\b/i.test(text)) {
+    matches.add("sample-based house");
+  }
+
+  if (/\bhouse\b/i.test(text) && /\balternative\b/i.test(text)) {
+    matches.add("alternative dance");
+  }
+
+  if (/\bchamber\b/i.test(text) && /\bfolk\b/i.test(text)) {
+    matches.add("chamber folk");
+  }
+
+  if (/\bart\b/i.test(text) && /\bfolk\b/i.test(text)) {
+    matches.add("art folk");
+  }
+
+  if (/\bneo\b/i.test(text) && /\bsoul\b/i.test(text)) {
+    matches.add("neo-soul");
+  }
+
+  if (/\bnu\b/i.test(text) && /\bjazz\b/i.test(text)) {
+    matches.add("nu jazz");
+  }
+
+  if (/\bhardcore\b/i.test(text) && /\bpunk\b/i.test(text)) {
+    matches.add("hardcore punk");
+  }
+
+  if (/\bmelodic\b/i.test(text) && /\bhardcore\b/i.test(text)) {
+    matches.add("melodic hardcore");
+  }
+
+  if (/\blatin\b/i.test(text) && /\balternative\b/i.test(text)) {
+    matches.add("latin alternative");
+  }
+
+  if (/\blatin\b/i.test(text) && /\brock\b/i.test(text)) {
+    matches.add("latin rock");
+  }
+
+  if (/\bchillwave\b/i.test(text) && /\bsynth\b/i.test(text)) {
+    matches.add("synth-pop");
+  }
+
+  if (/\bsinger[- ]songwriter\b/i.test(text) && /\bfolk\b/i.test(text)) {
+    matches.add("indie folk");
+  }
+
+  if (/\bdream\b/i.test(text) && /\bshoegaze\b/i.test(text)) {
+    matches.add("dreamgaze");
   }
 
   if (/\bslowcore\b/i.test(text) && /\bshoegaze\b/i.test(text)) {
@@ -369,18 +730,6 @@ function extractGenresFromText(text: string) {
 
   if (/\bdoom\b/i.test(text) && /\bshoegaze\b/i.test(text)) {
     matches.add("doomgaze");
-  }
-
-  if (/\bdream\b/i.test(text) && /\bshoegaze\b/i.test(text)) {
-    matches.add("dreamgaze");
-  }
-
-  if (/\bsynth\b/i.test(text) && /\bpop\b/i.test(text)) {
-    matches.add("synth-pop");
-  }
-
-  if (/\balt\b/i.test(text) && /\brock\b/i.test(text)) {
-    matches.add("alternative rock");
   }
 
   return [...matches];
@@ -395,6 +744,10 @@ function normalizeGenreName(value: string | null | undefined) {
     .replace(/^#/, "")
     .replace(/^the\s+/i, "")
     .replace(/[!"'`]+/g, "")
+    .replace(/\br\s*(?:&|and)\s*b\b/gi, "r&b")
+    .replace(/\bhip hop\b/gi, "hip-hop")
+    .replace(/\bneo soul\b/gi, "neo-soul")
+    .replace(/\bartpop\b/gi, "art pop")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
@@ -411,7 +764,7 @@ function normalizeGenreName(value: string | null | undefined) {
       if (!lastPart || lastPart === "discover") {
         return null;
       }
-      return lastPart.replace(/-/g, " ");
+      return normalizeGenreName(lastPart.replace(/-/g, " "));
     } catch {
       return null;
     }
@@ -424,6 +777,20 @@ function normalizeWhitespace(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function looksGenreLike(value: string) {
+  if (KNOWN_SINGLE_WORD_GENRES.has(value) || GENRE_ALIASES[value]) {
+    return true;
+  }
+
+  if (!value.includes(" ") && !value.includes("-") && !value.includes("&")) {
+    return false;
+  }
+
+  return value
+    .split(/[\s/-]+/)
+    .some((token) => token && KNOWN_GENRE_PARTS.has(token));
+}
+
 function isWeakGenre(value: string) {
   return WEAK_GENRES.has(value);
 }
@@ -431,6 +798,10 @@ function isWeakGenre(value: string) {
 function isRedundantGenre(candidate: string, selected: string[]) {
   return selected.some((existing) => {
     if (existing === candidate) {
+      return true;
+    }
+
+    if (candidate.includes(existing) || existing.includes(candidate)) {
       return true;
     }
 

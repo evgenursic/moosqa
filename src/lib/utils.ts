@@ -71,11 +71,19 @@ export function getDisplayGenre(
     return "Live / Session";
   }
 
-  if (releaseType === ReleaseType.ALBUM || releaseType === ReleaseType.EP || releaseType === ReleaseType.SINGLE) {
-    return "Indie / Alternative";
+  if (releaseType === ReleaseType.ALBUM) {
+    return "Album release";
   }
 
-  return "Alternative";
+  if (releaseType === ReleaseType.EP) {
+    return "EP release";
+  }
+
+  if (releaseType === ReleaseType.SINGLE) {
+    return "Single release";
+  }
+
+  return "Release";
 }
 
 function isMeaningfulDisplayGenre(value: string) {

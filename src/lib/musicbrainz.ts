@@ -111,8 +111,9 @@ type CoverArtMetadata = {
 export async function fetchMusicMetadata(
   input: ReleaseMatchInput,
 ): Promise<MusicMetadata> {
-  const match = await searchBestRelease(input);
-  const fallbackArtist = input.artistName ? await searchBestArtist(input.artistName) : null;
+  const lookupInput = deriveLookupInput(input);
+  const match = await searchBestRelease(lookupInput);
+  const fallbackArtist = lookupInput.artistName ? await searchBestArtist(lookupInput.artistName) : null;
 
   if (!match && !fallbackArtist) {
     return {};
@@ -374,33 +375,144 @@ function cleanArtistSearchName(value: string | null | undefined) {
     return "";
   }
 
-  return value
-    .replace(/,.+$/, "")
-    .replace(/\s+(?:&|and)\s+.+$/i, "")
+  return applyArtistAliases(
+    value
     .replace(/\b(feat\.?|featuring|ft\.?)\b.*$/i, "")
     .replace(/\([^)]*\)/g, " ")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim(),
+  );
 }
 
 function cleanReleaseSearchTitle(value: string) {
-  return value
+  return stripEditionSuffixes(
+    value
     .replace(/\((official|music|lyric|visualizer|audio|video)[^)]+\)/gi, " ")
     .replace(/\b(official music video|official video|lyric video|visualizer|official audio)\b/gi, " ")
     .replace(/\((19|20)\d{2}\)/g, " ")
+    .replace(/\b(feat\.?|featuring|ft\.?)\b.*$/i, " ")
     .replace(/\s+\/\s+['"].*?\bout\b.*$/i, " ")
     .replace(/\bout\s+[a-z]+\s+\d{1,2}.*$/i, " ")
+    .replace(/^.+?\s[-–—]\s/, (match) => (looksLikeArtistSeparator(match) ? "" : match))
+    .replace(/^.+?\s["“](.+?)["”]\s*$/, "$1")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim(),
+  );
 }
 
 function normalizeText(value: string) {
   return value
     .toLowerCase()
     .normalize("NFKD")
-    .replace(/[^\w\s]/g, " ")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function deriveLookupInput(input: ReleaseMatchInput): ReleaseMatchInput {
+  const inferredFromTitle = splitArtistAndWork(input.title);
+  const inferredFromProject = splitArtistAndWork(input.projectTitle || "");
+
+  const artistName =
+    input.artistName ||
+    inferredFromProject?.artist ||
+    inferredFromTitle?.artist ||
+    null;
+  const projectTitle =
+    normalizeQuotedProjectTitle(input.projectTitle || "", artistName) ||
+    inferredFromProject?.work ||
+    inferredFromTitle?.work ||
+    input.projectTitle ||
+    input.title;
+
+  return {
+    ...input,
+    artistName: cleanArtistSearchName(artistName),
+    projectTitle: cleanReleaseSearchTitle(projectTitle),
+    title: cleanReleaseSearchTitle(input.title),
+  };
+}
+
+function splitArtistAndWork(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const dashMatch = trimmed.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+  if (dashMatch) {
+    return {
+      artist: dashMatch[1].trim(),
+      work: dashMatch[2].trim(),
+    };
+  }
+
+  const quoteMatch = trimmed.match(/^(.+?)\s["“](.+?)["”]$/);
+  if (quoteMatch) {
+    return {
+      artist: quoteMatch[1].trim(),
+      work: quoteMatch[2].trim(),
+    };
+  }
+
+  return null;
+}
+
+function normalizeQuotedProjectTitle(projectTitle: string, artistName: string | null) {
+  const trimmed = projectTitle.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const quoteMatch = trimmed.match(/^(.+?)\s["“](.+?)["”]$/);
+  if (!quoteMatch) {
+    return trimmed;
+  }
+
+  const possibleArtist = cleanArtistSearchName(quoteMatch[1]);
+  const normalizedArtist = cleanArtistSearchName(artistName);
+  if (normalizedArtist && possibleArtist !== normalizedArtist) {
+    return trimmed;
+  }
+
+  return quoteMatch[2].trim();
+}
+
+function stripEditionSuffixes(value: string) {
+  return value
+    .replace(/\b\d{1,2}(st|nd|rd|th)\s+anniversary\b/gi, " ")
+    .replace(/\banniversary\b/gi, " ")
+    .replace(/\bdirector'?s cut\b/gi, " ")
+    .replace(/\bexpanded edition\b/gi, " ")
+    .replace(/\bexpanded\b/gi, " ")
+    .replace(/\bdeluxe edition\b/gi, " ")
+    .replace(/\bdeluxe\b/gi, " ")
+    .replace(/\bremaster(?:ed)?\b/gi, " ")
+    .replace(/\breissue\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function looksLikeArtistSeparator(value: string) {
+  return /[-–—]/.test(value);
+}
+
+function applyArtistAliases(value: string) {
+  const normalized = value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^\p{L}\p{N}\s.&-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const aliasMap: Record<string, string> = {
+    "marshmellow": "Marshmello",
+    "marshmellow and portugal. the man": "Marshmello and Portugal. The Man",
+  };
+
+  return aliasMap[normalized] || value;
 }
 
 async function fetchCoverArt(

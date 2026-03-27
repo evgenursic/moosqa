@@ -71,6 +71,7 @@ async function resolveSourceMetadataInternal(
       findStringValue(jsonLd, ["recordLabel", "name"]) ||
       findStringValue(jsonLd, ["publisher", "name"]) ||
       null;
+    const descriptionCandidates = collectDescriptionCandidates(html, jsonLd);
     const sourceTitle =
       sanitizeText(
         getMetaContent(html, "og:title") ||
@@ -82,12 +83,7 @@ async function resolveSourceMetadataInternal(
           "",
       ) || null;
     const sourceExcerpt =
-      sanitizeText(
-        getMetaContent(html, "description") ||
-          getMetaContent(html, "og:description") ||
-          findStringValue(jsonLd, ["description"]) ||
-          extractBodyExcerpt(html),
-      ) || null;
+      pickBestDescription(descriptionCandidates) || null;
     const rawGenreCandidates = [
       sourcePlatform !== "youtube" && sourcePlatform !== "youtube-music"
         ? getMetaContent(html, "keywords")
@@ -95,11 +91,16 @@ async function resolveSourceMetadataInternal(
       ...findStringValues(jsonLd, ["keywords"]),
       ...findStringValues(jsonLd, ["genre"]),
       ...extractBandcampTags(html),
+      ...extractBandcampJsonKeywords(html),
+      ...extractBandcampStructuredGenres(html),
     ];
     const genreName =
       buildGenreProfile({
         explicitGenres: rawGenreCandidates,
         text: [sourceTitle, sourceExcerpt].filter(Boolean).join(". "),
+        artistName: options.artistName || null,
+        projectTitle: options.projectTitle || null,
+        title: options.title || null,
         labelName: rawLabelName,
       }) || null;
     const sourceImageUrl =
@@ -187,6 +188,20 @@ function extractAnchorCandidates(html: string, baseUrl: string) {
 
 function extractBandcampTags(html: string) {
   return [...html.matchAll(/<a[^>]+class=["'][^"']*\btag\b[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi)]
+    .map((match) => sanitizeText(match[1]))
+    .filter((value): value is string => Boolean(value));
+}
+
+function extractBandcampJsonKeywords(html: string) {
+  return [...html.matchAll(/"keywords"\s*:\s*\[(.*?)\]/gi)]
+    .flatMap((match) =>
+      [...match[1].matchAll(/"([^"]+)"/g)].map((keywordMatch) => sanitizeText(keywordMatch[1])),
+    )
+    .filter((value): value is string => Boolean(value));
+}
+
+function extractBandcampStructuredGenres(html: string) {
+  return [...html.matchAll(/"genre"\s*:\s*"([^"]+)"/gi)]
     .map((match) => sanitizeText(match[1]))
     .filter((value): value is string => Boolean(value));
 }
@@ -430,6 +445,66 @@ function extractBodyExcerpt(html: string) {
   }
 
   return paragraphs.slice(0, 2).join(" ").slice(0, 320).trim();
+}
+
+function collectDescriptionCandidates(html: string, jsonLd: unknown[]) {
+  const candidates = [
+    getMetaContent(html, "description"),
+    getMetaContent(html, "og:description"),
+    getMetaContent(html, "twitter:description"),
+    ...findStringValues(jsonLd, ["description"]),
+    extractBodyExcerpt(html),
+  ]
+    .map((value) => sanitizeText(value))
+    .filter((value): value is string => Boolean(value));
+
+  return [...new Set(candidates)];
+}
+
+function pickBestDescription(candidates: string[]) {
+  const ranked = candidates
+    .map((candidate) => ({
+      candidate,
+      score: scoreDescriptionCandidate(candidate),
+    }))
+    .sort((left, right) => right.score - left.score);
+
+  return ranked[0]?.candidate || null;
+}
+
+function scoreDescriptionCandidate(value: string) {
+  const normalized = value.toLowerCase();
+  let score = Math.min(value.length, 320);
+
+  if (value.length < 60) {
+    score -= 50;
+  }
+
+  if (/(released?|out now|debut|album|ep|single|track|collaboration|live|session)/i.test(value)) {
+    score += 28;
+  }
+
+  if (
+    /\b(ambient|electronic|shoegaze|dream pop|post-punk|jungle|drum and bass|neo-soul|folk|jazz|punk|hardcore|synth-pop|experimental)\b/i.test(
+      value,
+    )
+  ) {
+    score += 24;
+  }
+
+  if (/\d+\.\s/.test(value) || /\btracklist\b/i.test(value)) {
+    score -= 35;
+  }
+
+  if (normalized.includes("listen on spotify") || normalized.includes("listen to ")) {
+    score -= 12;
+  }
+
+  if (normalized.includes("browser is outdated") || normalized.includes("brskalnik")) {
+    score -= 40;
+  }
+
+  return score;
 }
 
 function sanitizeText(value: string | null | undefined) {
