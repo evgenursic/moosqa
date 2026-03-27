@@ -132,7 +132,7 @@ export function SiteHeader() {
               </button>
 
               <nav className="hidden flex-wrap gap-x-8 gap-y-3 text-sm uppercase tracking-[0.18em] text-[var(--color-ink)] lg:flex">
-                {leftLinks.map((link) => renderNavLink(link))}
+                {leftLinks.map((link) => renderNavLink(link, "header-nav-link"))}
               </nav>
             </div>
 
@@ -149,7 +149,7 @@ export function SiteHeader() {
 
             <div className="flex items-center justify-end gap-2 lg:block">
               <div className="hidden flex-wrap justify-end gap-x-8 gap-y-3 text-sm uppercase tracking-[0.18em] text-[var(--color-ink)] lg:flex">
-                {rightLinks.map((link) => renderNavLink(link))}
+                {rightLinks.map((link) => renderNavLink(link, "header-nav-link"))}
                 <AdvancedSearchButton className="inline-flex items-center justify-center transition hover:opacity-70" />
               </div>
 

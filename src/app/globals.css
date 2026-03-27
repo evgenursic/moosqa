@@ -75,6 +75,42 @@ img {
   text-transform: uppercase;
 }
 
+.header-nav-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  transition: color 180ms ease;
+}
+
+.header-nav-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.45rem;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 180ms ease;
+}
+
+.header-nav-link:hover,
+.header-nav-link:focus-visible {
+  color: var(--color-accent-strong);
+}
+
+.header-nav-link:hover::after,
+.header-nav-link:focus-visible::after {
+  transform: scaleX(1);
+}
+
 .grain {
   position: relative;
 }
