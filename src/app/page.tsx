@@ -153,10 +153,6 @@ type ReleaseCardSectionProps = {
 };
 
 function ReleaseCardSection({ section, releases }: ReleaseCardSectionProps) {
-  if (releases.length === 0) {
-    return null;
-  }
-
   const definition = releaseSectionDefinitions[section];
 
   return (
@@ -168,16 +164,22 @@ function ReleaseCardSection({ section, releases }: ReleaseCardSectionProps) {
         <p className="section-kicker text-black/43">{definition.title}</p>
       </div>
 
-      <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-        {releases.map((release, index) => (
-          <ReleaseCard
-            key={release.id}
-            release={release}
-            compact={index > 1}
-            priority={index < 2}
-          />
-        ))}
-      </div>
+      {releases.length > 0 ? (
+        <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+          {releases.map((release, index) => (
+            <ReleaseCard
+              key={release.id}
+              release={release}
+              compact={index > 1}
+              priority={index < 2}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="border border-[var(--color-line)] bg-[var(--color-panel)] p-6 text-sm leading-7 text-black/63">
+          {definition.emptyState}
+        </div>
+      )}
 
       <SectionReadMore section={section} className="mt-8" />
     </section>
