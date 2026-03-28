@@ -78,34 +78,43 @@ export function SiteHeader() {
 
     lastScrollY.current = window.scrollY;
 
-    function updateHeaderState() {
-      const currentY = window.scrollY;
-      const delta = currentY - lastScrollY.current;
+    function handleScroll() {
       const isMobileViewport = window.innerWidth < 1024;
-      const resetThreshold = isMobileViewport ? 12 : 32;
-      const compactThreshold = isMobileViewport ? 26 : 140;
-      const downDeltaThreshold = isMobileViewport ? 0 : 8;
-      const upDeltaThreshold = isMobileViewport ? 0 : -8;
 
-      if (currentY <= resetThreshold) {
-        setIsCompact(false);
-      } else if (delta > downDeltaThreshold && currentY > compactThreshold) {
-        setIsCompact(true);
-      } else if (delta < upDeltaThreshold) {
-        setIsCompact(false);
+      if (isMobileViewport) {
+        const currentY = window.scrollY;
+        if (currentY <= 4) {
+          setIsCompact(false);
+        } else if (currentY > lastScrollY.current) {
+          setIsCompact(true);
+        } else if (currentY < lastScrollY.current) {
+          setIsCompact(false);
+        }
+
+        lastScrollY.current = currentY;
+        return;
       }
 
-      lastScrollY.current = currentY;
-      ticking.current = false;
-    }
-
-    function handleScroll() {
       if (ticking.current) {
         return;
       }
 
       ticking.current = true;
-      window.requestAnimationFrame(updateHeaderState);
+      window.requestAnimationFrame(() => {
+        const currentY = window.scrollY;
+        const delta = currentY - lastScrollY.current;
+
+        if (currentY <= 32) {
+          setIsCompact(false);
+        } else if (delta > 8 && currentY > 140) {
+          setIsCompact(true);
+        } else if (delta < -8) {
+          setIsCompact(false);
+        }
+
+        lastScrollY.current = currentY;
+        ticking.current = false;
+      });
     }
 
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -176,13 +185,15 @@ export function SiteHeader() {
   return (
     <>
       <header className="sticky top-0 z-40">
-        <div
-          className={`overflow-hidden transition-all duration-150 ease-out md:duration-300 ${
-            showCompactHeader
-              ? "max-h-0 -translate-y-5 opacity-0 pointer-events-none"
-              : "max-h-[24rem] translate-y-0 opacity-100"
-          }`}
-        >
+        {showCompactHeader ? (
+          <div className="py-2 md:py-3">
+            <Link href="/" className="block text-center">
+              <span className="glass-wordmark text-[1.9rem] leading-none text-[var(--color-ink)] serif-display md:text-[2.45rem]">
+                MooSQA
+              </span>
+            </Link>
+          </div>
+        ) : (
           <div className="border-b border-[var(--color-line)] bg-[var(--color-paper)]">
             <div className="border-b border-[var(--color-soft-line)] px-4 py-4 md:px-6 lg:px-8 lg:py-8">
               <div className="flex items-center justify-between gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-start lg:gap-8">
@@ -227,23 +238,7 @@ export function SiteHeader() {
               <AdvancedSearchPanel />
             </div>
           </div>
-        </div>
-
-        <div
-          className={`overflow-hidden transition-all duration-150 ease-out md:duration-300 ${
-            showCompactHeader
-              ? "max-h-20 translate-y-0 opacity-100"
-              : "max-h-0 -translate-y-4 opacity-0 pointer-events-none"
-          }`}
-        >
-          <div className="px-4 py-2 backdrop-blur-xl backdrop-saturate-150">
-            <Link href="/" className="block text-center">
-              <span className="glass-wordmark text-[1.9rem] leading-none text-[var(--color-ink)] serif-display md:text-[2.45rem]">
-                MooSQA
-              </span>
-            </Link>
-          </div>
-        </div>
+        )}
       </header>
 
       {menuOpen ? (
