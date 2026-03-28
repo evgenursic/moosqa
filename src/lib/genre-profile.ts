@@ -447,6 +447,28 @@ const TEXT_GENRE_PATTERNS: Array<[RegExp, string]> = [
   [/\buk techno\b/i, "uk techno"],
 ];
 
+const GENRE_PRIORITY_BONUSES: Record<string, number> = {
+  "math rock": 6,
+  "post-rock": 5,
+  "post-punk": 5,
+  shoegaze: 5,
+  slowcore: 4,
+  dreamgaze: 4,
+  doomgaze: 4,
+  slowgaze: 4,
+  indietronica: 4,
+  "experimental electronic": 3,
+  "spiritual jazz": 4,
+  "free jazz": 4,
+  "hardcore punk": 4,
+  "melodic hardcore": 4,
+  "garage punk": 4,
+  "garage rock": 3,
+  "singer-songwriter": 3,
+  "chamber pop": 3,
+  "chamber folk": 3,
+};
+
 export function buildGenreProfile(options: GenreProfileOptions) {
   const limit = options.limit || 3;
   const weightedGenres = new Map<string, WeightedGenre>();
@@ -525,6 +547,23 @@ export function isSpecificGenreProfile(value: string | null | undefined) {
   return genres.some((genre) => !isWeakGenre(genre));
 }
 
+export function countGenreProfileSegments(value: string | null | undefined) {
+  return expandGenreValue(value).length;
+}
+
+export function pickPreferredGenreProfile(...profiles: Array<string | null | undefined>) {
+  const candidates = profiles
+    .map((profile) => profile?.trim() || null)
+    .filter((profile): profile is string => Boolean(profile));
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return candidates
+    .sort((left, right) => scoreGenreProfile(right) - scoreGenreProfile(left))[0] || null;
+}
+
 function addWeightedGenre(
   map: Map<string, WeightedGenre>,
   candidate: string,
@@ -546,7 +585,8 @@ function addWeightedGenre(
     (current?.score || 0) +
     baseScore +
     (isWeakGenre(normalized) ? 0 : 4) +
-    (normalized.includes(" ") || normalized.includes("-") ? 1 : 0);
+    (normalized.includes(" ") || normalized.includes("-") ? 1 : 0) +
+    (GENRE_PRIORITY_BONUSES[normalized] || 0);
 
   map.set(normalized, {
     name: normalized,
@@ -830,4 +870,11 @@ function isRedundantGenre(candidate: string, selected: string[]) {
 
     return false;
   });
+}
+
+function scoreGenreProfile(value: string) {
+  const segments = expandGenreValue(value);
+  const specificSegments = segments.filter((genre) => !isWeakGenre(genre));
+
+  return specificSegments.length * 20 + segments.length * 8 + value.length / 100;
 }

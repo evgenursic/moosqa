@@ -2,7 +2,7 @@ import { ReleaseType } from "@/generated/prisma/enums";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
 import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
-import { buildGenreProfile, isSpecificGenreProfile } from "@/lib/genre-profile";
+import { buildGenreProfile, isSpecificGenreProfile, pickPreferredGenreProfile } from "@/lib/genre-profile";
 import { getGenreOverride } from "@/lib/genre-overrides";
 import { fetchRedditPosts, normalizeRedditPost, shouldKeepReleaseRecord } from "@/lib/reddit";
 import { enrichRecentReleases } from "@/lib/release-enrichment";
@@ -443,15 +443,7 @@ function resolvePreferredGenre(input: {
   } | null;
 }) {
   const specificStoredGenre = input.currentGenre?.trim();
-  if (specificStoredGenre && isSpecificGenreProfile(specificStoredGenre)) {
-    return specificStoredGenre;
-  }
-
   const specificFallbackGenre = input.fallbackGenre?.trim();
-  if (specificFallbackGenre && isSpecificGenreProfile(specificFallbackGenre)) {
-    return specificFallbackGenre;
-  }
-
   const synthesizedGenre = buildGenreProfile({
     explicitGenres: [input.currentGenre, input.fallbackGenre],
     text: [
@@ -475,9 +467,15 @@ function resolvePreferredGenre(input: {
     return overrideGenre;
   }
 
-  if (synthesizedGenre) {
-    return synthesizedGenre;
-  }
-
-  return null;
+  return (
+    pickPreferredGenreProfile(
+      synthesizedGenre,
+      specificFallbackGenre && isSpecificGenreProfile(specificFallbackGenre)
+        ? specificFallbackGenre
+        : null,
+      specificStoredGenre && isSpecificGenreProfile(specificStoredGenre)
+        ? specificStoredGenre
+        : null,
+    ) || null
+  );
 }

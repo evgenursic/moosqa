@@ -2,7 +2,12 @@ import { prisma } from "@/lib/prisma";
 import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
 import { searchBandcampRelease } from "@/lib/bandcamp-search";
 import { getGenreOverride } from "@/lib/genre-overrides";
-import { buildGenreProfile, isSpecificGenreProfile } from "@/lib/genre-profile";
+import {
+  buildGenreProfile,
+  countGenreProfileSegments,
+  isSpecificGenreProfile,
+  pickPreferredGenreProfile,
+} from "@/lib/genre-profile";
 import { fetchMusicMetadata, type MusicMetadata } from "@/lib/musicbrainz";
 import { detectPlatform } from "@/lib/listening-links";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
@@ -92,6 +97,10 @@ function needsEnrichment(release: EnrichableRelease, wantsAi: boolean) {
   }
 
   if (wantsAi && !release.aiSummary) {
+    return true;
+  }
+
+  if (shouldUpgradeGenreProfile(release)) {
     return true;
   }
 
@@ -206,8 +215,10 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
     }) || null;
   const genreName =
     overrideGenre ||
-    specificGenreCandidate ||
-    (profiledGenre && isSpecificGenreProfile(profiledGenre) ? profiledGenre : null) ||
+    pickPreferredGenreProfile(
+      profiledGenre && isSpecificGenreProfile(profiledGenre) ? profiledGenre : null,
+      specificGenreCandidate,
+    ) ||
     genreCandidates.find(Boolean) ||
     inferGenreFromRelease(release) ||
     release.genreName ||
@@ -456,4 +467,20 @@ function shouldUseArtistHint(
   }
 
   return !currentArtistName.toLowerCase().includes(normalizedHint);
+}
+
+function shouldUpgradeGenreProfile(release: EnrichableRelease) {
+  const currentGenre = release.genreName?.trim() || null;
+  if (!currentGenre || !isSpecificGenreProfile(currentGenre)) {
+    return false;
+  }
+
+  if (countGenreProfileSegments(currentGenre) > 1) {
+    return false;
+  }
+
+  const hintText = `${release.title} ${release.projectTitle || ""} ${release.summary || ""}`;
+  return /\b(math rock|post-rock|post-punk|shoegaze|dream pop|slowcore|noise rock|garage rock|indietronica|electronic|ambient|hardcore punk|singer-songwriter|chamber pop|art pop|synth-pop|psych(?:edelic)? rock|folk rock)\b/i.test(
+    hintText,
+  );
 }
