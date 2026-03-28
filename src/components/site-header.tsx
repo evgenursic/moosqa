@@ -1,11 +1,38 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, X } from "lucide-react";
+import { Menu, Search, X } from "lucide-react";
 
-import { AdvancedSearchButton, AdvancedSearchOverlay } from "@/components/advanced-search";
+const AdvancedSearchOverlay = dynamic(
+  () => import("@/components/advanced-search").then((mod) => mod.AdvancedSearchOverlay),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="fixed inset-0 z-[260] overflow-y-auto bg-[rgba(13,18,28,0.97)] text-white">
+        <div className="mx-auto min-h-screen max-w-[1480px] px-4 py-5 md:px-8 md:py-7">
+          <div className="flex items-center gap-4 border-b border-white/12 pb-5 md:gap-5 md:pb-7">
+            <Search size={22} strokeWidth={1.9} className="shrink-0 text-white/68" />
+            <div className="h-10 flex-1 animate-pulse bg-white/8 md:h-12" />
+            <div className="h-11 w-11 animate-pulse rounded-full bg-white/8" />
+          </div>
+        </div>
+      </div>
+    ),
+  },
+);
+
+let searchOverlayPreloadPromise: Promise<unknown> | null = null;
+
+function preloadSearchOverlay() {
+  if (!searchOverlayPreloadPromise) {
+    searchOverlayPreloadPromise = import("@/components/advanced-search");
+  }
+
+  return searchOverlayPreloadPromise;
+}
 
 type NavLink = {
   href: string;
@@ -37,6 +64,34 @@ export function SiteHeader() {
   const ticking = useRef(false);
   const forceExpandedHeader = menuOpen || searchOpen;
   const showCompactHeader = isCompact && !forceExpandedHeader;
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const browserWindow = window as Window & typeof globalThis & {
+      requestIdleCallback?: (
+        callback: IdleRequestCallback,
+        options?: IdleRequestOptions,
+      ) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    if (typeof browserWindow.requestIdleCallback === "function") {
+      const idleId = browserWindow.requestIdleCallback(() => {
+        void preloadSearchOverlay();
+      }, { timeout: 1800 });
+
+      return () => browserWindow.cancelIdleCallback?.(idleId);
+    }
+
+    const timeoutId = globalThis.setTimeout(() => {
+      void preloadSearchOverlay();
+    }, 900);
+
+    return () => globalThis.clearTimeout(timeoutId);
+  }, []);
 
   useEffect(() => {
     if (!menuOpen) {
@@ -143,6 +198,26 @@ export function SiteHeader() {
     router.push(link.href, { scroll: true });
   }
 
+  function openSearch() {
+    void preloadSearchOverlay();
+    setSearchOpen(true);
+  }
+
+  function renderSearchButton(className?: string) {
+    return (
+      <button
+        type="button"
+        onClick={openSearch}
+        onPointerEnter={() => void preloadSearchOverlay()}
+        onFocus={() => void preloadSearchOverlay()}
+        aria-label="Open search"
+        className={className}
+      >
+        <Search size={18} strokeWidth={1.9} />
+      </button>
+    );
+  }
+
   function renderNavLink(link: NavLink, className?: string) {
     if (link.external) {
       return (
@@ -229,16 +304,14 @@ export function SiteHeader() {
                 <div className="flex items-center justify-end gap-2 lg:block">
                   <div className="hidden flex-wrap justify-end gap-x-8 gap-y-3 text-sm uppercase tracking-[0.18em] text-[var(--color-ink)] lg:flex">
                     {rightLinks.map((link) => renderNavLink(link, "header-nav-link"))}
-                    <AdvancedSearchButton
-                      onOpen={() => setSearchOpen(true)}
-                      className="inline-flex items-center justify-center transition hover:opacity-70"
-                    />
+                    {renderSearchButton(
+                      "inline-flex cursor-pointer items-center justify-center transition hover:text-[var(--color-accent-strong)]",
+                    )}
                   </div>
 
-                  <AdvancedSearchButton
-                    onOpen={() => setSearchOpen(true)}
-                    className="inline-flex h-11 w-11 items-center justify-center text-[var(--color-ink)] transition hover:text-[var(--color-accent-strong)] lg:hidden"
-                  />
+                  {renderSearchButton(
+                    "inline-flex h-11 w-11 cursor-pointer items-center justify-center text-[var(--color-ink)] transition hover:text-[var(--color-accent-strong)] lg:hidden",
+                  )}
                 </div>
               </div>
             </div>

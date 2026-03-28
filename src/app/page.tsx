@@ -199,7 +199,6 @@ function SectionReadMore({
     <div className={className}>
       <Link
         href={`/browse/${section}`}
-        prefetch={false}
         className="inline-flex items-center border border-[var(--color-line)] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
       >
         {definition.readMoreLabel}

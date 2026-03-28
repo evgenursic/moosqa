@@ -59,7 +59,21 @@ const HOMEPAGE_LIMITS = {
 } as const;
 
 const ARCHIVE_PAGE_SIZE = 24;
+const SECTION_CACHE_TTL_MS = 12_000;
 const SEARCH_INDEX_CACHE_TTL_MS = 15_000;
+let homepageSectionsCache:
+  | {
+      expiresAt: number;
+      data: Awaited<ReturnType<typeof getHomepageSectionsDataUncached>>;
+    }
+  | null = null;
+let sectionArchiveCache = new Map<
+  ReleaseSectionKey,
+  {
+    expiresAt: number;
+    data: ReleaseListingItem[];
+  }
+>();
 let searchIndexCache:
   | {
       expiresAt: number;
@@ -118,6 +132,12 @@ export const releaseSectionDefinitions: Record<ReleaseSectionKey, ReleaseSection
   },
 };
 
+export function clearReleaseDataCaches() {
+  homepageSectionsCache = null;
+  sectionArchiveCache = new Map();
+  searchIndexCache = null;
+}
+
 const releaseListingSelect = {
   id: true,
   slug: true,
@@ -144,6 +164,21 @@ const releaseListingSelect = {
 } as const;
 
 export async function getHomepageSectionsData() {
+  const now = Date.now();
+  if (homepageSectionsCache && homepageSectionsCache.expiresAt > now) {
+    return homepageSectionsCache.data;
+  }
+
+  const data = await getHomepageSectionsDataUncached();
+  homepageSectionsCache = {
+    expiresAt: now + SECTION_CACHE_TTL_MS,
+    data,
+  };
+
+  return data;
+}
+
+async function getHomepageSectionsDataUncached() {
   await ensureDatabase();
 
   const [
@@ -276,6 +311,21 @@ function clampPageNumber(value: number, pageCount: number) {
 }
 
 async function getSectionReleases(section: ReleaseSectionKey) {
+  const cachedSection = sectionArchiveCache.get(section);
+  if (cachedSection && cachedSection.expiresAt > Date.now()) {
+    return cachedSection.data;
+  }
+
+  const releases = await getSectionReleasesUncached(section);
+  sectionArchiveCache.set(section, {
+    expiresAt: Date.now() + SECTION_CACHE_TTL_MS,
+    data: releases,
+  });
+
+  return releases;
+}
+
+async function getSectionReleasesUncached(section: ReleaseSectionKey) {
   if (section === "latest") {
     const releases = await prisma.release.findMany({
       select: releaseListingSelect,

@@ -11,7 +11,6 @@ import {
   releaseSectionDefinitions,
 } from "@/lib/release-sections";
 import { getSiteUrl } from "@/lib/site";
-import { refreshHomepageData } from "@/lib/sync-releases";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -63,7 +62,6 @@ export default async function BrowseSectionPage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const page = parsePageParam(resolvedSearchParams.page);
 
-  await refreshHomepageData();
   const archive = await getSectionArchivePage(section, page);
 
   return (
@@ -92,7 +90,6 @@ export default async function BrowseSectionPage({
               </span>
               <Link
                 href={`/#${archive.homeId}`}
-                prefetch={false}
                 className="inline-flex items-center border border-[var(--color-line)] px-3 py-2 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
               >
                 Back to homepage section
@@ -150,7 +147,6 @@ function ArchivePagination({
       {page > 1 ? (
         <Link
           href={`/browse/${section}?page=${page - 1}`}
-          prefetch={false}
           className="inline-flex items-center border border-[var(--color-line)] px-4 py-3 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
         >
           Previous
@@ -166,7 +162,6 @@ function ArchivePagination({
           <Link
             key={`${section}-${value}`}
             href={`/browse/${section}?page=${value}`}
-            prefetch={false}
             aria-current={value === page ? "page" : undefined}
             className={
               value === page
@@ -182,7 +177,6 @@ function ArchivePagination({
       {page < pageCount ? (
         <Link
           href={`/browse/${section}?page=${page + 1}`}
-          prefetch={false}
           className="inline-flex items-center border border-[var(--color-line)] px-4 py-3 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
         >
           Next

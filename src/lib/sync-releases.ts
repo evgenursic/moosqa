@@ -2,10 +2,12 @@ import { ReleaseType } from "@/generated/prisma/enums";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
 import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
+import { searchBandcampRelease } from "@/lib/bandcamp-search";
 import { buildGenreProfile, isSpecificGenreProfile, pickPreferredGenreProfile } from "@/lib/genre-profile";
 import { getGenreOverride } from "@/lib/genre-overrides";
 import { fetchRedditPosts, normalizeRedditPost, shouldKeepReleaseRecord } from "@/lib/reddit";
 import { enrichRecentReleases } from "@/lib/release-enrichment";
+import { clearReleaseDataCaches } from "@/lib/release-sections";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
 
 type SyncResult = {
@@ -45,6 +47,7 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
   const { created, updated, failed } = await upsertNormalizedReleases(releases, { lightweight });
 
   const enriched = enrich ? await enrichRecentReleases(Math.max(12, sanitized + created)) : 0;
+  clearReleaseDataCaches();
 
   return {
     scanned: posts.length,
@@ -272,6 +275,7 @@ async function syncLatestHomepageReleases() {
   const { created, updated, failed } = await upsertNormalizedReleases(releases, {
     lightweight: true,
   });
+  clearReleaseDataCaches();
 
   return {
     scanned: posts.length,
@@ -311,13 +315,17 @@ async function upsertNormalizedReleases(
   const existingBySourceItemId = new Map(
     existingReleases.map((release) => [release.sourceItemId, release]),
   );
+  const artistGenreHints = await loadArtistGenreHints(releases);
 
   for (const release of releases) {
     try {
       const existing = existingBySourceItemId.get(release.sourceItemId) || null;
+      const artistGenreHint =
+        artistGenreHints.get(normalizeArtistKey(release.artistName)) || null;
 
       const releaseData = await buildReleaseDataForUpsert(release, existing, {
         lightweight,
+        artistGenreHint,
       });
 
       await prisma.release.upsert({
@@ -349,7 +357,7 @@ async function buildReleaseDataForUpsert(
     imageUrl: string | null;
     thumbnailUrl: string | null;
   } | null,
-  options: { lightweight?: boolean } = {},
+  options: { lightweight?: boolean; artistGenreHint?: string | null } = {},
 ) {
   if (options.lightweight) {
     const shouldHydrateSourceMetadata =
@@ -363,6 +371,26 @@ async function buildReleaseDataForUpsert(
           title: release.title,
         })
       : null;
+    const initialGenre = resolvePreferredGenre({
+      currentGenre: existing?.genreName || null,
+      fallbackGenre: sourceMetadata?.genreName || null,
+      artistGenreHint: options.artistGenreHint || null,
+      release,
+      sourceMetadata,
+    });
+    const needsSupplementalBandcampLookup =
+      !initialGenre ||
+      (!release.imageUrl &&
+        !existing?.imageUrl &&
+        !existing?.thumbnailUrl &&
+        !sourceMetadata?.sourceImageUrl);
+    const supplementalSourceMetadata = needsSupplementalBandcampLookup
+      ? await resolveSupplementalBandcampMetadata(release)
+      : null;
+    const effectiveSourceMetadata = mergeSourceMetadataHints(
+      sourceMetadata,
+      supplementalSourceMetadata,
+    );
 
     return {
       ...release,
@@ -370,20 +398,21 @@ async function buildReleaseDataForUpsert(
         release.imageUrl ||
         existing?.imageUrl ||
         existing?.thumbnailUrl ||
-        sourceMetadata?.sourceImageUrl ||
+        effectiveSourceMetadata?.sourceImageUrl ||
         null,
       thumbnailUrl:
         release.thumbnailUrl ||
         existing?.thumbnailUrl ||
         release.imageUrl ||
         existing?.imageUrl ||
-        sourceMetadata?.sourceImageUrl ||
+        effectiveSourceMetadata?.sourceImageUrl ||
         null,
       genreName: resolvePreferredGenre({
         currentGenre: existing?.genreName || null,
-        fallbackGenre: sourceMetadata?.genreName || null,
+        fallbackGenre: effectiveSourceMetadata?.genreName || null,
+        artistGenreHint: options.artistGenreHint || null,
         release,
-        sourceMetadata,
+        sourceMetadata: effectiveSourceMetadata,
       }),
       aiSummary: existing?.aiSummary || null,
     };
@@ -400,6 +429,7 @@ async function buildReleaseDataForUpsert(
   const fallbackGenre = resolvePreferredGenre({
     currentGenre: existing?.genreName || null,
     fallbackGenre: sourceMetadata?.genreName || null,
+    artistGenreHint: options.artistGenreHint || null,
     release,
     sourceMetadata,
   });
@@ -435,6 +465,7 @@ async function buildReleaseDataForUpsert(
 function resolvePreferredGenre(input: {
   currentGenre: string | null;
   fallbackGenre: string | null;
+  artistGenreHint?: string | null;
   release: NormalizedReleaseRecord;
   sourceMetadata?: {
     sourceTitle?: string | null;
@@ -444,8 +475,9 @@ function resolvePreferredGenre(input: {
 }) {
   const specificStoredGenre = input.currentGenre?.trim();
   const specificFallbackGenre = input.fallbackGenre?.trim();
+  const artistGenreHint = input.artistGenreHint?.trim();
   const synthesizedGenre = buildGenreProfile({
-    explicitGenres: [input.currentGenre, input.fallbackGenre],
+    explicitGenres: [input.currentGenre, input.fallbackGenre, artistGenreHint],
     text: [
       input.release.title,
       input.release.projectTitle,
@@ -473,9 +505,136 @@ function resolvePreferredGenre(input: {
       specificFallbackGenre && isSpecificGenreProfile(specificFallbackGenre)
         ? specificFallbackGenre
         : null,
+      artistGenreHint && isSpecificGenreProfile(artistGenreHint) ? artistGenreHint : null,
       specificStoredGenre && isSpecificGenreProfile(specificStoredGenre)
         ? specificStoredGenre
         : null,
     ) || null
   );
+}
+
+async function loadArtistGenreHints(releases: NormalizedReleaseRecord[]) {
+  const targetArtistKeys = new Set(
+    releases
+      .map((release) => normalizeArtistKey(release.artistName))
+      .filter((value): value is string => Boolean(value)),
+  );
+
+  if (targetArtistKeys.size === 0) {
+    return new Map<string, string>();
+  }
+
+  const recentGenreRows = await prisma.release.findMany({
+    where: {
+      artistName: {
+        not: null,
+      },
+      genreName: {
+        not: null,
+      },
+    },
+    select: {
+      artistName: true,
+      genreName: true,
+      publishedAt: true,
+    },
+    orderBy: {
+      publishedAt: "desc",
+    },
+    take: 700,
+  });
+
+  const artistGenreBuckets = new Map<string, string[]>();
+
+  for (const row of recentGenreRows) {
+    const artistKey = normalizeArtistKey(row.artistName);
+    if (!artistKey || !targetArtistKeys.has(artistKey) || !row.genreName) {
+      continue;
+    }
+
+    if (!isSpecificGenreProfile(row.genreName)) {
+      continue;
+    }
+
+    const bucket = artistGenreBuckets.get(artistKey) || [];
+    if (bucket.length >= 4) {
+      continue;
+    }
+
+    bucket.push(row.genreName);
+    artistGenreBuckets.set(artistKey, bucket);
+  }
+
+  const artistGenreHints = new Map<string, string>();
+  for (const [artistKey, genres] of artistGenreBuckets.entries()) {
+    const hint = pickPreferredGenreProfile(...genres);
+    if (hint) {
+      artistGenreHints.set(artistKey, hint);
+    }
+  }
+
+  return artistGenreHints;
+}
+
+async function resolveSupplementalBandcampMetadata(release: NormalizedReleaseRecord) {
+  const bandcampResult = await searchBandcampRelease({
+    artistName: release.artistName,
+    projectTitle: release.projectTitle,
+    title: release.title,
+    releaseType: release.releaseType,
+  }).catch(() => null);
+
+  if (!bandcampResult?.url || bandcampResult.url === release.sourceUrl) {
+    return null;
+  }
+
+  return resolveSourceMetadata(bandcampResult.url, {
+    artistName: release.artistName,
+    projectTitle: release.projectTitle,
+    title: release.title,
+  });
+}
+
+function mergeSourceMetadataHints(
+  primary:
+    | {
+        sourceTitle?: string | null;
+        sourceExcerpt?: string | null;
+        genreName?: string | null;
+        labelName?: string | null;
+        sourceImageUrl?: string | null;
+      }
+    | null
+    | undefined,
+  fallback:
+    | {
+        sourceTitle?: string | null;
+        sourceExcerpt?: string | null;
+        genreName?: string | null;
+        labelName?: string | null;
+        sourceImageUrl?: string | null;
+      }
+    | null
+    | undefined,
+) {
+  if (!primary && !fallback) {
+    return null;
+  }
+
+  return {
+    sourceTitle: primary?.sourceTitle || fallback?.sourceTitle || null,
+    sourceExcerpt: primary?.sourceExcerpt || fallback?.sourceExcerpt || null,
+    genreName:
+      pickPreferredGenreProfile(primary?.genreName || null, fallback?.genreName || null) || null,
+    labelName: primary?.labelName || fallback?.labelName || null,
+    sourceImageUrl: primary?.sourceImageUrl || fallback?.sourceImageUrl || null,
+  };
+}
+
+function normalizeArtistKey(value: string | null | undefined) {
+  return value
+    ?.toLowerCase()
+    .normalize("NFKD")
+    .replace(/\s+/g, " ")
+    .trim() || "";
 }

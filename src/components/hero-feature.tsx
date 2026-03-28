@@ -88,7 +88,6 @@ export function HeroFeature({ release }: HeroFeatureProps) {
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               href={`/releases/${release.slug}`}
-              prefetch={false}
               className="inline-flex items-center border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-4 py-3 text-xs uppercase tracking-[0.18em] text-white transition hover:opacity-92"
             >
               Open story

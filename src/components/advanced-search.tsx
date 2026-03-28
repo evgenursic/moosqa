@@ -1,17 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Search, SlidersHorizontal, X } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
+import { Search, SlidersHorizontal, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { formatPubDate, formatReleaseTypeLabel, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
 
-const SEARCH_PATHNAME = "/";
-const SEARCH_KEYS = ["q", "type", "platform", "direct"] as const;
-const INITIAL_RESULTS_LIMIT = 8;
 const ACTIVE_RESULTS_LIMIT = 12;
 
 type SearchResultItem = {
@@ -104,14 +101,8 @@ function AdvancedSearchDialog({
   initialPlatform,
   initialDirect,
 }: AdvancedSearchDialogProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const searchParamsString = useMemo(
-    () => getSearchOnlyParams(searchParams.toString()).toString(),
-    [searchParams],
-  );
+  const resultsCacheRef = useRef<Map<string, SearchResponse>>(new Map());
   const [queryValue, setQueryValue] = useState(initialQuery);
   const [typeValue, setTypeValue] = useState(initialType);
   const [platformValue, setPlatformValue] = useState(initialPlatform);
@@ -124,6 +115,8 @@ function AdvancedSearchDialog({
   const [isSearching, setIsSearching] = useState(false);
   const [hasLoadedResults, setHasLoadedResults] = useState(false);
   const deferredQuery = useDeferredValue(queryValue.trim());
+  const hasStructuredFilters = Boolean(typeValue || platformValue || directOnlyValue);
+  const shouldSearch = deferredQuery.length >= 2 || hasStructuredFilters;
 
   const hasDraftCriteria = Boolean(
     queryValue.trim() || typeValue || platformValue || directOnlyValue,
@@ -148,14 +141,32 @@ function AdvancedSearchDialog({
   }, [onClose]);
 
   useEffect(() => {
+    if (!shouldSearch) {
+      setLiveResults([]);
+      setResultTotal(0);
+      setIsSearching(false);
+      setHasLoadedResults(false);
+      return;
+    }
+
     const controller = new AbortController();
     const params = new URLSearchParams();
+    const cacheKey = [deferredQuery, typeValue, platformValue, directOnlyValue ? "1" : "0"].join("|");
 
     setParam(params, "q", deferredQuery);
     setParam(params, "type", typeValue);
     setParam(params, "platform", platformValue);
     setParam(params, "direct", directOnlyValue ? "1" : "");
-    params.set("limit", hasDraftCriteria ? String(ACTIVE_RESULTS_LIMIT) : String(INITIAL_RESULTS_LIMIT));
+    params.set("limit", String(ACTIVE_RESULTS_LIMIT));
+
+    const cachedResponse = resultsCacheRef.current.get(cacheKey);
+    if (cachedResponse) {
+      setLiveResults(cachedResponse.results || []);
+      setResultTotal(cachedResponse.total || 0);
+      setHasLoadedResults(true);
+      setIsSearching(false);
+      return () => controller.abort();
+    }
 
     const timeoutId = window.setTimeout(async () => {
       setIsSearching(true);
@@ -171,6 +182,7 @@ function AdvancedSearchDialog({
         }
 
         const payload = (await response.json()) as SearchResponse;
+        resultsCacheRef.current.set(cacheKey, payload);
         setLiveResults(payload.results || []);
         setResultTotal(payload.total || 0);
         setHasLoadedResults(true);
@@ -188,38 +200,13 @@ function AdvancedSearchDialog({
           setIsSearching(false);
         }
       }
-    }, deferredQuery ? 120 : 0);
+    }, 90);
 
     return () => {
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [deferredQuery, directOnlyValue, hasDraftCriteria, platformValue, typeValue]);
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const nextParams = getSearchOnlyParams(searchParamsString);
-    setParam(nextParams, "q", queryValue.trim());
-    setParam(nextParams, "type", typeValue);
-    setParam(nextParams, "platform", platformValue);
-    setParam(nextParams, "direct", directOnlyValue ? "1" : "");
-
-    const href = nextParams.toString() ? `${SEARCH_PATHNAME}?${nextParams}` : SEARCH_PATHNAME;
-    if (pathname === SEARCH_PATHNAME) {
-      router.replace(href, { scroll: false });
-    } else {
-      router.push(href);
-    }
-
-    onClose();
-    requestAnimationFrame(() => {
-      document.getElementById("explore")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    });
-  }
+  }, [deferredQuery, directOnlyValue, platformValue, shouldSearch, typeValue]);
 
   function clearSearch() {
     setQueryValue("");
@@ -227,10 +214,6 @@ function AdvancedSearchDialog({
     setPlatformValue("");
     setDirectOnlyValue(false);
     setShowFilters(false);
-
-    if (pathname === SEARCH_PATHNAME && searchParamsString) {
-      router.replace(SEARCH_PATHNAME, { scroll: false });
-    }
 
     requestAnimationFrame(() => {
       inputRef.current?.focus();
@@ -246,7 +229,7 @@ function AdvancedSearchDialog({
       aria-label="Advanced search"
     >
       <div className="mx-auto min-h-screen max-w-[1480px] px-4 py-5 md:px-8 md:py-7">
-        <form onSubmit={submit}>
+        <div>
           <div className="flex items-center gap-4 border-b border-white/12 pb-5 md:gap-5 md:pb-7">
             <Search
               size={22}
@@ -280,17 +263,7 @@ function AdvancedSearchDialog({
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 py-4 text-[11px] uppercase tracking-[0.2em] text-white/54 md:py-5">
-            <div className="flex flex-wrap items-center gap-3" aria-live="polite">
-              <span>{hasDraftCriteria ? "Live results" : "Latest releases"}</span>
-              <span>
-                {isSearching
-                  ? "Searching..."
-                  : `${Math.min(liveResults.length, resultTotal)} of ${resultTotal} shown`}
-              </span>
-              {queryValue.trim() ? <span>Query: {queryValue.trim()}</span> : null}
-            </div>
-
+          <div className="flex flex-wrap items-center justify-end gap-2 border-b border-white/8 py-4 text-[11px] uppercase tracking-[0.2em] text-white/54 md:py-5">
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -310,18 +283,6 @@ function AdvancedSearchDialog({
                   Clear
                 </button>
               ) : null}
-
-              <button
-                type="submit"
-                className="group inline-flex min-h-10 cursor-pointer items-center gap-3 rounded-full bg-white px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-black transition hover:bg-[var(--color-sun)]"
-              >
-                <span>View all results</span>
-                <ArrowRight
-                  size={16}
-                  strokeWidth={1.9}
-                  className="transition-transform group-hover:translate-x-1"
-                />
-              </button>
             </div>
           </div>
 
@@ -410,6 +371,8 @@ function AdvancedSearchDialog({
           ) : null}
 
           <SearchLiveResults
+            query={queryValue.trim()}
+            shouldSearch={shouldSearch}
             hasDraftCriteria={hasDraftCriteria}
             results={liveResults}
             total={resultTotal}
@@ -417,13 +380,15 @@ function AdvancedSearchDialog({
             hasLoadedResults={hasLoadedResults}
             onResultSelect={onClose}
           />
-        </form>
+        </div>
       </div>
     </div>
   );
 }
 
 function SearchLiveResults({
+  query,
+  shouldSearch,
   hasDraftCriteria,
   results,
   total,
@@ -431,6 +396,8 @@ function SearchLiveResults({
   hasLoadedResults,
   onResultSelect,
 }: {
+  query: string;
+  shouldSearch: boolean;
   hasDraftCriteria: boolean;
   results: SearchResultItem[];
   total: number;
@@ -440,18 +407,36 @@ function SearchLiveResults({
 }) {
   if (isSearching && !hasLoadedResults) {
     return (
-      <div className="mt-6 grid gap-4 md:mt-8 md:grid-cols-2 xl:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, index) => (
+      <div className="mt-6 grid gap-3 md:mt-8">
+        {Array.from({ length: 5 }).map((_, index) => (
           <div
             key={index}
-            className="animate-pulse border border-white/10 bg-white/[0.03] p-4"
+            className="grid animate-pulse gap-4 border border-white/10 bg-white/[0.03] p-4 md:grid-cols-[12rem_1fr]"
           >
-            <div className="aspect-[4/3] bg-white/8" />
-            <div className="mt-4 h-3 w-24 bg-white/10" />
-            <div className="mt-4 h-8 w-3/4 bg-white/12" />
-            <div className="mt-3 h-16 w-full bg-white/8" />
+            <div className="aspect-[4/3] bg-white/8 md:aspect-[16/10]" />
+            <div>
+              <div className="h-3 w-28 bg-white/10" />
+              <div className="mt-4 h-8 w-3/4 bg-white/12" />
+              <div className="mt-3 h-14 w-full bg-white/8" />
+            </div>
           </div>
         ))}
+      </div>
+    );
+  }
+
+  if (!shouldSearch && query.length === 1) {
+    return (
+      <div className="mt-6 border border-white/10 bg-white/[0.03] p-5 text-sm leading-7 text-white/64 md:mt-8">
+        Type at least 2 characters to search the archive.
+      </div>
+    );
+  }
+
+  if (!shouldSearch) {
+    return (
+      <div className="mt-6 border border-white/10 bg-white/[0.03] p-5 text-sm leading-7 text-white/64 md:mt-8">
+        Start typing to search artists, tracks, albums, EPs, and live sessions.
       </div>
     );
   }
@@ -459,9 +444,7 @@ function SearchLiveResults({
   if (!results.length) {
     return (
       <div className="mt-6 border border-white/10 bg-white/[0.03] p-5 text-sm leading-7 text-white/64 md:mt-8">
-        {hasDraftCriteria
-          ? "No releases match the current search."
-          : "Start typing to search the archive, or browse the latest releases shown here."}
+        No releases match the current search.
       </div>
     );
   }
@@ -469,18 +452,18 @@ function SearchLiveResults({
   return (
     <div className="mt-6 md:mt-8">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-white/48">
-        <span>{hasDraftCriteria ? "Matching releases" : "Fresh archive picks"}</span>
-        <span>{Math.min(results.length, total)} visible</span>
+        <span>{Math.min(results.length, total)} of {total} results</span>
+        {hasDraftCriteria && query ? <span>Searching: {query}</span> : null}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3">
         {results.map((result) => (
           <Link
             key={result.id}
             href={`/releases/${result.slug}`}
             prefetch={false}
             onClick={onResultSelect}
-            className="group block border border-white/10 bg-white/[0.03] p-4 transition duration-300 hover:border-white/24 hover:bg-white/[0.045]"
+            className="group grid gap-4 border border-white/10 bg-white/[0.03] p-4 transition duration-300 hover:border-white/24 hover:bg-white/[0.045] md:grid-cols-[12rem_1fr]"
           >
             <ReleaseArtwork
               title={result.title}
@@ -488,36 +471,38 @@ function SearchLiveResults({
               projectTitle={result.projectTitle}
               imageUrl={result.imageUrl || result.thumbnailUrl}
               genreName={result.genreName}
-              imageClassName="aspect-[4/3]"
+              imageClassName="aspect-[4/3] md:aspect-[16/10]"
             />
 
-            <div className="mt-4 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
-              <span>{getDisplayGenre(result.genreName, result.releaseType)}</span>
-              <span>{formatReleaseTypeLabel(result.releaseType)}</span>
-              <span>{formatPubDate(new Date(result.publishedAt))}</span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
+                <span>{getDisplayGenre(result.genreName, result.releaseType)}</span>
+                <span>{formatReleaseTypeLabel(result.releaseType)}</span>
+                <span>{formatPubDate(new Date(result.publishedAt))}</span>
+              </div>
+
+              <h3 className="mt-3 text-[1.9rem] leading-[0.94] text-white serif-display md:text-[2.25rem]">
+                <span className="card-title-underline">
+                  {result.artistName || result.projectTitle || result.title}
+                </span>
+              </h3>
+
+              <p className="mt-2 text-lg leading-7 text-white/72 serif-display">
+                {result.artistName && result.projectTitle ? result.projectTitle : result.title}
+              </p>
+
+              <p className="mt-4 text-sm leading-6 text-white/68">
+                {getDisplaySummary({
+                  aiSummary: result.aiSummary,
+                  summary: result.summary,
+                  artistName: result.artistName,
+                  projectTitle: result.projectTitle,
+                  title: result.title,
+                  releaseType: result.releaseType,
+                  genreName: result.genreName,
+                })}
+              </p>
             </div>
-
-            <h3 className="mt-3 text-[1.9rem] leading-[0.94] text-white serif-display md:text-[2.25rem]">
-              <span className="card-title-underline">
-                {result.artistName || result.projectTitle || result.title}
-              </span>
-            </h3>
-
-            <p className="mt-2 text-lg leading-7 text-white/72 serif-display">
-              {result.artistName && result.projectTitle ? result.projectTitle : result.title}
-            </p>
-
-            <p className="mt-4 text-sm leading-6 text-white/68">
-              {getDisplaySummary({
-                aiSummary: result.aiSummary,
-                summary: result.summary,
-                artistName: result.artistName,
-                projectTitle: result.projectTitle,
-                title: result.title,
-                releaseType: result.releaseType,
-                genreName: result.genreName,
-              })}
-            </p>
           </Link>
         ))}
       </div>
@@ -532,18 +517,4 @@ function setParam(params: URLSearchParams, key: string, value: string) {
   }
 
   params.delete(key);
-}
-
-function getSearchOnlyParams(searchParamsString: string) {
-  const sourceParams = new URLSearchParams(searchParamsString);
-  const nextParams = new URLSearchParams();
-
-  for (const key of SEARCH_KEYS) {
-    const value = sourceParams.get(key);
-    if (value) {
-      nextParams.set(key, value);
-    }
-  }
-
-  return nextParams;
 }
