@@ -1,11 +1,38 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { FormEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Search, SlidersHorizontal, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+import { ReleaseType } from "@/generated/prisma/enums";
+import { ReleaseArtwork } from "@/components/release-artwork";
+import { formatPubDate, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
+
 const SEARCH_PATHNAME = "/";
 const SEARCH_KEYS = ["q", "type", "platform", "direct"] as const;
+const INITIAL_RESULTS_LIMIT = 8;
+const ACTIVE_RESULTS_LIMIT = 12;
+
+type SearchResultItem = {
+  id: string;
+  slug: string;
+  title: string;
+  artistName: string | null;
+  projectTitle: string | null;
+  releaseType: ReleaseType;
+  imageUrl: string | null;
+  thumbnailUrl: string | null;
+  genreName: string | null;
+  summary: string | null;
+  aiSummary: string | null;
+  publishedAt: string;
+};
+
+type SearchResponse = {
+  total: number;
+  results: SearchResultItem[];
+};
 
 type AdvancedSearchButtonProps = {
   className?: string;
@@ -92,6 +119,11 @@ function AdvancedSearchDialog({
   const [showFilters, setShowFilters] = useState(
     Boolean(initialType || initialPlatform || initialDirect),
   );
+  const [liveResults, setLiveResults] = useState<SearchResultItem[]>([]);
+  const [resultTotal, setResultTotal] = useState(0);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasLoadedResults, setHasLoadedResults] = useState(false);
+  const deferredQuery = useDeferredValue(queryValue.trim());
 
   const hasDraftCriteria = Boolean(
     queryValue.trim() || typeValue || platformValue || directOnlyValue,
@@ -114,6 +146,55 @@ function AdvancedSearchDialog({
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, [onClose]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const params = new URLSearchParams();
+
+    setParam(params, "q", deferredQuery);
+    setParam(params, "type", typeValue);
+    setParam(params, "platform", platformValue);
+    setParam(params, "direct", directOnlyValue ? "1" : "");
+    params.set("limit", hasDraftCriteria ? String(ACTIVE_RESULTS_LIMIT) : String(INITIAL_RESULTS_LIMIT));
+
+    const timeoutId = window.setTimeout(async () => {
+      setIsSearching(true);
+
+      try {
+        const response = await fetch(`/api/search?${params.toString()}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(`Search request failed with ${response.status}`);
+        }
+
+        const payload = (await response.json()) as SearchResponse;
+        setLiveResults(payload.results || []);
+        setResultTotal(payload.total || 0);
+        setHasLoadedResults(true);
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        console.error(error);
+        setLiveResults([]);
+        setResultTotal(0);
+        setHasLoadedResults(true);
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsSearching(false);
+        }
+      }
+    }, deferredQuery ? 120 : 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [deferredQuery, directOnlyValue, hasDraftCriteria, platformValue, typeValue]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -159,13 +240,13 @@ function AdvancedSearchDialog({
   return (
     <div
       id="advanced-search-overlay"
-      className="fixed inset-0 z-[260] bg-[rgba(13,18,28,0.97)] text-white"
+      className="fixed inset-0 z-[260] overflow-y-auto bg-[rgba(13,18,28,0.97)] text-white"
       role="dialog"
       aria-modal="true"
       aria-label="Advanced search"
     >
-      <div className="mx-auto flex min-h-screen max-w-[1480px] flex-col px-4 py-5 md:px-8 md:py-7">
-        <form onSubmit={submit} className="flex-1">
+      <div className="mx-auto min-h-screen max-w-[1480px] px-4 py-5 md:px-8 md:py-7">
+        <form onSubmit={submit}>
           <div className="flex items-center gap-4 border-b border-white/12 pb-5 md:gap-5 md:pb-7">
             <Search
               size={22}
@@ -200,9 +281,12 @@ function AdvancedSearchDialog({
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 py-4 text-[11px] uppercase tracking-[0.2em] text-white/54 md:py-5">
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3" aria-live="polite">
+              <span>{hasDraftCriteria ? "Live results" : "Latest releases"}</span>
               <span>
-                {hasDraftCriteria ? "Ready to search" : "Search the full MooSQA archive"}
+                {isSearching
+                  ? "Searching..."
+                  : `${Math.min(liveResults.length, resultTotal)} of ${resultTotal} shown`}
               </span>
               {queryValue.trim() ? <span>Query: {queryValue.trim()}</span> : null}
             </div>
@@ -231,7 +315,7 @@ function AdvancedSearchDialog({
                 type="submit"
                 className="group inline-flex min-h-10 cursor-pointer items-center gap-3 rounded-full bg-white px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-black transition hover:bg-[var(--color-sun)]"
               >
-                <span>Search</span>
+                <span>View all results</span>
                 <ArrowRight
                   size={16}
                   strokeWidth={1.9}
@@ -325,31 +409,117 @@ function AdvancedSearchDialog({
             </div>
           ) : null}
 
-          <div className="mt-6 grid gap-4 md:mt-8 md:grid-cols-2 xl:grid-cols-3">
-            <div className="border border-white/8 bg-white/[0.03] p-4">
-              <p className="section-kicker text-white/36">Fast search</p>
-              <p className="mt-3 text-sm leading-7 text-white/64">
-                This panel now opens locally in the browser first, so tapping the search icon no
-                longer waits for a server refresh before showing the input.
-              </p>
-            </div>
-
-            <div className="border border-white/8 bg-white/[0.03] p-4">
-              <p className="section-kicker text-white/36">Archive coverage</p>
-              <p className="mt-3 text-sm leading-7 text-white/64">
-                Search spans artists, release titles, genres, labels, summaries, outlets and live
-                sessions from the current MooSQA archive.
-              </p>
-            </div>
-
-            <div className="border border-white/8 bg-white/[0.03] p-4">
-              <p className="section-kicker text-white/36">Quick submit</p>
-              <p className="mt-3 text-sm leading-7 text-white/64">
-                Press Enter to load matching results below the header on the homepage.
-              </p>
-            </div>
-          </div>
+          <SearchLiveResults
+            hasDraftCriteria={hasDraftCriteria}
+            results={liveResults}
+            total={resultTotal}
+            isSearching={isSearching}
+            hasLoadedResults={hasLoadedResults}
+            onResultSelect={onClose}
+          />
         </form>
+      </div>
+    </div>
+  );
+}
+
+function SearchLiveResults({
+  hasDraftCriteria,
+  results,
+  total,
+  isSearching,
+  hasLoadedResults,
+  onResultSelect,
+}: {
+  hasDraftCriteria: boolean;
+  results: SearchResultItem[];
+  total: number;
+  isSearching: boolean;
+  hasLoadedResults: boolean;
+  onResultSelect: () => void;
+}) {
+  if (isSearching && !hasLoadedResults) {
+    return (
+      <div className="mt-6 grid gap-4 md:mt-8 md:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div
+            key={index}
+            className="animate-pulse border border-white/10 bg-white/[0.03] p-4"
+          >
+            <div className="aspect-[4/3] bg-white/8" />
+            <div className="mt-4 h-3 w-24 bg-white/10" />
+            <div className="mt-4 h-8 w-3/4 bg-white/12" />
+            <div className="mt-3 h-16 w-full bg-white/8" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!results.length) {
+    return (
+      <div className="mt-6 border border-white/10 bg-white/[0.03] p-5 text-sm leading-7 text-white/64 md:mt-8">
+        {hasDraftCriteria
+          ? "No releases match the current search."
+          : "Start typing to search the archive, or browse the latest releases shown here."}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 md:mt-8">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-white/48">
+        <span>{hasDraftCriteria ? "Matching releases" : "Fresh archive picks"}</span>
+        <span>{Math.min(results.length, total)} visible</span>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {results.map((result) => (
+          <Link
+            key={result.id}
+            href={`/releases/${result.slug}`}
+            prefetch={false}
+            onClick={onResultSelect}
+            className="group block border border-white/10 bg-white/[0.03] p-4 transition duration-300 hover:border-white/24 hover:bg-white/[0.045]"
+          >
+            <ReleaseArtwork
+              title={result.title}
+              artistName={result.artistName}
+              projectTitle={result.projectTitle}
+              imageUrl={result.imageUrl || result.thumbnailUrl}
+              genreName={result.genreName}
+              imageClassName="aspect-[4/3]"
+            />
+
+            <div className="mt-4 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
+              <span>{getDisplayGenre(result.genreName, result.releaseType)}</span>
+              <span>{result.releaseType.replace("_", " ")}</span>
+              <span>{formatPubDate(new Date(result.publishedAt))}</span>
+            </div>
+
+            <h3 className="mt-3 text-[1.9rem] leading-[0.94] text-white serif-display md:text-[2.25rem]">
+              <span className="card-title-underline">
+                {result.artistName || result.projectTitle || result.title}
+              </span>
+            </h3>
+
+            <p className="mt-2 text-lg leading-7 text-white/72 serif-display">
+              {result.artistName && result.projectTitle ? result.projectTitle : result.title}
+            </p>
+
+            <p className="mt-4 text-sm leading-6 text-white/68">
+              {getDisplaySummary({
+                aiSummary: result.aiSummary,
+                summary: result.summary,
+                artistName: result.artistName,
+                projectTitle: result.projectTitle,
+                title: result.title,
+                releaseType: result.releaseType,
+                genreName: result.genreName,
+              })}
+            </p>
+          </Link>
+        ))}
       </div>
     </div>
   );

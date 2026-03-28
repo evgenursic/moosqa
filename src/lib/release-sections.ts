@@ -59,6 +59,13 @@ const HOMEPAGE_LIMITS = {
 } as const;
 
 const ARCHIVE_PAGE_SIZE = 24;
+const SEARCH_INDEX_CACHE_TTL_MS = 15_000;
+let searchIndexCache:
+  | {
+      expiresAt: number;
+      data: ReleaseListingItem[];
+    }
+  | null = null;
 
 export const releaseSectionDefinitions: Record<ReleaseSectionKey, ReleaseSectionDefinition> = {
   latest: {
@@ -207,15 +214,30 @@ export async function getHomepageSectionsData() {
   };
 }
 
-export async function getSearchReleases() {
+export async function getSearchReleases(options?: { useCache?: boolean; ttlMs?: number }) {
   await ensureDatabase();
+  const useCache = options?.useCache ?? true;
+  const ttlMs = options?.ttlMs ?? SEARCH_INDEX_CACHE_TTL_MS;
+
+  if (useCache && searchIndexCache && searchIndexCache.expiresAt > Date.now()) {
+    return searchIndexCache.data;
+  }
 
   const releases = await prisma.release.findMany({
     select: releaseListingSelect,
     orderBy: { publishedAt: "desc" },
   });
 
-  return prepareDisplayReleases(releases);
+  const preparedReleases = prepareDisplayReleases(releases);
+
+  if (useCache) {
+    searchIndexCache = {
+      expiresAt: Date.now() + ttlMs,
+      data: preparedReleases,
+    };
+  }
+
+  return preparedReleases;
 }
 
 export async function getSectionArchivePage(section: ReleaseSectionKey, requestedPage = 1) {
