@@ -4,12 +4,15 @@ import { decodeHtmlEntities, slugify, trimText } from "@/lib/utils";
 const REDDIT_URLS = [
   "https://www.reddit.com/r/indieheads/new.json?limit=100&raw_json=1",
   "https://api.reddit.com/r/indieheads/new?limit=100&raw_json=1",
+  "https://www.reddit.com/r/indieheads/new/.json?limit=100&raw_json=1",
+  "https://old.reddit.com/r/indieheads/new.json?limit=100&raw_json=1",
   "https://www.reddit.com/r/indieheads/.json?limit=100&raw_json=1",
 ];
 const REDDIT_RSS_URL = "https://www.reddit.com/r/indieheads/new.rss";
 const USER_AGENT = "moosqa/0.1 (+https://moosqa.local)";
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
+const REDDIT_FETCH_TIMEOUT_MS = 10000;
 
 type RedditListing = {
   data?: {
@@ -74,6 +77,7 @@ export async function fetchRedditPosts() {
           headers,
           cache: "no-store",
           next: { revalidate: 0 },
+          signal: AbortSignal.timeout(REDDIT_FETCH_TIMEOUT_MS),
         });
 
         if (!response.ok) {
@@ -154,6 +158,7 @@ async function fetchRedditPostsFromRss(headerVariants: Array<Record<string, stri
         },
         cache: "no-store",
         next: { revalidate: 0 },
+        signal: AbortSignal.timeout(REDDIT_FETCH_TIMEOUT_MS),
       });
 
       if (!response.ok) {
@@ -318,10 +323,12 @@ function mergeRedditPostLists(primary: RedditPost[], secondary: RedditPost[]) {
 export function normalizeRedditPost(post: RedditPost): NormalizedRelease | null {
   const releaseType = detectReleaseType(post.title, post.link_flair_text);
   const cleanTitle = stripTag(post.title);
+  const sourceUrl = resolvePrimarySourceUrl(post);
+  const sourceDomain = inferDomain(sourceUrl);
   if (!shouldKeepReleaseRecord({
     title: cleanTitle,
     releaseType,
-    sourceUrl: post.url,
+    sourceUrl,
     flair: post.link_flair_text ?? null,
   })) {
     return null;
@@ -341,14 +348,14 @@ export function normalizeRedditPost(post: RedditPost): NormalizedRelease | null 
     releaseType,
     flair: post.link_flair_text ?? extractTag(post.title),
     summary: trimText(post.selftext || buildSummary(cleanTitle, releaseType, publishedAt)),
-    outletName: inferOutletName(post.domain),
+    outletName: inferOutletName(sourceDomain || post.domain),
     releaseDate: null,
     publishedAt,
     redditPermalink: `https://www.reddit.com${post.permalink}`,
-    sourceUrl: post.url,
+    sourceUrl,
     imageUrl,
     thumbnailUrl,
-    domain: post.domain ?? null,
+    domain: sourceDomain || post.domain || null,
     score: post.score ?? null,
     commentCount: post.num_comments ?? null,
     rawJson: JSON.stringify(post),
@@ -502,8 +509,6 @@ export function shouldKeepReleaseRecord(input: {
     "playlist",
     "magazine",
     "podcast",
-    "announcement",
-    "announce",
     "ama",
   ];
 
@@ -529,4 +534,36 @@ function isRedditHostedOnly(sourceUrl: string) {
   } catch {
     return false;
   }
+}
+
+function resolvePrimarySourceUrl(post: RedditPost) {
+  if (!isRedditSelfPost(post.url)) {
+    return post.url;
+  }
+
+  const selftextUrl = extractFirstExternalUrl(post.selftext || "");
+  return selftextUrl || post.url;
+}
+
+function isRedditSelfPost(url: string) {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "");
+    return hostname === "reddit.com" || hostname.endsWith(".reddit.com");
+  } catch {
+    return false;
+  }
+}
+
+function extractFirstExternalUrl(text: string) {
+  const markdownMatch = text.match(/\[[^\]]+\]\((https?:\/\/[^)\s]+)\)/i);
+  if (markdownMatch?.[1] && !isRedditUrl(markdownMatch[1])) {
+    return markdownMatch[1];
+  }
+
+  const urlMatch = text.match(/https?:\/\/[^\s)]+/i);
+  if (urlMatch?.[0] && !isRedditUrl(urlMatch[0])) {
+    return urlMatch[0];
+  }
+
+  return null;
 }

@@ -23,18 +23,32 @@ export function ReleaseArtwork({
   const accent = getArtworkAccent(genreName);
 
   return (
-    <div className={cn("relative overflow-hidden border border-[var(--color-line)] bg-[var(--color-panel)]", className)}>
+    <div
+      className={cn(
+        "relative overflow-hidden border border-[var(--color-line)] bg-[var(--color-panel)] transition duration-500 ease-out group-hover:border-[var(--color-accent-strong)] group-hover:shadow-[0_24px_54px_rgba(82,110,170,0.18)]",
+        className,
+      )}
+    >
       {imageUrl ? (
         <img
           src={imageUrl}
           alt={title}
-          className={cn("h-full w-full object-cover", imageClassName)}
+          className={cn(
+            "h-full w-full object-cover transition duration-700 ease-out will-change-transform group-hover:scale-[1.035] group-hover:brightness-[1.03]",
+            imageClassName,
+          )}
           loading={priority ? "eager" : "lazy"}
           decoding="async"
           fetchPriority={priority ? "high" : "low"}
         />
       ) : (
-        <div className={cn("relative h-full min-h-[18rem]", accent, imageClassName)}>
+        <div
+          className={cn(
+            "relative h-full min-h-[18rem] transition duration-700 ease-out will-change-transform group-hover:scale-[1.035]",
+            accent,
+            imageClassName,
+          )}
+        >
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(255,255,255,0.34),transparent_22%),radial-gradient(circle_at_78%_26%,rgba(255,255,255,0.22),transparent_20%),linear-gradient(140deg,rgba(255,255,255,0.12),transparent_42%,rgba(18,28,48,0.16))]" />
         </div>
       )}

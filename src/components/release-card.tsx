@@ -40,8 +40,8 @@ export function ReleaseCard({
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
 
   return (
-    <article className="min-w-0 border-t border-[var(--color-line)] pt-6">
-      <Link href={`/releases/${release.slug}`} prefetch={false} className="block min-w-0">
+    <article className="group min-w-0 border-t border-[var(--color-line)] pt-6">
+      <Link href={`/releases/${release.slug}`} prefetch={false} className="block min-w-0 cursor-pointer">
         <ReleaseArtwork
           title={release.title}
           artistName={release.artistName}
@@ -67,7 +67,7 @@ export function ReleaseCard({
         <p className="section-kicker text-black/43">
           {release.releaseType.replace("_", " ")} / {formatPubDate(release.publishedAt)} / {formatRelative(release.publishedAt)}
         </p>
-        <Link href={`/releases/${release.slug}`} prefetch={false} className="block">
+        <Link href={`/releases/${release.slug}`} prefetch={false} className="block cursor-pointer">
           <h3
             className={
               compact
@@ -75,7 +75,9 @@ export function ReleaseCard({
                 : "mt-3 break-words text-[2.35rem] leading-[0.94] text-[var(--color-ink)] serif-display md:text-[3rem]"
             }
           >
-            {release.artistName || release.projectTitle || release.title}
+            <span className="card-title-underline">
+              {release.artistName || release.projectTitle || release.title}
+            </span>
           </h3>
           <p className="mt-3 break-words text-lg leading-7 text-black/68 serif-display">
             {release.artistName && release.projectTitle ? release.projectTitle : release.title}

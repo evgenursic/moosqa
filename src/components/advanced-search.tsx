@@ -62,7 +62,7 @@ export function AdvancedSearchButton({ className }: AdvancedSearchButtonProps) {
       aria-label="Open search"
       aria-expanded={isOpen}
       aria-controls="advanced-search"
-      className={`${className ?? ""} ${isOpen ? "opacity-100" : ""}`.trim()}
+      className={`${className ?? ""} cursor-pointer ${isOpen ? "opacity-100" : ""}`.trim()}
     >
       <Search size={18} strokeWidth={1.9} />
     </button>

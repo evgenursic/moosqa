@@ -111,6 +111,19 @@ img {
   transform: scaleX(1);
 }
 
+.card-title-underline {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 0% 1px;
+  transition: background-size 220ms ease;
+}
+
+.group:hover .card-title-underline,
+.group:focus-within .card-title-underline {
+  background-size: 100% 1px;
+}
+
 .grain {
   position: relative;
 }
