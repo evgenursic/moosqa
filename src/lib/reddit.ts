@@ -395,6 +395,10 @@ function detectReleaseType(title: string, flair: string | null | undefined) {
     return ReleaseType.PERFORMANCE;
   }
 
+  if (raw.includes("ORIGINAL")) {
+    return ReleaseType.SINGLE;
+  }
+
   if (raw.includes("FRESH")) {
     return ReleaseType.SINGLE;
   }

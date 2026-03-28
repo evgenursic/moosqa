@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ListeningLinks } from "@/components/listening-links";
 import { ReleaseArtwork } from "@/components/release-artwork";
-import { formatPubDate, formatRelative, formatScore, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
+import { formatPubDate, formatRelative, formatReleaseTypeLabel, formatScore, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
 
 type ReleaseCardProps = {
   release: {
@@ -65,7 +65,7 @@ export function ReleaseCard({
           ) : null}
         </div>
         <p className="section-kicker text-black/43">
-          {release.releaseType.replace("_", " ")} / {formatPubDate(release.publishedAt)} / {formatRelative(release.publishedAt)}
+          {formatReleaseTypeLabel(release.releaseType)} / {formatPubDate(release.publishedAt)} / {formatRelative(release.publishedAt)}
         </p>
         <Link href={`/releases/${release.slug}`} prefetch={false} className="block cursor-pointer">
           <h3

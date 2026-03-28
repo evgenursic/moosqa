@@ -7,7 +7,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ReleaseArtwork } from "@/components/release-artwork";
-import { formatPubDate, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
+import { formatPubDate, formatReleaseTypeLabel, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
 
 const SEARCH_PATHNAME = "/";
 const SEARCH_KEYS = ["q", "type", "platform", "direct"] as const;
@@ -493,7 +493,7 @@ function SearchLiveResults({
 
             <div className="mt-4 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
               <span>{getDisplayGenre(result.genreName, result.releaseType)}</span>
-              <span>{result.releaseType.replace("_", " ")}</span>
+              <span>{formatReleaseTypeLabel(result.releaseType)}</span>
               <span>{formatPubDate(new Date(result.publishedAt))}</span>
             </div>
 

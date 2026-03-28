@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     searchParams.get("enrich") === "1" || searchParams.get("deep") === "1";
   const result = await syncIndieheadsReleases({
     enrich: wantsEnrichment,
-    lightweight: true,
+    lightweight: !wantsEnrichment,
   });
   revalidatePath("/");
 

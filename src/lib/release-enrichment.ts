@@ -1,4 +1,3 @@
-import { ReleaseType } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
 import { searchBandcampRelease } from "@/lib/bandcamp-search";
@@ -417,10 +416,6 @@ function inferGenreFromRelease(release: EnrichableRelease) {
   }
 
   const haystack = `${release.title} ${release.projectTitle || ""} ${release.artistName || ""}`.toLowerCase();
-
-  if (release.releaseType === ReleaseType.PERFORMANCE) {
-    return "Live / Session";
-  }
 
   const inferredGenre = buildGenreProfile({
     text: haystack,

@@ -7,7 +7,6 @@ import { getGenreOverride } from "@/lib/genre-overrides";
 import { fetchRedditPosts, normalizeRedditPost, shouldKeepReleaseRecord } from "@/lib/reddit";
 import { enrichRecentReleases } from "@/lib/release-enrichment";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
-import { getDisplayGenre } from "@/lib/utils";
 
 type SyncResult = {
   scanned: number;
@@ -180,6 +179,11 @@ async function sanitizeStoredMetadata() {
         { genreName: { equals: "Alternative" } },
         { genreName: { equals: "alternative" } },
         { genreName: { equals: "Indie Alternative" } },
+        { genreName: { equals: "Single release" } },
+        { genreName: { equals: "Album release" } },
+        { genreName: { equals: "EP release" } },
+        { genreName: { equals: "Live / Session" } },
+        { genreName: { equals: "Live performance" } },
         { genreName: { startsWith: "http" } },
         { genreName: { equals: "https:" } },
         { genreName: { equals: "http:" } },
@@ -349,12 +353,9 @@ async function buildReleaseDataForUpsert(
 ) {
   if (options.lightweight) {
     const shouldHydrateSourceMetadata =
-      (
-        (!release.imageUrl && !existing?.imageUrl && !existing?.thumbnailUrl) ||
-        !existing?.genreName ||
-        existing.genreName === "Indie / Alternative" ||
-        existing.genreName === "Alternative"
-      );
+      (!release.imageUrl && !existing?.imageUrl && !existing?.thumbnailUrl) ||
+      !existing?.genreName ||
+      !isSpecificGenreProfile(existing.genreName);
     const sourceMetadata = shouldHydrateSourceMetadata
       ? await resolveSourceMetadata(release.sourceUrl, {
           artistName: release.artistName,
@@ -478,5 +479,5 @@ function resolvePreferredGenre(input: {
     return synthesizedGenre;
   }
 
-  return getDisplayGenre(null, input.release.releaseType);
+  return null;
 }

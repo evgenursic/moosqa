@@ -8,7 +8,7 @@ import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { getSiteUrl } from "@/lib/site";
 import { getReleaseBySlug } from "@/lib/sync-releases";
-import { formatPubDate, formatRelative, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
+import { formatPubDate, formatRelative, formatReleaseTypeLabel, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +88,7 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
             </Link>
 
             <div>
-              <p className="section-kicker text-black/43">{release.releaseType.replace("_", " ")}</p>
+              <p className="section-kicker text-black/43">{formatReleaseTypeLabel(release.releaseType)}</p>
               <h1 className="mt-4 max-w-5xl text-6xl leading-[0.92] text-[var(--color-ink)] serif-display md:text-7xl">
                 {release.artistName || release.projectTitle || release.title}
               </h1>

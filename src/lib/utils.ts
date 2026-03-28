@@ -58,17 +58,13 @@ export function formatScore(score: number) {
   return `${Math.round(score)}%`;
 }
 
-export function getDisplayGenre(
-  genreName: string | null | undefined,
-  releaseType: ReleaseType,
-) {
-  const normalizedGenre = genreName?.trim() || null;
-  if (normalizedGenre && isMeaningfulDisplayGenre(normalizedGenre)) {
-    return normalizedGenre;
+export function formatReleaseTypeLabel(releaseType: ReleaseType) {
+  if (releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION) {
+    return "Live performance";
   }
 
-  if (releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION) {
-    return "Live / Session";
+  if (releaseType === ReleaseType.SINGLE) {
+    return "Single release";
   }
 
   if (releaseType === ReleaseType.ALBUM) {
@@ -79,11 +75,20 @@ export function getDisplayGenre(
     return "EP release";
   }
 
-  if (releaseType === ReleaseType.SINGLE) {
-    return "Single release";
+  return releaseType.replace("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+export function getDisplayGenre(
+  genreName: string | null | undefined,
+  releaseType: ReleaseType,
+) {
+  const normalizedGenre = genreName?.trim() || null;
+  if (normalizedGenre && isMeaningfulDisplayGenre(normalizedGenre)) {
+    const prefix = getDisplayReleasePrefix(releaseType);
+    return prefix ? `${prefix} / ${normalizedGenre}` : normalizedGenre;
   }
 
-  return "Release";
+  return getFallbackReleaseLabel(releaseType);
 }
 
 function isMeaningfulDisplayGenre(value: string) {
@@ -103,6 +108,22 @@ function isMeaningfulDisplayGenre(value: string) {
   }
 
   return true;
+}
+
+function getDisplayReleasePrefix(releaseType: ReleaseType) {
+  if (releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION) {
+    return "Live performance";
+  }
+
+  if (releaseType === ReleaseType.SINGLE) {
+    return "Single release";
+  }
+
+  return null;
+}
+
+function getFallbackReleaseLabel(releaseType: ReleaseType) {
+  return formatReleaseTypeLabel(releaseType);
 }
 
 export function getDisplaySummary(input: {
@@ -147,7 +168,7 @@ function buildStaticSummaryFallback(input: {
     input.artistName?.trim() && input.projectTitle?.trim()
       ? input.projectTitle.trim()
       : input.title?.trim() || input.projectTitle?.trim() || subject;
-  const genre = getDisplayGenre(input.genreName, input.releaseType || ReleaseType.OTHER).toLowerCase();
+  const genre = getSummaryGenreLabel(input.genreName, input.releaseType || ReleaseType.OTHER).toLowerCase();
 
   if (input.releaseType === ReleaseType.PERFORMANCE || input.releaseType === ReleaseType.LIVE_SESSION) {
     if (workTitle !== subject) {
@@ -166,4 +187,16 @@ function buildStaticSummaryFallback(input: {
   }
 
   return `${subject} pushes ${workTitle} forward through a ${genre} angle that still gives the card something concrete to say.`;
+}
+
+function getSummaryGenreLabel(
+  genreName: string | null | undefined,
+  releaseType: ReleaseType,
+) {
+  const normalizedGenre = genreName?.trim() || null;
+  if (normalizedGenre && isMeaningfulDisplayGenre(normalizedGenre)) {
+    return normalizedGenre;
+  }
+
+  return getFallbackReleaseLabel(releaseType);
 }

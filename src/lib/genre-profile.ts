@@ -593,7 +593,7 @@ function expandGenreValue(value: string | null | undefined) {
 
   const parts = normalized
     .split(/[,;|]/)
-    .flatMap((part) => part.split(/\s+\/\s+/))
+    .flatMap((part) => part.split(/\s*\/\s*/))
     .map((part) => normalizeGenreName(part))
     .filter((part): part is string => part !== null);
 
@@ -606,130 +606,145 @@ function expandGenreValue(value: string | null | undefined) {
 }
 
 function extractGenresFromText(text: string) {
+  const normalizedText = text.replace(/([a-z])\/([a-z])/gi, "$1 / $2");
   const matches = new Set<string>();
 
   for (const [pattern, genre] of TEXT_GENRE_PATTERNS) {
-    if (pattern.test(text)) {
+    if (pattern.test(normalizedText)) {
       matches.add(genre);
     }
   }
 
-  if (/\bavant[- ]garde\b/i.test(text) && /\belectronic\b/i.test(text)) {
+  if (/\bavant[- ]garde\b/i.test(normalizedText) && /\belectronic\b/i.test(normalizedText)) {
     matches.add("avant-garde electronic");
     matches.add("experimental electronic");
   }
 
-  if (/\bambient\b/i.test(text) && /\belectronic\b/i.test(text)) {
+  if (/\bambient\b/i.test(normalizedText) && /\belectronic\b/i.test(normalizedText)) {
     matches.add("ambient electronic");
   }
 
-  if (/\bmodular\b/i.test(text) && /\bambient\b/i.test(text)) {
+  if (/\bmodular\b/i.test(normalizedText) && /\bambient\b/i.test(normalizedText)) {
     matches.add("modular ambient");
   }
 
-  if (/\belectroacoustic\b/i.test(text) || (/\belectro\b/i.test(text) && /\bacoustic\b/i.test(text))) {
+  if (/\belectroacoustic\b/i.test(normalizedText) || (/\belectro\b/i.test(normalizedText) && /\bacoustic\b/i.test(normalizedText))) {
     matches.add("electroacoustic");
   }
 
-  if (/\bfree\b/i.test(text) && /\bjazz\b/i.test(text)) {
+  if (/\bfree\b/i.test(normalizedText) && /\bjazz\b/i.test(normalizedText)) {
     matches.add("free jazz");
   }
 
-  if (/\bspiritual\b/i.test(text) && /\bjazz\b/i.test(text)) {
+  if (/\bspiritual\b/i.test(normalizedText) && /\bjazz\b/i.test(normalizedText)) {
     matches.add("spiritual jazz");
   }
 
-  if (/\bjungle\b/i.test(text) && /\bdrum (?:and|n) bass\b/i.test(text)) {
+  if (/\bjungle\b/i.test(normalizedText) && /\bdrum (?:and|n) bass\b/i.test(normalizedText)) {
     matches.add("jungle");
     matches.add("drum and bass");
   }
 
-  if (/\balt\b/i.test(text) && /\brock\b/i.test(text)) {
+  if (/\balt\b/i.test(normalizedText) && /\brock\b/i.test(normalizedText)) {
     matches.add("alternative rock");
   }
 
-  if (/\balt\b/i.test(text) && /\br&b\b/i.test(text)) {
+  if (/\balt\b/i.test(normalizedText) && /\br&b\b/i.test(normalizedText)) {
     matches.add("alternative r&b");
   }
 
-  if (/\bhip[- ]hop\b/i.test(text) && /\bpsychedelic\b/i.test(text)) {
+  if (/\bhip[- ]hop\b/i.test(normalizedText) && /\bpsychedelic\b/i.test(normalizedText)) {
     matches.add("psychedelic hip-hop");
   }
 
-  if (/\bpsychedelic\b/i.test(text) && /\bfolk\b/i.test(text)) {
+  if (/\bpsychedelic\b/i.test(normalizedText) && /\bfolk\b/i.test(normalizedText)) {
     matches.add("psychedelic folk");
   }
 
-  if (/\bpsychedelic\b/i.test(text) && /\bpop\b/i.test(text)) {
+  if (/\bpsychedelic\b/i.test(normalizedText) && /\bpop\b/i.test(normalizedText)) {
     matches.add("psychedelic pop");
   }
 
-  if (/\bpsychedelic\b/i.test(text) && /\brock\b/i.test(text)) {
+  if (/\bpsychedelic\b/i.test(normalizedText) && /\brock\b/i.test(normalizedText)) {
     matches.add("psychedelic rock");
   }
 
-  if (/\bhouse\b/i.test(text) && /\bsoulful\b/i.test(text)) {
+  if (/\bhouse\b/i.test(normalizedText) && /\bsoulful\b/i.test(normalizedText)) {
     matches.add("soulful house");
   }
 
-  if (/\bhouse\b/i.test(text) && /\bsample(?:d|[- ])based\b/i.test(text)) {
+  if (/\bhouse\b/i.test(normalizedText) && /\bsample(?:d|[- ])based\b/i.test(normalizedText)) {
     matches.add("sample-based house");
   }
 
-  if (/\bhouse\b/i.test(text) && /\balternative\b/i.test(text)) {
+  if (/\bhouse\b/i.test(normalizedText) && /\balternative\b/i.test(normalizedText)) {
     matches.add("alternative dance");
   }
 
-  if (/\bchamber\b/i.test(text) && /\bfolk\b/i.test(text)) {
+  if (/\bchamber\b/i.test(normalizedText) && /\bfolk\b/i.test(normalizedText)) {
     matches.add("chamber folk");
   }
 
-  if (/\bart\b/i.test(text) && /\bfolk\b/i.test(text)) {
+  if (/\bart\b/i.test(normalizedText) && /\bfolk\b/i.test(normalizedText)) {
     matches.add("art folk");
   }
 
-  if (/\bneo\b/i.test(text) && /\bsoul\b/i.test(text)) {
+  if (/\bneo\b/i.test(normalizedText) && /\bsoul\b/i.test(normalizedText)) {
     matches.add("neo-soul");
   }
 
-  if (/\bnu\b/i.test(text) && /\bjazz\b/i.test(text)) {
+  if (/\bnu\b/i.test(normalizedText) && /\bjazz\b/i.test(normalizedText)) {
     matches.add("nu jazz");
   }
 
-  if (/\bhardcore\b/i.test(text) && /\bpunk\b/i.test(text)) {
+  if (/\bhardcore\b/i.test(normalizedText) && /\bpunk\b/i.test(normalizedText)) {
     matches.add("hardcore punk");
   }
 
-  if (/\bmelodic\b/i.test(text) && /\bhardcore\b/i.test(text)) {
+  if (/\bmelodic\b/i.test(normalizedText) && /\bhardcore\b/i.test(normalizedText)) {
     matches.add("melodic hardcore");
   }
 
-  if (/\blatin\b/i.test(text) && /\balternative\b/i.test(text)) {
+  if (/\blatin\b/i.test(normalizedText) && /\balternative\b/i.test(normalizedText)) {
     matches.add("latin alternative");
   }
 
-  if (/\blatin\b/i.test(text) && /\brock\b/i.test(text)) {
+  if (/\blatin\b/i.test(normalizedText) && /\brock\b/i.test(normalizedText)) {
     matches.add("latin rock");
   }
 
-  if (/\bchillwave\b/i.test(text) && /\bsynth\b/i.test(text)) {
+  if (/\bchillwave\b/i.test(normalizedText) && /\bsynth\b/i.test(normalizedText)) {
     matches.add("synth-pop");
   }
 
-  if (/\bsinger[- ]songwriter\b/i.test(text) && /\bfolk\b/i.test(text)) {
+  if (/\bsinger[- ]songwriter\b/i.test(normalizedText) && /\bfolk\b/i.test(normalizedText)) {
     matches.add("indie folk");
   }
 
-  if (/\bdream\b/i.test(text) && /\bshoegaze\b/i.test(text)) {
+  if (/\bdream\b/i.test(normalizedText) && /\bshoegaze\b/i.test(normalizedText)) {
     matches.add("dreamgaze");
   }
 
-  if (/\bslowcore\b/i.test(text) && /\bshoegaze\b/i.test(text)) {
+  if (/\bslowcore\b/i.test(normalizedText) && /\bshoegaze\b/i.test(normalizedText)) {
     matches.add("slowgaze");
   }
 
-  if (/\bdoom\b/i.test(text) && /\bshoegaze\b/i.test(text)) {
+  if (/\bdoom\b/i.test(normalizedText) && /\bshoegaze\b/i.test(normalizedText)) {
     matches.add("doomgaze");
+  }
+
+  if (/\bmath rock\b/i.test(normalizedText) && /\b(?:alt|alternative)\b/i.test(normalizedText)) {
+    matches.add("math rock");
+    matches.add("alternative rock");
+  }
+
+  if (/\bmath rock\b/i.test(normalizedText) && /\belectronic\b/i.test(normalizedText)) {
+    matches.add("math rock");
+    matches.add("experimental electronic");
+  }
+
+  if (/\b(?:alt|alternative)\b/i.test(normalizedText) && /\bguitar\b/i.test(normalizedText)) {
+    matches.add("alternative rock");
   }
 
   return [...matches];
