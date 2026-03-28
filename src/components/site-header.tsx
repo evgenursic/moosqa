@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Menu, X } from "lucide-react";
 
-import { AdvancedSearchButton, AdvancedSearchPanel } from "@/components/advanced-search";
+import { AdvancedSearchButton, AdvancedSearchOverlay } from "@/components/advanced-search";
 
 type NavLink = {
   href: string;
@@ -29,22 +29,13 @@ const rightLinks: NavLink[] = [
 
 export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const lastScrollY = useRef(0);
   const ticking = useRef(false);
-  const searchState = searchParams.get("search");
-  const hasSearchCriteria = Boolean(
-    searchParams.get("q") ||
-      searchParams.get("type") ||
-      searchParams.get("platform") ||
-      searchParams.get("direct"),
-  );
-  const isSearchOpen =
-    searchState === "open" || (searchState !== "closed" && hasSearchCriteria);
-  const forceExpandedHeader = menuOpen || isSearchOpen;
+  const forceExpandedHeader = menuOpen || searchOpen;
   const showCompactHeader = isCompact && !forceExpandedHeader;
 
   useEffect(() => {
@@ -58,6 +49,18 @@ export function SiteHeader() {
       document.body.style.removeProperty("overflow");
     };
   }, [menuOpen]);
+
+  useEffect(() => {
+    if (!searchOpen) {
+      document.body.style.removeProperty("overflow");
+      return;
+    }
+
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.removeProperty("overflow");
+    };
+  }, [searchOpen]);
 
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
@@ -194,7 +197,7 @@ export function SiteHeader() {
             </Link>
           </div>
         ) : (
-          <div className="border-b border-[var(--color-line)] bg-[var(--color-paper)]">
+        <div className="border-b border-[var(--color-line)] bg-[var(--color-paper)]">
             <div className="border-b border-[var(--color-soft-line)] px-4 py-4 md:px-6 lg:px-8 lg:py-8">
               <div className="flex items-center justify-between gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-start lg:gap-8">
                 <div className="flex items-center gap-3 lg:block">
@@ -226,20 +229,24 @@ export function SiteHeader() {
                 <div className="flex items-center justify-end gap-2 lg:block">
                   <div className="hidden flex-wrap justify-end gap-x-8 gap-y-3 text-sm uppercase tracking-[0.18em] text-[var(--color-ink)] lg:flex">
                     {rightLinks.map((link) => renderNavLink(link, "header-nav-link"))}
-                    <AdvancedSearchButton className="inline-flex items-center justify-center transition hover:opacity-70" />
+                    <AdvancedSearchButton
+                      onOpen={() => setSearchOpen(true)}
+                      className="inline-flex items-center justify-center transition hover:opacity-70"
+                    />
                   </div>
 
-                  <AdvancedSearchButton className="inline-flex h-11 w-11 items-center justify-center text-[var(--color-ink)] transition hover:text-[var(--color-accent-strong)] lg:hidden" />
+                  <AdvancedSearchButton
+                    onOpen={() => setSearchOpen(true)}
+                    className="inline-flex h-11 w-11 items-center justify-center text-[var(--color-ink)] transition hover:text-[var(--color-accent-strong)] lg:hidden"
+                  />
                 </div>
               </div>
-            </div>
-
-            <div className="px-4 pb-4 md:px-6 lg:px-8 lg:pb-6">
-              <AdvancedSearchPanel />
             </div>
           </div>
         )}
       </header>
+
+      <AdvancedSearchOverlay isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
 
       {menuOpen ? (
         <div className="fixed inset-0 z-50 bg-black/45 lg:hidden" onClick={() => setMenuOpen(false)}>

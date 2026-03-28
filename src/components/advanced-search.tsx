@@ -1,130 +1,98 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Search, SlidersHorizontal, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const SEARCH_PATHNAME = "/";
-const SEARCH_KEYS = ["q", "type", "platform", "direct", "search"] as const;
+const SEARCH_KEYS = ["q", "type", "platform", "direct"] as const;
 
 type AdvancedSearchButtonProps = {
   className?: string;
+  onOpen: () => void;
 };
 
-export function AdvancedSearchButton({ className }: AdvancedSearchButtonProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const hasCriteria = Boolean(
-    searchParams.get("q") ||
-      searchParams.get("type") ||
-      searchParams.get("platform") ||
-      searchParams.get("direct"),
-  );
-  const searchState = searchParams.get("search");
-  const isOpen = searchState === "open" || (searchState !== "closed" && hasCriteria);
+type AdvancedSearchOverlayProps = {
+  isOpen: boolean;
+  onClose: () => void;
+};
 
-  function openSearch() {
-    if (isOpen && pathname === SEARCH_PATHNAME) {
-      requestAnimationFrame(() => {
-        document.getElementById("advanced-search")?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-        document.getElementById("advanced-query")?.focus();
-      });
-      return;
-    }
-
-    const nextParams = getSearchOnlyParams(searchParams.toString());
-    nextParams.set("search", "open");
-
-    const href = nextParams.toString() ? `${SEARCH_PATHNAME}?${nextParams}` : SEARCH_PATHNAME;
-    if (pathname === SEARCH_PATHNAME) {
-      router.replace(href, { scroll: false });
-    } else {
-      router.push(href);
-      return;
-    }
-
-    requestAnimationFrame(() => {
-      document.getElementById("advanced-search")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    });
-  }
-
+export function AdvancedSearchButton({
+  className,
+  onOpen,
+}: AdvancedSearchButtonProps) {
   return (
     <button
       type="button"
-      onClick={openSearch}
+      onClick={onOpen}
       aria-label="Open search"
-      aria-expanded={isOpen}
-      aria-controls="advanced-search"
-      className={`${className ?? ""} cursor-pointer ${isOpen ? "opacity-100" : ""}`.trim()}
+      aria-expanded={false}
+      aria-controls="advanced-search-overlay"
+      className={`${className ?? ""} cursor-pointer`.trim()}
     >
       <Search size={18} strokeWidth={1.9} />
     </button>
   );
 }
 
-export function AdvancedSearchPanel() {
+export function AdvancedSearchOverlay({
+  isOpen,
+  onClose,
+}: AdvancedSearchOverlayProps) {
   const searchParams = useSearchParams();
-  const searchParamsString = getSearchOnlyParams(searchParams.toString()).toString();
-
-  const query = searchParams.get("q") || "";
-  const type = searchParams.get("type") || "";
-  const platform = searchParams.get("platform") || "";
-  const direct = searchParams.get("direct") === "1";
-  const hasCriteria = Boolean(query || type || platform || direct);
-  const searchState = searchParams.get("search");
-  const isOpen = searchState === "open" || (searchState !== "closed" && hasCriteria);
+  const currentQuery = searchParams.get("q") || "";
+  const currentType = searchParams.get("type") || "";
+  const currentPlatform = searchParams.get("platform") || "";
+  const currentDirect = searchParams.get("direct") === "1";
+  const searchKey = `${currentQuery}|${currentType}|${currentPlatform}|${currentDirect ? "1" : "0"}`;
 
   if (!isOpen) {
     return null;
   }
 
   return (
-    <AdvancedSearchForm
-      key={[query, type, platform, direct ? "1" : "", searchState || ""].join("|")}
-      pathname={SEARCH_PATHNAME}
-      searchParamsString={searchParamsString}
-      query={query}
-      type={type}
-      platform={platform}
-      direct={direct}
-      hasCriteria={hasCriteria}
+    <AdvancedSearchDialog
+      key={searchKey}
+      onClose={onClose}
+      initialQuery={currentQuery}
+      initialType={currentType}
+      initialPlatform={currentPlatform}
+      initialDirect={currentDirect}
     />
   );
 }
 
-type AdvancedSearchFormProps = {
-  pathname: string;
-  searchParamsString: string;
-  query: string;
-  type: string;
-  platform: string;
-  direct: boolean;
-  hasCriteria: boolean;
+type AdvancedSearchDialogProps = {
+  onClose: () => void;
+  initialQuery: string;
+  initialType: string;
+  initialPlatform: string;
+  initialDirect: boolean;
 };
 
-function AdvancedSearchForm({
-  pathname,
-  searchParamsString,
-  query,
-  type,
-  platform,
-  direct,
-  hasCriteria,
-}: AdvancedSearchFormProps) {
+function AdvancedSearchDialog({
+  onClose,
+  initialQuery,
+  initialType,
+  initialPlatform,
+  initialDirect,
+}: AdvancedSearchDialogProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [queryValue, setQueryValue] = useState(query);
-  const [typeValue, setTypeValue] = useState(type);
-  const [platformValue, setPlatformValue] = useState(platform);
-  const [directOnlyValue, setDirectOnlyValue] = useState(direct);
-  const [showFilters, setShowFilters] = useState(hasCriteria);
+  const searchParamsString = useMemo(
+    () => getSearchOnlyParams(searchParams.toString()).toString(),
+    [searchParams],
+  );
+  const [queryValue, setQueryValue] = useState(initialQuery);
+  const [typeValue, setTypeValue] = useState(initialType);
+  const [platformValue, setPlatformValue] = useState(initialPlatform);
+  const [directOnlyValue, setDirectOnlyValue] = useState(initialDirect);
+  const [showFilters, setShowFilters] = useState(
+    Boolean(initialType || initialPlatform || initialDirect),
+  );
+
   const hasDraftCriteria = Boolean(
     queryValue.trim() || typeValue || platformValue || directOnlyValue,
   );
@@ -136,24 +104,34 @@ function AdvancedSearchForm({
     });
   }, []);
 
+  useEffect(() => {
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [onClose]);
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const nextParams = new URLSearchParams(searchParamsString);
 
-    const nextQuery = queryValue.trim();
-    const nextType = typeValue;
-    const nextPlatform = platformValue;
-    const nextDirect = directOnlyValue ? "1" : "";
+    const nextParams = getSearchOnlyParams(searchParamsString);
+    setParam(nextParams, "q", queryValue.trim());
+    setParam(nextParams, "type", typeValue);
+    setParam(nextParams, "platform", platformValue);
+    setParam(nextParams, "direct", directOnlyValue ? "1" : "");
 
-    setParam(nextParams, "q", nextQuery);
-    setParam(nextParams, "type", nextType);
-    setParam(nextParams, "platform", nextPlatform);
-    setParam(nextParams, "direct", nextDirect);
-    nextParams.set("search", "open");
+    const href = nextParams.toString() ? `${SEARCH_PATHNAME}?${nextParams}` : SEARCH_PATHNAME;
+    if (pathname === SEARCH_PATHNAME) {
+      router.replace(href, { scroll: false });
+    } else {
+      router.push(href);
+    }
 
-    const href = nextParams.toString() ? `${pathname}?${nextParams}` : pathname;
-    router.replace(href, { scroll: false });
-
+    onClose();
     requestAnimationFrame(() => {
       document.getElementById("explore")?.scrollIntoView({
         behavior: "smooth",
@@ -163,47 +141,79 @@ function AdvancedSearchForm({
   }
 
   function clearSearch() {
-    const nextParams = new URLSearchParams(searchParamsString);
-    nextParams.delete("q");
-    nextParams.delete("type");
-    nextParams.delete("platform");
-    nextParams.delete("direct");
-    nextParams.delete("search");
-
     setQueryValue("");
     setTypeValue("");
     setPlatformValue("");
     setDirectOnlyValue(false);
     setShowFilters(false);
 
-    const href = nextParams.toString() ? `${pathname}?${nextParams}` : pathname;
-    router.replace(href, { scroll: false });
-  }
+    if (pathname === SEARCH_PATHNAME && searchParamsString) {
+      router.replace(SEARCH_PATHNAME, { scroll: false });
+    }
 
-  function closeSearch() {
-    const nextParams = new URLSearchParams(searchParamsString);
-    nextParams.set("search", "closed");
-    const href = nextParams.toString() ? `${pathname}?${nextParams}` : pathname;
-    router.replace(href, { scroll: false });
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
   }
 
   return (
-    <section id="advanced-search" className="mt-4 scroll-mt-24">
-      <form
-        onSubmit={submit}
-        className="border border-[var(--color-line)] bg-[var(--color-paper)] shadow-[0_18px_40px_rgba(29,34,48,0.06)]"
-      >
-        <div className="px-4 py-4 md:px-5 md:py-5">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <p className="section-kicker text-black/44">Search</p>
+    <div
+      id="advanced-search-overlay"
+      className="fixed inset-0 z-[260] bg-[rgba(13,18,28,0.97)] text-white"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Advanced search"
+    >
+      <div className="mx-auto flex min-h-screen max-w-[1480px] flex-col px-4 py-5 md:px-8 md:py-7">
+        <form onSubmit={submit} className="flex-1">
+          <div className="flex items-center gap-4 border-b border-white/12 pb-5 md:gap-5 md:pb-7">
+            <Search
+              size={22}
+              strokeWidth={1.9}
+              className="shrink-0 text-white/68"
+            />
+
+            <input
+              ref={inputRef}
+              id="advanced-query"
+              name="q"
+              type="search"
+              inputMode="search"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="search"
+              value={queryValue}
+              onChange={(event) => setQueryValue(event.target.value)}
+              placeholder="Search artists, tracks, albums, EPs, live sessions"
+              className="editorial-search-input flex-1 bg-transparent text-2xl font-bold tracking-[-0.021em] text-white placeholder:text-white/30 focus:outline-none md:text-3xl"
+            />
+
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close search"
+              className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-white/78 transition hover:bg-white/8 hover:text-white"
+            >
+              <X size={20} strokeWidth={1.9} />
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 py-4 text-[11px] uppercase tracking-[0.2em] text-white/54 md:py-5">
+            <div className="flex flex-wrap items-center gap-3">
+              <span>
+                {hasDraftCriteria ? "Ready to search" : "Search the full MooSQA archive"}
+              </span>
+              {queryValue.trim() ? <span>Query: {queryValue.trim()}</span> : null}
+            </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setShowFilters((current) => !current)}
-                className="inline-flex min-h-10 items-center gap-2 border border-[var(--color-line)] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-black/66 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+                className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-white/12 px-4 py-2 transition hover:border-white/24 hover:bg-white/6 hover:text-white"
               >
-                <SlidersHorizontal size={14} strokeWidth={1.9} />
+                <SlidersHorizontal size={14} strokeWidth={1.8} />
                 {showFilters ? "Hide filters" : "Filters"}
               </button>
 
@@ -211,96 +221,32 @@ function AdvancedSearchForm({
                 <button
                   type="button"
                   onClick={clearSearch}
-                  className="inline-flex min-h-10 items-center justify-center border border-[var(--color-line)] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-black/66 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+                  className="inline-flex min-h-10 cursor-pointer items-center rounded-full border border-white/12 px-4 py-2 transition hover:border-white/24 hover:bg-white/6 hover:text-white"
                 >
                   Clear
                 </button>
               ) : null}
 
               <button
-                type="button"
-                onClick={closeSearch}
-                aria-label="Close search"
-                className="inline-flex h-10 w-10 items-center justify-center border border-[var(--color-line)] text-black/66 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+                type="submit"
+                className="group inline-flex min-h-10 cursor-pointer items-center gap-3 rounded-full bg-white px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-black transition hover:bg-[var(--color-sun)]"
               >
-                <X size={17} strokeWidth={1.9} />
+                <span>Search</span>
+                <ArrowRight
+                  size={16}
+                  strokeWidth={1.9}
+                  className="transition-transform group-hover:translate-x-1"
+                />
               </button>
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[minmax(0,1fr)_auto_auto]">
-            <label
-              htmlFor="advanced-query"
-              className="flex min-h-14 items-center gap-3 border border-[var(--color-line)] bg-white px-4 text-[var(--color-ink)]"
-            >
-              <Search size={20} strokeWidth={1.8} className="shrink-0 text-black/52" />
-              <input
-                ref={inputRef}
-                id="advanced-query"
-                name="q"
-                type="search"
-                inputMode="search"
-                autoComplete="off"
-                enterKeyHint="search"
-                value={queryValue}
-                onChange={(event) => setQueryValue(event.target.value)}
-                placeholder="Search artists, tracks, albums, EPs, live sessions"
-                className="editorial-search-input min-w-0 flex-1 bg-transparent text-base text-[var(--color-ink)] outline-none placeholder:text-black/36"
-              />
-            </label>
-
-            <button
-              type="submit"
-              className="group inline-flex min-h-14 items-center justify-between gap-4 border border-[var(--color-ink)] bg-[var(--color-ink)] px-5 py-3 text-sm uppercase tracking-[0.22em] text-white transition hover:bg-[var(--color-accent-strong)] hover:border-[var(--color-accent-strong)] xl:min-w-40 xl:justify-center"
-            >
-              <span>Search</span>
-              <ArrowRight
-                size={18}
-                strokeWidth={1.8}
-                className="transition-transform group-hover:translate-x-1"
-              />
-            </button>
-
-            <div className="hidden items-center justify-end text-[11px] uppercase tracking-[0.2em] text-black/46 xl:flex">
-              <span>Artists</span>
-              <span className="mx-3 h-px w-5 bg-[var(--color-line)]" />
-              <span>Releases</span>
-              <span className="mx-3 h-px w-5 bg-[var(--color-line)]" />
-              <span>Genres</span>
-            </div>
-          </div>
-
-          {hasDraftCriteria ? (
-            <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-black/54">
-              {queryValue.trim() ? (
-                <span className="border border-[var(--color-soft-line)] bg-white px-3 py-2">
-                  Query: {queryValue.trim()}
-                </span>
-              ) : null}
-              {typeValue ? (
-                <span className="border border-[var(--color-soft-line)] bg-white px-3 py-2">
-                  Type: {typeValue.replace("_", " ")}
-                </span>
-              ) : null}
-              {platformValue ? (
-                <span className="border border-[var(--color-soft-line)] bg-white px-3 py-2">
-                  Platform: {platformValue}
-                </span>
-              ) : null}
-              {directOnlyValue ? (
-                <span className="border border-[var(--color-soft-line)] bg-white px-3 py-2">
-                  Working links only
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-
           {showFilters ? (
-            <div className="mt-4 grid gap-3 border-t border-[var(--color-soft-line)] pt-4 md:grid-cols-2 xl:grid-cols-[minmax(12rem,0.72fr)_minmax(12rem,0.72fr)_auto]">
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(12rem,0.72fr)_minmax(12rem,0.72fr)_auto]">
               <div>
                 <label
                   htmlFor="advanced-type"
-                  className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-black/48"
+                  className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-white/46"
                 >
                   Release type
                 </label>
@@ -309,20 +255,30 @@ function AdvancedSearchForm({
                   name="type"
                   value={typeValue}
                   onChange={(event) => setTypeValue(event.target.value)}
-                  className="w-full border border-[var(--color-line)] bg-white px-4 py-3 text-sm text-[var(--color-ink)] outline-none transition focus:border-[var(--color-accent-strong)]"
+                  className="w-full rounded-2xl border border-white/12 bg-white/6 px-4 py-3 text-sm text-white outline-none transition focus:border-white/28"
                 >
-                  <option value="">All release types</option>
-                  <option value="SINGLE">Singles</option>
-                  <option value="ALBUM">Albums</option>
-                  <option value="EP">EPs</option>
-                  <option value="PERFORMANCE">Live / Session</option>
+                  <option value="" className="bg-[#0f1521]">
+                    All release types
+                  </option>
+                  <option value="SINGLE" className="bg-[#0f1521]">
+                    Singles
+                  </option>
+                  <option value="ALBUM" className="bg-[#0f1521]">
+                    Albums
+                  </option>
+                  <option value="EP" className="bg-[#0f1521]">
+                    EPs
+                  </option>
+                  <option value="PERFORMANCE" className="bg-[#0f1521]">
+                    Live / Session
+                  </option>
                 </select>
               </div>
 
               <div>
                 <label
                   htmlFor="advanced-platform"
-                  className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-black/48"
+                  className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-white/46"
                 >
                   Platform
                 </label>
@@ -331,34 +287,71 @@ function AdvancedSearchForm({
                   name="platform"
                   value={platformValue}
                   onChange={(event) => setPlatformValue(event.target.value)}
-                  className="w-full border border-[var(--color-line)] bg-white px-4 py-3 text-sm text-[var(--color-ink)] outline-none transition focus:border-[var(--color-accent-strong)]"
+                  className="w-full rounded-2xl border border-white/12 bg-white/6 px-4 py-3 text-sm text-white outline-none transition focus:border-white/28"
                 >
-                  <option value="">Any platform</option>
-                  <option value="youtube">YouTube</option>
-                  <option value="youtube-music">YouTube Music</option>
-                  <option value="bandcamp">Bandcamp</option>
-                  <option value="spotify">Spotify</option>
-                  <option value="apple-music">Apple Music</option>
+                  <option value="" className="bg-[#0f1521]">
+                    Any platform
+                  </option>
+                  <option value="youtube" className="bg-[#0f1521]">
+                    YouTube
+                  </option>
+                  <option value="youtube-music" className="bg-[#0f1521]">
+                    YouTube Music
+                  </option>
+                  <option value="bandcamp" className="bg-[#0f1521]">
+                    Bandcamp
+                  </option>
+                  <option value="spotify" className="bg-[#0f1521]">
+                    Spotify
+                  </option>
+                  <option value="apple-music" className="bg-[#0f1521]">
+                    Apple Music
+                  </option>
                 </select>
               </div>
 
               <div className="flex items-end md:col-span-2 xl:col-span-1">
-                <label className="flex min-h-12 w-full items-center gap-3 border border-[var(--color-line)] bg-white px-4 py-3 text-sm text-[var(--color-ink)]">
+                <label className="flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-2xl border border-white/12 bg-white/6 px-4 py-3 text-sm text-white/90">
                   <input
                     type="checkbox"
                     name="direct"
                     checked={directOnlyValue}
                     onChange={(event) => setDirectOnlyValue(event.target.checked)}
-                    className="h-4 w-4 accent-[var(--color-accent-strong)]"
+                    className="h-4 w-4 accent-white"
                   />
                   Working links only
                 </label>
               </div>
             </div>
           ) : null}
-        </div>
-      </form>
-    </section>
+
+          <div className="mt-6 grid gap-4 md:mt-8 md:grid-cols-2 xl:grid-cols-3">
+            <div className="border border-white/8 bg-white/[0.03] p-4">
+              <p className="section-kicker text-white/36">Fast search</p>
+              <p className="mt-3 text-sm leading-7 text-white/64">
+                This panel now opens locally in the browser first, so tapping the search icon no
+                longer waits for a server refresh before showing the input.
+              </p>
+            </div>
+
+            <div className="border border-white/8 bg-white/[0.03] p-4">
+              <p className="section-kicker text-white/36">Archive coverage</p>
+              <p className="mt-3 text-sm leading-7 text-white/64">
+                Search spans artists, release titles, genres, labels, summaries, outlets and live
+                sessions from the current MooSQA archive.
+              </p>
+            </div>
+
+            <div className="border border-white/8 bg-white/[0.03] p-4">
+              <p className="section-kicker text-white/36">Quick submit</p>
+              <p className="mt-3 text-sm leading-7 text-white/64">
+                Press Enter to load matching results below the header on the homepage.
+              </p>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 
