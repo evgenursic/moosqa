@@ -1,10 +1,10 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import { ListeningLinks } from "@/components/listening-links";
 import { RatingMeter } from "@/components/rating-meter";
+import { BackToHomeButton } from "@/components/back-to-home-button";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { getSiteUrl } from "@/lib/site";
 import { getReleaseBySlug } from "@/lib/sync-releases";
@@ -83,9 +83,7 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
       <div className="mx-auto max-w-[1500px] bg-[var(--color-paper)] px-2 md:px-4">
         <div className="grid gap-10 border-b border-[var(--color-line)] py-6 lg:grid-cols-[1.05fr_0.95fr]">
           <section className="space-y-6">
-            <Link href="/" prefetch={false} className="section-kicker inline-flex text-black/43">
-              Back to front page
-            </Link>
+            <BackToHomeButton className="section-kicker inline-flex cursor-pointer text-black/43 transition hover:text-[var(--color-accent-strong)]" />
 
             <div>
               <p className="section-kicker text-black/43">{formatReleaseTypeLabel(release.releaseType)}</p>
