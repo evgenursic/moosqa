@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Menu, X } from "lucide-react";
 
 import { AdvancedSearchButton, AdvancedSearchPanel } from "@/components/advanced-search";
@@ -29,8 +29,23 @@ const rightLinks: NavLink[] = [
 
 export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isCompact, setIsCompact] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const lastScrollY = useRef(0);
+  const ticking = useRef(false);
+  const searchState = searchParams.get("search");
+  const hasSearchCriteria = Boolean(
+    searchParams.get("q") ||
+      searchParams.get("type") ||
+      searchParams.get("platform") ||
+      searchParams.get("direct"),
+  );
+  const isSearchOpen =
+    searchState === "open" || (searchState !== "closed" && hasSearchCriteria);
+  const forceExpandedHeader = menuOpen || isSearchOpen;
+  const showCompactHeader = isCompact && !forceExpandedHeader;
 
   useEffect(() => {
     if (!menuOpen) {
@@ -54,6 +69,43 @@ export function SiteHeader() {
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, []);
+
+  useEffect(() => {
+    if (forceExpandedHeader) {
+      lastScrollY.current = window.scrollY;
+      return;
+    }
+
+    lastScrollY.current = window.scrollY;
+
+    function updateHeaderState() {
+      const currentY = window.scrollY;
+      const delta = currentY - lastScrollY.current;
+
+      if (currentY <= 32) {
+        setIsCompact(false);
+      } else if (delta > 8 && currentY > 140) {
+        setIsCompact(true);
+      } else if (delta < -8) {
+        setIsCompact(false);
+      }
+
+      lastScrollY.current = currentY;
+      ticking.current = false;
+    }
+
+    function handleScroll() {
+      if (ticking.current) {
+        return;
+      }
+
+      ticking.current = true;
+      window.requestAnimationFrame(updateHeaderState);
+    }
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [forceExpandedHeader]);
 
   function handleSectionNavigation(link: NavLink) {
     if (!link.sectionId) {
@@ -118,48 +170,75 @@ export function SiteHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-[var(--color-line)] bg-[var(--color-paper)]">
-        <div className="border-b border-[var(--color-soft-line)] px-4 py-4 md:px-6 lg:px-8 lg:py-8">
-          <div className="flex items-center justify-between gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-start lg:gap-8">
-            <div className="flex items-center gap-3 lg:block">
-              <button
-                type="button"
-                onClick={() => setMenuOpen(true)}
-                aria-label="Open navigation menu"
-                className="inline-flex h-11 w-11 items-center justify-center text-[var(--color-ink)] transition hover:text-[var(--color-accent-strong)] lg:hidden"
-              >
-                <Menu size={20} strokeWidth={1.8} />
-              </button>
+      <header className="sticky top-0 z-40">
+        <div
+          className={`overflow-hidden transition-all duration-500 ease-out ${
+            showCompactHeader
+              ? "max-h-0 -translate-y-5 opacity-0 pointer-events-none"
+              : "max-h-[24rem] translate-y-0 opacity-100"
+          }`}
+        >
+          <div className="border-b border-[var(--color-line)] bg-[var(--color-paper)]">
+            <div className="border-b border-[var(--color-soft-line)] px-4 py-4 md:px-6 lg:px-8 lg:py-8">
+              <div className="flex items-center justify-between gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-start lg:gap-8">
+                <div className="flex items-center gap-3 lg:block">
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen(true)}
+                    aria-label="Open navigation menu"
+                    className="inline-flex h-11 w-11 items-center justify-center text-[var(--color-ink)] transition hover:text-[var(--color-accent-strong)] lg:hidden"
+                  >
+                    <Menu size={20} strokeWidth={1.8} />
+                  </button>
 
-              <nav className="hidden flex-wrap gap-x-8 gap-y-3 text-sm uppercase tracking-[0.18em] text-[var(--color-ink)] lg:flex">
-                {leftLinks.map((link) => renderNavLink(link, "header-nav-link"))}
-              </nav>
-            </div>
+                  <nav className="hidden flex-wrap gap-x-8 gap-y-3 text-sm uppercase tracking-[0.18em] text-[var(--color-ink)] lg:flex">
+                    {leftLinks.map((link) => renderNavLink(link, "header-nav-link"))}
+                  </nav>
+                </div>
 
-            <div className="flex-1 text-center lg:flex-none">
-              <Link href="/" className="inline-block">
-                <p className="text-[2.9rem] leading-none text-[var(--color-ink)] serif-display sm:text-[3.5rem] md:text-6xl lg:text-7xl">
-                  MooSQA
-                </p>
-                <p className="mt-1 text-[10px] uppercase tracking-[0.45em] text-black/56 md:mt-2 md:text-xs md:tracking-[0.65em]">
-                  Music Radar
-                </p>
-              </Link>
-            </div>
+                <div className="flex-1 text-center lg:flex-none">
+                  <Link href="/" className="inline-block">
+                    <p className="text-[2.9rem] leading-none text-[var(--color-ink)] serif-display sm:text-[3.5rem] md:text-6xl lg:text-7xl">
+                      MooSQA
+                    </p>
+                    <p className="mt-1 text-[10px] uppercase tracking-[0.45em] text-black/56 md:mt-2 md:text-xs md:tracking-[0.65em]">
+                      Music Radar
+                    </p>
+                  </Link>
+                </div>
 
-            <div className="flex items-center justify-end gap-2 lg:block">
-              <div className="hidden flex-wrap justify-end gap-x-8 gap-y-3 text-sm uppercase tracking-[0.18em] text-[var(--color-ink)] lg:flex">
-                {rightLinks.map((link) => renderNavLink(link, "header-nav-link"))}
-                <AdvancedSearchButton className="inline-flex items-center justify-center transition hover:opacity-70" />
+                <div className="flex items-center justify-end gap-2 lg:block">
+                  <div className="hidden flex-wrap justify-end gap-x-8 gap-y-3 text-sm uppercase tracking-[0.18em] text-[var(--color-ink)] lg:flex">
+                    {rightLinks.map((link) => renderNavLink(link, "header-nav-link"))}
+                    <AdvancedSearchButton className="inline-flex items-center justify-center transition hover:opacity-70" />
+                  </div>
+
+                  <AdvancedSearchButton className="inline-flex h-11 w-11 items-center justify-center text-[var(--color-ink)] transition hover:text-[var(--color-accent-strong)] lg:hidden" />
+                </div>
               </div>
+            </div>
 
-              <AdvancedSearchButton className="inline-flex h-11 w-11 items-center justify-center text-[var(--color-ink)] transition hover:text-[var(--color-accent-strong)] lg:hidden" />
+            <div className="px-4 pb-4 md:px-6 lg:px-8 lg:pb-6">
+              <AdvancedSearchPanel />
             </div>
           </div>
         </div>
 
-        <div className="px-4 pb-4 md:px-6 lg:px-8 lg:pb-6">
-          <AdvancedSearchPanel />
+        <div
+          className={`overflow-hidden transition-all duration-500 ease-out ${
+            showCompactHeader
+              ? "max-h-28 translate-y-0 opacity-100"
+              : "max-h-0 -translate-y-4 opacity-0 pointer-events-none"
+          }`}
+        >
+          <div className="relative mx-auto mt-2 w-fit rounded-full border border-white/40 bg-[linear-gradient(135deg,rgba(255,255,255,0.34),rgba(213,223,238,0.22)_48%,rgba(128,148,190,0.18))] px-6 py-3 shadow-[0_18px_40px_rgba(29,34,48,0.14)] backdrop-blur-2xl backdrop-saturate-150">
+            <div className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle_at_20%_25%,rgba(255,255,255,0.46),transparent_32%),radial-gradient(circle_at_78%_35%,rgba(128,148,190,0.24),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.15),rgba(255,255,255,0.02))]" />
+            <Link href="/" className="relative block text-center">
+              <span className="glass-wordmark text-[2rem] leading-none text-[var(--color-ink)] serif-display md:text-[2.55rem]">
+                MooSQA
+              </span>
+            </Link>
+          </div>
         </div>
       </header>
 

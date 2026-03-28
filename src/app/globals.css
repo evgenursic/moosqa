@@ -124,6 +124,23 @@ img {
   background-size: 100% 1px;
 }
 
+.glass-wordmark {
+  display: inline-block;
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.94) 0%,
+    rgba(223, 231, 244, 0.92) 22%,
+    rgba(135, 154, 190, 0.82) 58%,
+    rgba(29, 34, 48, 0.86) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28),
+    0 12px 28px rgba(82, 110, 170, 0.16);
+}
+
 .grain {
   position: relative;
 }
