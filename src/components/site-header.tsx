@@ -81,12 +81,17 @@ export function SiteHeader() {
     function updateHeaderState() {
       const currentY = window.scrollY;
       const delta = currentY - lastScrollY.current;
+      const isMobileViewport = window.innerWidth < 1024;
+      const resetThreshold = isMobileViewport ? 12 : 32;
+      const compactThreshold = isMobileViewport ? 26 : 140;
+      const downDeltaThreshold = isMobileViewport ? 0 : 8;
+      const upDeltaThreshold = isMobileViewport ? 0 : -8;
 
-      if (currentY <= 32) {
+      if (currentY <= resetThreshold) {
         setIsCompact(false);
-      } else if (delta > 8 && currentY > 140) {
+      } else if (delta > downDeltaThreshold && currentY > compactThreshold) {
         setIsCompact(true);
-      } else if (delta < -8) {
+      } else if (delta < upDeltaThreshold) {
         setIsCompact(false);
       }
 
@@ -172,7 +177,7 @@ export function SiteHeader() {
     <>
       <header className="sticky top-0 z-40">
         <div
-          className={`overflow-hidden transition-all duration-500 ease-out ${
+          className={`overflow-hidden transition-all duration-150 ease-out md:duration-300 ${
             showCompactHeader
               ? "max-h-0 -translate-y-5 opacity-0 pointer-events-none"
               : "max-h-[24rem] translate-y-0 opacity-100"
@@ -225,16 +230,15 @@ export function SiteHeader() {
         </div>
 
         <div
-          className={`overflow-hidden transition-all duration-500 ease-out ${
+          className={`overflow-hidden transition-all duration-150 ease-out md:duration-300 ${
             showCompactHeader
-              ? "max-h-28 translate-y-0 opacity-100"
+              ? "max-h-20 translate-y-0 opacity-100"
               : "max-h-0 -translate-y-4 opacity-0 pointer-events-none"
           }`}
         >
-          <div className="relative mx-auto mt-2 w-fit rounded-full border border-white/40 bg-[linear-gradient(135deg,rgba(255,255,255,0.34),rgba(213,223,238,0.22)_48%,rgba(128,148,190,0.18))] px-6 py-3 shadow-[0_18px_40px_rgba(29,34,48,0.14)] backdrop-blur-2xl backdrop-saturate-150">
-            <div className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle_at_20%_25%,rgba(255,255,255,0.46),transparent_32%),radial-gradient(circle_at_78%_35%,rgba(128,148,190,0.24),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.15),rgba(255,255,255,0.02))]" />
-            <Link href="/" className="relative block text-center">
-              <span className="glass-wordmark text-[2rem] leading-none text-[var(--color-ink)] serif-display md:text-[2.55rem]">
+          <div className="px-4 py-2 backdrop-blur-xl backdrop-saturate-150">
+            <Link href="/" className="block text-center">
+              <span className="glass-wordmark text-[1.9rem] leading-none text-[var(--color-ink)] serif-display md:text-[2.45rem]">
                 MooSQA
               </span>
             </Link>
