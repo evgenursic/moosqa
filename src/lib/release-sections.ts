@@ -1,4 +1,5 @@
 import { ReleaseType } from "@/generated/prisma/enums";
+import type { Prisma } from "@/generated/prisma/client";
 import { ensureDatabase } from "@/lib/database";
 import { dedupeReleasesForDisplay } from "@/lib/display-dedupe";
 import { buildGenreProfile, isSpecificGenreProfile } from "@/lib/genre-profile";
@@ -36,6 +37,9 @@ export type ReleaseListingItem = {
   scoreCount: number;
   score: number | null;
   commentCount: number | null;
+  upvoteRatio: number | null;
+  awardCount: number | null;
+  crosspostCount: number | null;
 };
 
 type ReleaseSectionDefinition = {
@@ -55,8 +59,9 @@ const HOMEPAGE_LIMITS = {
   topRated: 8,
   topRatedCandidates: 24,
   topEngaged: 8,
-  topEngagedCandidates: 36,
+  topEngagedCandidates: 72,
 } as const;
+const TOP_ENGAGED_LOOKBACK_DAYS = 45;
 
 const ARCHIVE_PAGE_SIZE = 24;
 const SECTION_CACHE_TTL_MS = 12_000;
@@ -102,7 +107,8 @@ export const releaseSectionDefinitions: Record<ReleaseSectionKey, ReleaseSection
     key: "top-engaged",
     title: "Top engaged on Indieheads",
     homeId: "top-engaged",
-    description: "Releases with the strongest Reddit score and comment activity.",
+    description:
+      "Releases ranked by Reddit score, comment activity, upvote approval, awards, crossposts, and recency.",
     readMoreLabel: "Read more top engaged releases",
     emptyState: "No high-engagement releases are available yet.",
   },
@@ -161,6 +167,9 @@ const releaseListingSelect = {
   scoreCount: true,
   score: true,
   commentCount: true,
+  upvoteRatio: true,
+  awardCount: true,
+  crosspostCount: true,
 } as const;
 
 export async function getHomepageSectionsData() {
@@ -186,6 +195,7 @@ async function getHomepageSectionsDataUncached() {
     topRatedCandidates,
     topEngagedByComments,
     topEngagedByScore,
+    topEngagedByAwards,
     albumCandidates,
     epCandidates,
     liveCandidates,
@@ -203,13 +213,21 @@ async function getHomepageSectionsDataUncached() {
     }),
     prisma.release.findMany({
       select: releaseListingSelect,
+      where: getTopEngagedWhere(),
       orderBy: [{ commentCount: "desc" }, { publishedAt: "desc" }],
       take: HOMEPAGE_LIMITS.topEngagedCandidates,
     }),
     prisma.release.findMany({
       select: releaseListingSelect,
+      where: getTopEngagedWhere(),
       orderBy: [{ score: "desc" }, { publishedAt: "desc" }],
       take: HOMEPAGE_LIMITS.topEngagedCandidates,
+    }),
+    prisma.release.findMany({
+      select: releaseListingSelect,
+      where: getTopEngagedWhere(),
+      orderBy: [{ awardCount: "desc" }, { crosspostCount: "desc" }, { publishedAt: "desc" }],
+      take: Math.ceil(HOMEPAGE_LIMITS.topEngagedCandidates / 2),
     }),
     prisma.release.findMany({
       select: releaseListingSelect,
@@ -239,7 +257,7 @@ async function getHomepageSectionsDataUncached() {
     latest: prepareDisplayReleases(latestCandidates).slice(0, HOMEPAGE_LIMITS.latest),
     topRated: prepareDisplayReleases(topRatedCandidates).slice(0, HOMEPAGE_LIMITS.topRated),
     topEngaged: prepareDisplayReleases(
-      mergeReleasePools(latestCandidates, topEngagedByComments, topEngagedByScore).sort(
+      mergeReleasePools(topEngagedByComments, topEngagedByScore, topEngagedByAwards).sort(
         sortByEngagement,
       ),
     ).slice(0, HOMEPAGE_LIMITS.topEngaged),
@@ -346,7 +364,8 @@ async function getSectionReleasesUncached(section: ReleaseSectionKey) {
   if (section === "top-engaged") {
     const releases = await prisma.release.findMany({
       select: releaseListingSelect,
-      orderBy: { publishedAt: "desc" },
+      where: getTopEngagedWhere(),
+      orderBy: [{ commentCount: "desc" }, { score: "desc" }, { publishedAt: "desc" }],
     });
     return prepareDisplayReleases(releases.sort(sortByEngagement));
   }
@@ -441,8 +460,85 @@ function sortByEngagement(left: ReleaseListingItem, right: ReleaseListingItem) {
   return right.publishedAt.getTime() - left.publishedAt.getTime();
 }
 
-function getEngagementScore(release: Pick<ReleaseListingItem, "commentCount" | "score">) {
-  return (release.commentCount ?? 0) * 4 + (release.score ?? 0);
+function getEngagementScore(
+  release: Pick<
+    ReleaseListingItem,
+    | "publishedAt"
+    | "commentCount"
+    | "score"
+    | "upvoteRatio"
+    | "awardCount"
+    | "crosspostCount"
+    | "scoreCount"
+    | "scoreAverage"
+  >,
+) {
+  const commentCount = Math.max(release.commentCount ?? 0, 0);
+  const redditScore = Math.max(release.score ?? 0, 0);
+  const upvoteRatio = clamp(release.upvoteRatio ?? 0.5, 0, 1);
+  const awardCount = Math.max(release.awardCount ?? 0, 0);
+  const crosspostCount = Math.max(release.crosspostCount ?? 0, 0);
+  const communityVotes = Math.max(release.scoreCount ?? 0, 0);
+  const communityAverage = Math.max(release.scoreAverage ?? 0, 0);
+  const ageHours = Math.max(
+    1,
+    (Date.now() - release.publishedAt.getTime()) / (1000 * 60 * 60),
+  );
+
+  const discussionWeight = Math.log1p(commentCount) * 13;
+  const scoreWeight = Math.log1p(redditScore) * 10;
+  const approvalWeight = Math.max(0, upvoteRatio - 0.5) * 16;
+  const awardsWeight = Math.log1p(awardCount) * 5;
+  const crosspostWeight = Math.log1p(crosspostCount) * 4;
+  const communityWeight =
+    (communityVotes > 0 ? Math.log1p(communityVotes) * 3.25 : 0) +
+    (communityAverage > 0 ? communityAverage / 18 : 0);
+  const discussionIntensity =
+    commentCount > 0
+      ? Math.min(8, (commentCount / Math.max(redditScore, 1)) * 10)
+      : 0;
+  const recencyWeight =
+    ageHours <= 24
+      ? 1.12
+      : ageHours <= 72
+        ? 1
+        : ageHours <= 168
+          ? 0.93
+          : ageHours <= 720
+            ? 0.82
+            : 0.72;
+
+  return (
+    (discussionWeight +
+      scoreWeight +
+      approvalWeight +
+      awardsWeight +
+      crosspostWeight +
+      communityWeight +
+      discussionIntensity) *
+    recencyWeight
+  );
+}
+
+function getTopEngagedWhere(): Prisma.ReleaseWhereInput {
+  const cutoffDate = new Date(Date.now() - TOP_ENGAGED_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+
+  return {
+    publishedAt: {
+      gte: cutoffDate,
+    },
+    OR: [
+      { commentCount: { gte: 2 } },
+      { score: { gte: 8 } },
+      { awardCount: { gt: 0 } },
+      { crosspostCount: { gt: 0 } },
+      { scoreCount: { gt: 0 } },
+    ],
+  };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function mergeReleasePools(...pools: ReleaseListingItem[][]) {

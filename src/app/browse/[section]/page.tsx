@@ -105,6 +105,7 @@ export default async function BrowseSectionPage({
                   release={release}
                   compact={index > 3}
                   priority={index < 2}
+                  context={getReleaseCardContext(section)}
                 />
               ))}
             </div>
@@ -209,4 +210,16 @@ function parsePageParam(value: string | string[] | undefined) {
   const raw = Array.isArray(value) ? value[0] : value;
   const parsed = Number(raw || "1");
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function getReleaseCardContext(section: string) {
+  if (section === "top-rated") {
+    return "top-rated" as const;
+  }
+
+  if (section === "top-engaged") {
+    return "top-engaged" as const;
+  }
+
+  return "default" as const;
 }

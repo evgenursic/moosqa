@@ -59,6 +59,9 @@ model Release {
   domain          String?
   score           Int?
   commentCount    Int?
+  upvoteRatio     Float?
+  awardCount      Int?
+  crosspostCount  Int?
   rawJson         String?
   scoreAverage    Float         @default(0)
   scoreCount      Int           @default(0)

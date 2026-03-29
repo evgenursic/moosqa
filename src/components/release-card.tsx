@@ -27,17 +27,25 @@ type ReleaseCardProps = {
     publishedAt: Date;
     scoreAverage: number;
     scoreCount: number;
+    score?: number | null;
+    commentCount?: number | null;
+    upvoteRatio?: number | null;
+    awardCount?: number | null;
+    crosspostCount?: number | null;
   };
   compact?: boolean;
   priority?: boolean;
+  context?: "default" | "top-rated" | "top-engaged";
 };
 
 export function ReleaseCard({
   release,
   compact = false,
   priority = false,
+  context = "default",
 }: ReleaseCardProps) {
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
+  const metaItems = getMetaItems(release, context);
 
   return (
     <article className="group min-w-0 border-t border-[var(--color-line)] pt-6">
@@ -85,10 +93,9 @@ export function ReleaseCard({
         </Link>
 
         <div className="mt-4 flex flex-wrap gap-3 break-words text-[11px] uppercase tracking-[0.18em] text-black/55">
-          <span>{release.outletName || "Source pending"}</span>
-          <span>
-            Community {formatScore(release.scoreAverage || 0)} / {release.scoreCount} ratings
-          </span>
+          {metaItems.map((item) => (
+            <span key={item}>{item}</span>
+          ))}
         </div>
 
         <p className="mt-4 text-sm leading-6 text-black/66">
@@ -116,4 +123,48 @@ export function ReleaseCard({
       </div>
     </article>
   );
+}
+
+function getMetaItems(
+  release: ReleaseCardProps["release"],
+  context: NonNullable<ReleaseCardProps["context"]>,
+) {
+  const items = [release.outletName || "Source pending"];
+
+  if (context === "top-rated") {
+    items.push(`Avg ${formatScore(release.scoreAverage || 0)}`);
+    items.push(`${release.scoreCount} ${release.scoreCount === 1 ? "user" : "users"}`);
+    return items;
+  }
+
+  if (context === "top-engaged") {
+    if ((release.score ?? 0) > 0) {
+      items.push(`Reddit ${release.score} score`);
+    }
+
+    if ((release.commentCount ?? 0) > 0) {
+      items.push(`${release.commentCount} comments`);
+    }
+
+    if (typeof release.upvoteRatio === "number") {
+      items.push(`${Math.round(release.upvoteRatio * 100)}% upvoted`);
+    }
+
+    if ((release.awardCount ?? 0) > 0) {
+      items.push(`${release.awardCount} ${release.awardCount === 1 ? "award" : "awards"}`);
+    } else if ((release.crosspostCount ?? 0) > 0) {
+      items.push(
+        `${release.crosspostCount} ${release.crosspostCount === 1 ? "crosspost" : "crossposts"}`,
+      );
+    }
+
+    if ((release.scoreCount ?? 0) > 0) {
+      items.push(`MooSQA ${formatScore(release.scoreAverage || 0)} / ${release.scoreCount} users`);
+    }
+
+    return items;
+  }
+
+  items.push(`Community ${formatScore(release.scoreAverage || 0)} / ${release.scoreCount} ratings`);
+  return items;
 }

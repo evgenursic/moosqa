@@ -78,7 +78,7 @@ export default async function Home({ searchParams }: HomePageProps) {
           {latestReleases.length > 0 ? (
             <div className="grid gap-8 lg:grid-cols-12">
               {latestReleases[0] ? (
-                <div className="lg:col-span-6">
+            <div className="lg:col-span-6">
                   <ReleaseCard release={latestReleases[0]} priority />
                 </div>
               ) : null}
@@ -172,6 +172,7 @@ function ReleaseCardSection({ section, releases }: ReleaseCardSectionProps) {
               release={release}
               compact={index > 1}
               priority={index < 2}
+              context={getReleaseCardContext(section)}
             />
           ))}
         </div>
@@ -184,6 +185,18 @@ function ReleaseCardSection({ section, releases }: ReleaseCardSectionProps) {
       <SectionReadMore section={section} className="mt-8" />
     </section>
   );
+}
+
+function getReleaseCardContext(section: ReleaseSectionKey) {
+  if (section === "top-rated") {
+    return "top-rated" as const;
+  }
+
+  if (section === "top-engaged") {
+    return "top-engaged" as const;
+  }
+
+  return "default" as const;
 }
 
 function SectionReadMore({

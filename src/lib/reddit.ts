@@ -34,6 +34,9 @@ type RedditPost = {
   domain?: string;
   score?: number;
   num_comments?: number;
+  upvote_ratio?: number;
+  total_awards_received?: number;
+  num_crossposts?: number;
   preview?: {
     images?: Array<{
       source?: {
@@ -62,6 +65,9 @@ export type NormalizedRelease = {
   domain: string | null;
   score: number | null;
   commentCount: number | null;
+  upvoteRatio: number | null;
+  awardCount: number | null;
+  crosspostCount: number | null;
   rawJson: string;
 };
 
@@ -358,6 +364,9 @@ export function normalizeRedditPost(post: RedditPost): NormalizedRelease | null 
     domain: sourceDomain || post.domain || null,
     score: post.score ?? null,
     commentCount: post.num_comments ?? null,
+    upvoteRatio: post.upvote_ratio ?? null,
+    awardCount: post.total_awards_received ?? null,
+    crosspostCount: post.num_crossposts ?? null,
     rawJson: JSON.stringify(post),
   };
 }
