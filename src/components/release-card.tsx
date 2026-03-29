@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ListeningLinks } from "@/components/listening-links";
 import { ReleaseArtwork } from "@/components/release-artwork";
+import { TopRatedVisual } from "@/components/top-rated-visual";
 import { formatPubDate, formatRelative, formatReleaseTypeLabel, formatScore, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
 
 type ReleaseCardProps = {
@@ -98,6 +99,10 @@ export function ReleaseCard({
           ))}
         </div>
 
+        {context === "top-rated" ? (
+          <TopRatedVisual average={release.scoreAverage} count={release.scoreCount} />
+        ) : null}
+
         <p className="mt-4 text-sm leading-6 text-black/66">
           {getDisplaySummary({
             aiSummary: release.aiSummary,
@@ -132,8 +137,6 @@ function getMetaItems(
   const items = [release.outletName || "Source pending"];
 
   if (context === "top-rated") {
-    items.push(`Avg ${formatScore(release.scoreAverage || 0)}`);
-    items.push(`${release.scoreCount} ${release.scoreCount === 1 ? "user" : "users"}`);
     return items;
   }
 

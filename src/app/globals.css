@@ -124,6 +124,70 @@ img {
   background-size: 100% 1px;
 }
 
+.score-ring {
+  --score-angle: 0deg;
+  --score-color: #d7dc45;
+  position: relative;
+  width: 5.8rem;
+  min-width: 5.8rem;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  padding: 0.42rem;
+  background:
+    radial-gradient(circle at center, rgba(29, 34, 48, 0.12) 60%, transparent 61%),
+    conic-gradient(var(--score-color) 0deg var(--score-angle), rgba(29, 34, 48, 0.12) var(--score-angle) 360deg);
+  box-shadow:
+    inset 0 0 0 1px rgba(29, 34, 48, 0.12),
+    0 10px 24px rgba(82, 110, 170, 0.12);
+}
+
+.score-ring__inner {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--color-paper) 86%, white 14%);
+  box-shadow: inset 0 0 0 1px rgba(29, 34, 48, 0.08);
+}
+
+.score-ring__value {
+  font-family: var(--font-space-mono), monospace;
+  font-size: 1.5rem;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--color-ink);
+}
+
+.score-meter-track {
+  position: relative;
+  height: 0.6rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  background:
+    linear-gradient(
+      90deg,
+      #79cd75 0% 33%,
+      #f1ba4d 33% 83%,
+      #f1737a 83% 100%
+    );
+  box-shadow: inset 0 0 0 1px rgba(29, 34, 48, 0.08);
+}
+
+.score-meter-indicator {
+  position: absolute;
+  top: 50%;
+  display: block;
+  height: 0.9rem;
+  width: 0.9rem;
+  border-radius: 9999px;
+  border: 2px solid rgba(29, 34, 48, 0.18);
+  background: rgba(255, 255, 255, 0.92);
+  transform: translateY(-50%);
+  box-shadow: 0 1px 6px rgba(29, 34, 48, 0.16);
+}
+
 .glass-wordmark {
   display: inline-block;
   background-image: linear-gradient(
