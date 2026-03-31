@@ -480,7 +480,7 @@ function shouldUpgradeGenreProfile(release: EnrichableRelease) {
   }
 
   const hintText = `${release.title} ${release.projectTitle || ""} ${release.summary || ""}`;
-  return /\b(math rock|post-rock|post-punk|shoegaze|dream pop|slowcore|noise rock|garage rock|indietronica|electronic|ambient|hardcore punk|singer-songwriter|chamber pop|art pop|synth-pop|psych(?:edelic)? rock|folk rock)\b/i.test(
+  return /\b(math rock|post-rock|post-punk|shoegaze|dream pop|dream rock|jangle pop|slowcore|noise rock|noise pop|garage rock|indietronica|electronic|ambient|hardcore punk|singer-songwriter|chamber pop|chamber folk|art pop|art punk|synth-pop|dreamwave|synthwave|psych(?:edelic)? rock|psychedelic pop|psychedelic folk|heartland rock|gothic rock|darkwave|folk rock)\b/i.test(
     hintText,
   );
 }

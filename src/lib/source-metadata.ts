@@ -453,6 +453,7 @@ function collectDescriptionCandidates(html: string, jsonLd: unknown[]) {
     getMetaContent(html, "og:description"),
     getMetaContent(html, "twitter:description"),
     ...findStringValues(jsonLd, ["description"]),
+    extractBandcampAboutText(html),
     extractBodyExcerpt(html),
   ]
     .map((value) => sanitizeText(value))
@@ -472,6 +473,25 @@ function pickBestDescription(candidates: string[]) {
   return ranked[0]?.candidate || null;
 }
 
+function extractBandcampAboutText(html: string) {
+  const patterns = [
+    /<div[^>]+id=["']tralbum-about["'][^>]*>([\s\S]*?)<\/div>/i,
+    /<div[^>]+class=["'][^"']*\btralbumData\b[^"']*\btralbum-about\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+    /<div[^>]+class=["'][^"']*\btralbumData\b[^"']*\babout\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+    /<meta[^>]+name=["']title["'][^>]+content=["'][^"']+["'][\s\S]*?<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    const candidate = sanitizeText(match?.[1] || "");
+    if (candidate && isMeaningfulExcerpt(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 function scoreDescriptionCandidate(value: string) {
   const normalized = value.toLowerCase();
   let score = Math.min(value.length, 320);
@@ -485,7 +505,7 @@ function scoreDescriptionCandidate(value: string) {
   }
 
   if (
-    /\b(ambient|electronic|shoegaze|dream pop|post-punk|jungle|drum and bass|neo-soul|folk|jazz|punk|hardcore|synth-pop|experimental)\b/i.test(
+    /\b(ambient|electronic|shoegaze|dream pop|jangle pop|post-punk|math rock|slowcore|krautrock|jungle|drum and bass|neo-soul|folk|jazz|punk|hardcore|synth-pop|chamber pop|baroque pop|experimental)\b/i.test(
       value,
     )
   ) {

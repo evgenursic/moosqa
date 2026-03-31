@@ -49,7 +49,10 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
 
   const { created, updated, failed } = await upsertNormalizedReleases(releases, { lightweight });
 
-  const enriched = enrich ? await enrichRecentReleases(Math.max(12, sanitized + created)) : 0;
+  const enrichTarget = lightweight
+    ? Math.max(12, sanitized + created)
+    : Math.max(60, sanitized + created + updated);
+  const enriched = enrich ? await enrichRecentReleases(enrichTarget) : 0;
   await markHomepageSyncFresh();
   clearReleaseDataCaches();
 
@@ -190,6 +193,22 @@ async function sanitizeStoredMetadata() {
         { genreName: { equals: "Alternative" } },
         { genreName: { equals: "alternative" } },
         { genreName: { equals: "Indie Alternative" } },
+        { genreName: { equals: "Indie rock" } },
+        { genreName: { equals: "indie rock" } },
+        { genreName: { equals: "Alternative rock" } },
+        { genreName: { equals: "alternative rock" } },
+        { genreName: { equals: "Indie pop" } },
+        { genreName: { equals: "indie pop" } },
+        { genreName: { equals: "Alternative pop" } },
+        { genreName: { equals: "alternative pop" } },
+        { genreName: { equals: "Indie folk" } },
+        { genreName: { equals: "indie folk" } },
+        { genreName: { equals: "Folk rock" } },
+        { genreName: { equals: "folk rock" } },
+        { genreName: { equals: "Pop rock" } },
+        { genreName: { equals: "pop rock" } },
+        { genreName: { equals: "Punk rock" } },
+        { genreName: { equals: "punk rock" } },
         { genreName: { equals: "Single release" } },
         { genreName: { equals: "Album release" } },
         { genreName: { equals: "EP release" } },
