@@ -54,6 +54,8 @@ model Release {
   youtubeUrl      String?
   youtubeMusicUrl String?
   bandcampUrl     String?
+  officialWebsiteUrl String?
+  officialStoreUrl   String?
   musicbrainzReleaseId String?
   musicbrainzArtistId  String?
   domain          String?

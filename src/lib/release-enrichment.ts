@@ -78,7 +78,8 @@ function needsEnrichment(release: EnrichableRelease, wantsAi: boolean) {
       !release.genreName ||
       !release.youtubeUrl ||
       !release.youtubeMusicUrl ||
-      !release.bandcampUrl
+      !release.bandcampUrl ||
+      !release.officialWebsiteUrl
     )
   ) {
     return true;
@@ -89,6 +90,16 @@ function needsEnrichment(release: EnrichableRelease, wantsAi: boolean) {
   }
 
   if (isStale && (!release.youtubeUrl || !release.youtubeMusicUrl || !release.bandcampUrl)) {
+    return true;
+  }
+
+  if (
+    isStale &&
+    isPurchasableRelease(release.releaseType) &&
+    !release.bandcampUrl &&
+    !release.officialStoreUrl &&
+    !release.officialWebsiteUrl
+  ) {
     return true;
   }
 
@@ -291,6 +302,20 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
       musicMetadata.musicbrainzReleaseId || release.musicbrainzReleaseId || null,
     musicbrainzArtistId:
       musicMetadata.musicbrainzArtistId || release.musicbrainzArtistId || null,
+    officialWebsiteUrl:
+      sourceMetadata.officialWebsiteUrl ||
+      fallbackBandcampMetadata?.officialWebsiteUrl ||
+      searchedBandcampMetadata?.officialWebsiteUrl ||
+      musicMetadata.officialWebsiteUrl ||
+      release.officialWebsiteUrl ||
+      null,
+    officialStoreUrl:
+      sourceMetadata.officialStoreUrl ||
+      fallbackBandcampMetadata?.officialStoreUrl ||
+      searchedBandcampMetadata?.officialStoreUrl ||
+      musicMetadata.officialStoreUrl ||
+      release.officialStoreUrl ||
+      null,
     imageUrl:
       release.imageUrl ||
       musicMetadata.coverArtUrl ||
@@ -369,6 +394,15 @@ function scoreEnrichmentPriority(release: EnrichableRelease, wantsAi: boolean) {
     score += 7;
   }
 
+  if (
+    isPurchasableRelease(release.releaseType) &&
+    !release.bandcampUrl &&
+    !release.officialStoreUrl &&
+    !release.officialWebsiteUrl
+  ) {
+    score += 5;
+  }
+
   if (!release.labelName || !release.releaseDate) {
     score += 4;
   }
@@ -440,6 +474,14 @@ function inferGenreFromRelease(release: EnrichableRelease) {
   }
 
   return null;
+}
+
+function isPurchasableRelease(releaseType: EnrichableRelease["releaseType"]) {
+  return (
+    releaseType === "SINGLE" ||
+    releaseType === "ALBUM" ||
+    releaseType === "EP"
+  );
 }
 
 function shouldUseArtistHint(

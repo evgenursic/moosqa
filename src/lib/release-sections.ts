@@ -29,6 +29,8 @@ export type ReleaseListingItem = {
   youtubeUrl: string | null;
   youtubeMusicUrl: string | null;
   bandcampUrl: string | null;
+  officialWebsiteUrl: string | null;
+  officialStoreUrl: string | null;
   labelName: string | null;
   genreName: string | null;
   aiSummary: string | null;
@@ -159,6 +161,8 @@ const releaseListingSelect = {
   youtubeUrl: true,
   youtubeMusicUrl: true,
   bandcampUrl: true,
+  officialWebsiteUrl: true,
+  officialStoreUrl: true,
   labelName: true,
   genreName: true,
   aiSummary: true,

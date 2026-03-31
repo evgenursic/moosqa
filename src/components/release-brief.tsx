@@ -19,6 +19,8 @@ type ReleaseBriefProps = {
     youtubeUrl?: string | null;
     youtubeMusicUrl?: string | null;
     bandcampUrl?: string | null;
+    officialWebsiteUrl?: string | null;
+    officialStoreUrl?: string | null;
     genreName?: string | null;
     scoreAverage: number;
     scoreCount: number;

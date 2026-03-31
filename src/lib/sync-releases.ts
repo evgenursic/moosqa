@@ -372,6 +372,12 @@ async function upsertNormalizedReleases(
       genreName: true,
       imageUrl: true,
       thumbnailUrl: true,
+      youtubeUrl: true,
+      youtubeMusicUrl: true,
+      bandcampUrl: true,
+      officialWebsiteUrl: true,
+      officialStoreUrl: true,
+      metadataEnrichedAt: true,
     },
   });
   const existingBySourceItemId = new Map(
@@ -418,14 +424,33 @@ async function buildReleaseDataForUpsert(
     genreName: string | null;
     imageUrl: string | null;
     thumbnailUrl: string | null;
+    youtubeUrl: string | null;
+    youtubeMusicUrl: string | null;
+    bandcampUrl: string | null;
+    officialWebsiteUrl: string | null;
+    officialStoreUrl: string | null;
+    metadataEnrichedAt: Date | null;
   } | null,
   options: { lightweight?: boolean; artistGenreHint?: string | null } = {},
 ) {
   if (options.lightweight) {
+    const hasStableListeningLinks =
+      Boolean(existing?.youtubeUrl) &&
+      Boolean(existing?.youtubeMusicUrl) &&
+      Boolean(existing?.bandcampUrl);
+    const hasStablePurchaseLink =
+      !isPurchasableReleaseType(release.releaseType) ||
+      Boolean(existing?.bandcampUrl || existing?.officialStoreUrl || existing?.officialWebsiteUrl);
+    const recentlyEnriched =
+      existing?.metadataEnrichedAt &&
+      Date.now() - existing.metadataEnrichedAt.getTime() < 1000 * 60 * 20;
     const shouldHydrateSourceMetadata =
       (!release.imageUrl && !existing?.imageUrl && !existing?.thumbnailUrl) ||
       !existing?.genreName ||
-      !isSpecificGenreProfile(existing.genreName);
+      !isSpecificGenreProfile(existing.genreName) ||
+      !hasStableListeningLinks ||
+      !hasStablePurchaseLink ||
+      !recentlyEnriched;
     const sourceMetadata = shouldHydrateSourceMetadata
       ? await resolveSourceMetadata(release.sourceUrl, {
           artistName: release.artistName,
@@ -442,6 +467,7 @@ async function buildReleaseDataForUpsert(
     });
     const needsSupplementalBandcampLookup =
       !initialGenre ||
+      !sourceMetadata?.bandcampUrl ||
       (!release.imageUrl &&
         !existing?.imageUrl &&
         !existing?.thumbnailUrl &&
@@ -476,6 +502,26 @@ async function buildReleaseDataForUpsert(
         release,
         sourceMetadata: effectiveSourceMetadata,
       }),
+      youtubeUrl:
+        effectiveSourceMetadata?.youtubeUrl ||
+        existing?.youtubeUrl ||
+        null,
+      youtubeMusicUrl:
+        effectiveSourceMetadata?.youtubeMusicUrl ||
+        existing?.youtubeMusicUrl ||
+        null,
+      bandcampUrl:
+        effectiveSourceMetadata?.bandcampUrl ||
+        existing?.bandcampUrl ||
+        null,
+      officialWebsiteUrl:
+        effectiveSourceMetadata?.officialWebsiteUrl ||
+        existing?.officialWebsiteUrl ||
+        null,
+      officialStoreUrl:
+        effectiveSourceMetadata?.officialStoreUrl ||
+        existing?.officialStoreUrl ||
+        null,
       aiSummary: existing?.aiSummary || null,
     };
   }
@@ -520,6 +566,11 @@ async function buildReleaseDataForUpsert(
       sourceMetadata?.sourceImageUrl ||
       null,
     genreName: fallbackGenre,
+    youtubeUrl: sourceMetadata?.youtubeUrl || existing?.youtubeUrl || null,
+    youtubeMusicUrl: sourceMetadata?.youtubeMusicUrl || existing?.youtubeMusicUrl || null,
+    bandcampUrl: sourceMetadata?.bandcampUrl || existing?.bandcampUrl || null,
+    officialWebsiteUrl: sourceMetadata?.officialWebsiteUrl || existing?.officialWebsiteUrl || null,
+    officialStoreUrl: sourceMetadata?.officialStoreUrl || existing?.officialStoreUrl || null,
     aiSummary: fallbackAiSummary,
   };
 }
@@ -659,22 +710,32 @@ async function resolveSupplementalBandcampMetadata(release: NormalizedReleaseRec
 
 function mergeSourceMetadataHints(
   primary:
-    | {
+      | {
         sourceTitle?: string | null;
         sourceExcerpt?: string | null;
         genreName?: string | null;
         labelName?: string | null;
         sourceImageUrl?: string | null;
+        youtubeUrl?: string | null;
+        youtubeMusicUrl?: string | null;
+        bandcampUrl?: string | null;
+        officialWebsiteUrl?: string | null;
+        officialStoreUrl?: string | null;
       }
     | null
     | undefined,
   fallback:
-    | {
+      | {
         sourceTitle?: string | null;
         sourceExcerpt?: string | null;
         genreName?: string | null;
         labelName?: string | null;
         sourceImageUrl?: string | null;
+        youtubeUrl?: string | null;
+        youtubeMusicUrl?: string | null;
+        bandcampUrl?: string | null;
+        officialWebsiteUrl?: string | null;
+        officialStoreUrl?: string | null;
       }
     | null
     | undefined,
@@ -690,6 +751,11 @@ function mergeSourceMetadataHints(
       pickPreferredGenreProfile(primary?.genreName || null, fallback?.genreName || null) || null,
     labelName: primary?.labelName || fallback?.labelName || null,
     sourceImageUrl: primary?.sourceImageUrl || fallback?.sourceImageUrl || null,
+    youtubeUrl: primary?.youtubeUrl || fallback?.youtubeUrl || null,
+    youtubeMusicUrl: primary?.youtubeMusicUrl || fallback?.youtubeMusicUrl || null,
+    bandcampUrl: primary?.bandcampUrl || fallback?.bandcampUrl || null,
+    officialWebsiteUrl: primary?.officialWebsiteUrl || fallback?.officialWebsiteUrl || null,
+    officialStoreUrl: primary?.officialStoreUrl || fallback?.officialStoreUrl || null,
   };
 }
 
@@ -699,4 +765,12 @@ function normalizeArtistKey(value: string | null | undefined) {
     .normalize("NFKD")
     .replace(/\s+/g, " ")
     .trim() || "";
+}
+
+function isPurchasableReleaseType(releaseType: ReleaseType) {
+  return (
+    releaseType === ReleaseType.SINGLE ||
+    releaseType === ReleaseType.ALBUM ||
+    releaseType === ReleaseType.EP
+  );
 }

@@ -99,6 +99,8 @@ export type MusicMetadata = {
   youtubeUrl?: string | null;
   youtubeMusicUrl?: string | null;
   bandcampUrl?: string | null;
+  officialWebsiteUrl?: string | null;
+  officialStoreUrl?: string | null;
   coverArtUrl?: string | null;
   thumbnailArtUrl?: string | null;
 };
@@ -142,6 +144,8 @@ export async function fetchMusicMetadata(
     youtubeUrl: pickRelationUrl(release?.relations, artist?.relations, ["youtube"]),
     youtubeMusicUrl: pickRelationUrl(release?.relations, artist?.relations, ["music.youtube.com"]),
     bandcampUrl: pickRelationUrl(release?.relations, artist?.relations, ["bandcamp.com"]),
+    officialWebsiteUrl: pickOfficialWebsiteUrl(release?.relations, artist?.relations),
+    officialStoreUrl: pickOfficialStoreUrl(release?.relations, artist?.relations),
     coverArtUrl: coverArt.coverArtUrl,
     thumbnailArtUrl: coverArt.thumbnailArtUrl,
   };
@@ -334,6 +338,55 @@ function pickRelationUrl(
   return null;
 }
 
+function pickOfficialWebsiteUrl(
+  releaseRelations: MusicBrainzLookupResponse["relations"] | undefined,
+  artistRelations: MusicBrainzArtistResponse["relations"] | undefined,
+) {
+  const relationLists = [artistRelations || [], releaseRelations || []];
+
+  for (const relations of relationLists) {
+    for (const relation of relations) {
+      const resource = relation.url?.resource;
+      if (!resource || isIgnoredOfficialTarget(resource)) {
+        continue;
+      }
+
+      if (relation.type === "official homepage" || relation.type === "homepage") {
+        return resource;
+      }
+    }
+  }
+
+  return null;
+}
+
+function pickOfficialStoreUrl(
+  releaseRelations: MusicBrainzLookupResponse["relations"] | undefined,
+  artistRelations: MusicBrainzArtistResponse["relations"] | undefined,
+) {
+  const relationLists = [releaseRelations || [], artistRelations || []];
+
+  for (const relations of relationLists) {
+    for (const relation of relations) {
+      const resource = relation.url?.resource;
+      if (!resource || isIgnoredOfficialTarget(resource)) {
+        continue;
+      }
+
+      if (
+        relation.type === "purchase for download" ||
+        relation.type === "purchase for mail order" ||
+        relation.type === "download for free" ||
+        relation.type === "mail order"
+      ) {
+        return resource;
+      }
+    }
+  }
+
+  return null;
+}
+
 function parseReleaseDate(value: string | undefined) {
   if (!value) {
     return null;
@@ -408,6 +461,45 @@ function normalizeText(value: string) {
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function isIgnoredOfficialTarget(url: string) {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    const blockedHosts = [
+      "reddit.com",
+      "www.reddit.com",
+      "instagram.com",
+      "www.instagram.com",
+      "facebook.com",
+      "www.facebook.com",
+      "x.com",
+      "www.x.com",
+      "twitter.com",
+      "www.twitter.com",
+      "bsky.app",
+      "youtube.com",
+      "youtu.be",
+      "music.youtube.com",
+      "spotify.com",
+      "open.spotify.com",
+      "qobuz.com",
+      "apple.com",
+      "music.apple.com",
+      "tidal.com",
+      "genius.com",
+      "discogs.com",
+      "musicbrainz.org",
+      "linktr.ee",
+      "lnk.to",
+      "ffm.to",
+      "ffm.bio",
+    ];
+
+    return blockedHosts.some((blocked) => hostname === blocked || hostname.endsWith(`.${blocked}`));
+  } catch {
+    return true;
+  }
 }
 
 function deriveLookupInput(input: ReleaseMatchInput): ReleaseMatchInput {

@@ -15,6 +15,8 @@ export type SearchableReleaseListing = {
   youtubeUrl?: string | null;
   youtubeMusicUrl?: string | null;
   bandcampUrl?: string | null;
+  officialWebsiteUrl?: string | null;
+  officialStoreUrl?: string | null;
   labelName?: string | null;
   genreName?: string | null;
   summary?: string | null;

@@ -9,6 +9,8 @@ type LinkableRelease = {
   youtubeUrl?: string | null;
   youtubeMusicUrl?: string | null;
   bandcampUrl?: string | null;
+  officialWebsiteUrl?: string | null;
+  officialStoreUrl?: string | null;
 };
 
 type ListeningPlatform = "youtube" | "youtube-music" | "bandcamp";
@@ -27,26 +29,32 @@ export type PurchaseLink = {
 
 export function getListeningLinks(release: LinkableRelease): ListeningLink[] {
   const query = encodeURIComponent(buildSearchQuery(release));
+  const sourcePlatform = detectPlatform(release.sourceUrl);
+  const youtubeHref = release.youtubeUrl || fallbackPlatformUrl("youtube", release.sourceUrl, query);
+  const youtubeMusicHref =
+    release.youtubeMusicUrl || fallbackPlatformUrl("youtube-music", release.sourceUrl, query);
+  const bandcampHref = release.bandcampUrl || fallbackPlatformUrl("bandcamp", release.sourceUrl, query);
 
   return [
     {
       label: "YouTube",
-      href: release.youtubeUrl || fallbackPlatformUrl("youtube", release.sourceUrl, query),
-      isDirect: Boolean(release.youtubeUrl || detectPlatform(release.sourceUrl) === "youtube"),
+      href: youtubeHref,
+      isDirect: isVerifiedListeningLink("youtube", youtubeHref, release.youtubeUrl, sourcePlatform),
     },
     {
       label: "YouTube Music",
-      href:
-        release.youtubeMusicUrl ||
-        fallbackPlatformUrl("youtube-music", release.sourceUrl, query),
-      isDirect: Boolean(
-        release.youtubeMusicUrl || detectPlatform(release.sourceUrl) === "youtube-music",
+      href: youtubeMusicHref,
+      isDirect: isVerifiedListeningLink(
+        "youtube-music",
+        youtubeMusicHref,
+        release.youtubeMusicUrl,
+        sourcePlatform,
       ),
     },
     {
       label: "Bandcamp",
-      href: release.bandcampUrl || fallbackPlatformUrl("bandcamp", release.sourceUrl, query),
-      isDirect: Boolean(release.bandcampUrl || detectPlatform(release.sourceUrl) === "bandcamp"),
+      href: bandcampHref,
+      isDirect: isVerifiedListeningLink("bandcamp", bandcampHref, release.bandcampUrl, sourcePlatform),
     },
   ].sort((left, right) => Number(right.isDirect) - Number(left.isDirect));
 }
@@ -56,7 +64,6 @@ export function getPurchaseLink(release: LinkableRelease): PurchaseLink | null {
     return null;
   }
 
-  const query = encodeURIComponent(buildSearchQuery(release));
   const sourcePlatform = detectPlatform(release.sourceUrl);
 
   if (release.bandcampUrl) {
@@ -75,11 +82,31 @@ export function getPurchaseLink(release: LinkableRelease): PurchaseLink | null {
     };
   }
 
-  return {
-    label: "Buy music",
-    href: `https://www.qobuz.com/us-en/search?q=${query}`,
-    isDirect: false,
-  };
+  if (release.officialStoreUrl && looksOfficialWebsiteUrl(release.officialStoreUrl)) {
+    return {
+      label: "Artist store",
+      href: release.officialStoreUrl,
+      isDirect: true,
+    };
+  }
+
+  if (release.officialWebsiteUrl && looksOfficialWebsiteUrl(release.officialWebsiteUrl)) {
+    return {
+      label: "Artist site",
+      href: release.officialWebsiteUrl,
+      isDirect: true,
+    };
+  }
+
+  if (looksOfficialWebsiteUrl(release.sourceUrl)) {
+    return {
+      label: "Artist site",
+      href: release.sourceUrl,
+      isDirect: true,
+    };
+  }
+
+  return null;
 }
 
 export function detectPlatform(url: string): ListeningPlatform | null {
@@ -141,4 +168,64 @@ function fallbackPlatformUrl(
   }
 
   return `https://bandcamp.com/search?q=${query}`;
+}
+
+function isVerifiedListeningLink(
+  platform: ListeningPlatform,
+  href: string,
+  storedUrl: string | null | undefined,
+  sourcePlatform: ListeningPlatform | null,
+) {
+  if (storedUrl && detectPlatform(storedUrl) === platform) {
+    return true;
+  }
+
+  if (sourcePlatform === platform && detectPlatform(href) === platform) {
+    return true;
+  }
+
+  return false;
+}
+
+function looksOfficialWebsiteUrl(url: string | null | undefined) {
+  if (!url) {
+    return false;
+  }
+
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    const blockedHosts = [
+      "reddit.com",
+      "www.reddit.com",
+      "instagram.com",
+      "www.instagram.com",
+      "facebook.com",
+      "www.facebook.com",
+      "x.com",
+      "www.x.com",
+      "twitter.com",
+      "www.twitter.com",
+      "bsky.app",
+      "youtube.com",
+      "youtu.be",
+      "music.youtube.com",
+      "bandcamp.com",
+      "spotify.com",
+      "open.spotify.com",
+      "qobuz.com",
+      "tidal.com",
+      "amazon.com",
+      "discogs.com",
+      "musicbrainz.org",
+      "genius.com",
+      "linktr.ee",
+      "lnk.to",
+      "ffm.to",
+      "ffm.bio",
+    ];
+
+    return !blockedHosts.some((blocked) => hostname === blocked || hostname.endsWith(`.${blocked}`));
+  } catch {
+    return false;
+  }
 }

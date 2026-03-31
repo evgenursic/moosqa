@@ -15,6 +15,8 @@ type SourceMetadata = {
   youtubeUrl?: string | null;
   youtubeMusicUrl?: string | null;
   bandcampUrl?: string | null;
+  officialWebsiteUrl?: string | null;
+  officialStoreUrl?: string | null;
 };
 
 type ResolveSourceOptions = {
@@ -66,6 +68,7 @@ async function resolveSourceMetadataInternal(
     const html = await response.text();
     const hrefCandidates = extractAnchorCandidates(html, finalUrl);
     const platformLinkCandidates = await resolvePlatformCandidates(hrefCandidates);
+    const officialLinkCandidates = resolveOfficialSiteCandidates(hrefCandidates, finalUrl);
     const jsonLd = parseJsonLd(html);
     const rawLabelName =
       findStringValue(jsonLd, ["recordLabel", "name"]) ||
@@ -127,6 +130,11 @@ async function resolveSourceMetadataInternal(
       youtubeMusicUrl:
         platformLinks.youtubeMusicUrl || platformLinkCandidates.youtubeMusicUrl || null,
       bandcampUrl: platformLinks.bandcampUrl || platformLinkCandidates.bandcampUrl || null,
+      officialWebsiteUrl:
+        officialLinkCandidates.officialWebsiteUrl ||
+        inferOfficialWebsiteFromSource(finalUrl) ||
+        null,
+      officialStoreUrl: officialLinkCandidates.officialStoreUrl || null,
     };
 
     if (
@@ -269,6 +277,58 @@ async function resolvePlatformCandidates(candidates: Array<{ href: string; text:
   return result;
 }
 
+function resolveOfficialSiteCandidates(
+  candidates: Array<{ href: string; text: string }>,
+  baseUrl: string,
+) {
+  const result: {
+    officialWebsiteUrl?: string | null;
+    officialStoreUrl?: string | null;
+  } = {};
+
+  for (const candidate of candidates.slice(0, 80)) {
+    const href = candidate.href;
+    const text = candidate.text;
+    if (!href || !text) {
+      continue;
+    }
+
+    if (isIgnoredOfficialDomain(href, baseUrl)) {
+      continue;
+    }
+
+    if (
+      !result.officialStoreUrl &&
+      /\b(store|shop|merch|merchandise|vinyl|cd|cassette|buy|order)\b/i.test(text)
+    ) {
+      result.officialStoreUrl = href;
+    }
+
+    if (
+      !result.officialWebsiteUrl &&
+      /\b(official site|official website|website|homepage|home page|artist site|visit site)\b/i.test(text)
+    ) {
+      result.officialWebsiteUrl = href;
+    }
+  }
+
+  if (!result.officialWebsiteUrl) {
+    const likelyOfficial = candidates.find(
+      (candidate) =>
+        !isIgnoredOfficialDomain(candidate.href, baseUrl) &&
+        !/\b(store|shop|merch|buy|order)\b/i.test(candidate.text) &&
+        /\b(about|bio|contact|tour|music|home)\b/i.test(candidate.text),
+    );
+    result.officialWebsiteUrl = likelyOfficial?.href || null;
+  }
+
+  if (!result.officialWebsiteUrl && !isIgnoredOfficialDomain(baseUrl, baseUrl)) {
+    result.officialWebsiteUrl = baseUrl;
+  }
+
+  return result;
+}
+
 async function resolveFinalUrl(url: string) {
   try {
     const response = await fetch(url, {
@@ -306,6 +366,14 @@ function detectDirectPlatformUrls(urls: string[]) {
   }
 
   return result;
+}
+
+function inferOfficialWebsiteFromSource(url: string) {
+  if (isIgnoredOfficialDomain(url, url)) {
+    return null;
+  }
+
+  return url;
 }
 
 function parseJsonLd(html: string) {
@@ -600,6 +668,8 @@ function mergeSourceMetadata(base: SourceMetadata, deep: SourceMetadata): Source
     youtubeUrl: deep.youtubeUrl || base.youtubeUrl || null,
     youtubeMusicUrl: deep.youtubeMusicUrl || base.youtubeMusicUrl || null,
     bandcampUrl: deep.bandcampUrl || base.bandcampUrl || null,
+    officialWebsiteUrl: deep.officialWebsiteUrl || base.officialWebsiteUrl || null,
+    officialStoreUrl: deep.officialStoreUrl || base.officialStoreUrl || null,
   };
 }
 
@@ -706,6 +776,88 @@ function resolveSourceArtworkFromUrl(url: string) {
   }
 
   return null;
+}
+
+function isIgnoredOfficialDomain(url: string, baseUrl: string) {
+  try {
+    const parsed = new URL(url);
+    const base = new URL(baseUrl);
+    const hostname = parsed.hostname.toLowerCase();
+
+    if (
+      hostname === base.hostname.toLowerCase() &&
+      isPublicationLikeHost(hostname)
+    ) {
+      return true;
+    }
+
+    if (detectPlatform(url)) {
+      return true;
+    }
+
+    const blockedHosts = [
+      "reddit.com",
+      "www.reddit.com",
+      "instagram.com",
+      "www.instagram.com",
+      "facebook.com",
+      "www.facebook.com",
+      "x.com",
+      "www.x.com",
+      "twitter.com",
+      "www.twitter.com",
+      "bsky.app",
+      "soundcloud.com",
+      "open.spotify.com",
+      "spotify.com",
+      "music.apple.com",
+      "apple.com",
+      "qobuz.com",
+      "tidal.com",
+      "amazon.com",
+      "discogs.com",
+      "musicbrainz.org",
+      "genius.com",
+      "linktr.ee",
+      "lnk.to",
+      "ffm.to",
+      "ffm.bio",
+    ];
+
+    if (blockedHosts.some((blocked) => hostname === blocked || hostname.endsWith(`.${blocked}`))) {
+      return true;
+    }
+
+    return isPublicationLikeHost(hostname);
+  } catch {
+    return true;
+  }
+}
+
+function isPublicationLikeHost(hostname: string) {
+  const publicationHints = [
+    "pitchfork.com",
+    "floodmagazine.com",
+    "stereogum.com",
+    "nme.com",
+    "rollingstone.com",
+    "thelineofbestfit.com",
+    "consequence.net",
+    "brooklynvegan.com",
+    "undertheradarmag.com",
+    "clashmusic.com",
+    "faroutmagazine.co.uk",
+    "paste",
+    "dork",
+    "audiotree",
+    "kexp",
+    "npr.org",
+    "bbc.co.uk",
+    "youtube.com",
+    "youtu.be",
+  ];
+
+  return publicationHints.some((hint) => hostname.includes(hint));
 }
 
 function normalizeWhitespace(value: string) {

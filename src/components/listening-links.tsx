@@ -13,6 +13,8 @@ type ListeningLinksProps = {
     youtubeUrl?: string | null;
     youtubeMusicUrl?: string | null;
     bandcampUrl?: string | null;
+    officialWebsiteUrl?: string | null;
+    officialStoreUrl?: string | null;
   };
   compact?: boolean;
   dark?: boolean;
