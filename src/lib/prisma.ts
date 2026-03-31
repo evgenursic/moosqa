@@ -1,13 +1,14 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-import { PrismaClient } from "@/generated/prisma/client";
+import { PrismaClient as PrismaClientClass } from "@/generated/prisma/client";
+import type { PrismaClient as PrismaClientInstance } from "@/generated/prisma/client";
 
 const PRISMA_CLIENT_SCHEMA_VERSION = "postgres-production-v1";
 const runtimeDatabaseUrl =
   process.env.DATABASE_RUNTIME_URL || process.env.DATABASE_URL;
 
 declare global {
-  var prismaGlobal: PrismaClient | undefined;
+  var prismaGlobal: PrismaClientInstance | undefined;
   var prismaGlobalVersion: string | undefined;
   var prismaPoolGlobal: Pool | undefined;
 }
@@ -26,14 +27,14 @@ const prismaPool =
     allowExitOnIdle: true,
   });
 
-const prismaClient: PrismaClient = shouldCreateClient
-  ? new PrismaClient({
+const prismaClient: PrismaClientInstance = shouldCreateClient
+  ? new PrismaClientClass({
       adapter: new PrismaPg(prismaPool),
       log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
     })
-  : (globalThis.prismaGlobal as PrismaClient);
+  : (globalThis.prismaGlobal as PrismaClientInstance);
 
-export const prisma: PrismaClient = prismaClient;
+export const prisma: PrismaClientInstance = prismaClient;
 
 if (process.env.NODE_ENV !== "production") {
   globalThis.prismaGlobal = prisma;

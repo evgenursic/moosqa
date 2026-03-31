@@ -1,7 +1,10 @@
+import { ReleaseType } from "@/generated/prisma/enums";
+
 type LinkableRelease = {
   title: string;
   artistName: string | null;
   projectTitle: string | null;
+  releaseType: ReleaseType;
   sourceUrl: string;
   youtubeUrl?: string | null;
   youtubeMusicUrl?: string | null;
@@ -11,6 +14,12 @@ type LinkableRelease = {
 type ListeningPlatform = "youtube" | "youtube-music" | "bandcamp";
 
 export type ListeningLink = {
+  label: string;
+  href: string;
+  isDirect: boolean;
+};
+
+export type PurchaseLink = {
   label: string;
   href: string;
   isDirect: boolean;
@@ -40,6 +49,37 @@ export function getListeningLinks(release: LinkableRelease): ListeningLink[] {
       isDirect: Boolean(release.bandcampUrl || detectPlatform(release.sourceUrl) === "bandcamp"),
     },
   ].sort((left, right) => Number(right.isDirect) - Number(left.isDirect));
+}
+
+export function getPurchaseLink(release: LinkableRelease): PurchaseLink | null {
+  if (!isPurchasableRelease(release.releaseType)) {
+    return null;
+  }
+
+  const query = encodeURIComponent(buildSearchQuery(release));
+  const sourcePlatform = detectPlatform(release.sourceUrl);
+
+  if (release.bandcampUrl) {
+    return {
+      label: "Buy on Bandcamp",
+      href: release.bandcampUrl,
+      isDirect: true,
+    };
+  }
+
+  if (sourcePlatform === "bandcamp") {
+    return {
+      label: "Buy on Bandcamp",
+      href: release.sourceUrl,
+      isDirect: true,
+    };
+  }
+
+  return {
+    label: "Buy music",
+    href: `https://www.qobuz.com/us-en/search?q=${query}`,
+    isDirect: false,
+  };
 }
 
 export function detectPlatform(url: string): ListeningPlatform | null {
@@ -72,6 +112,14 @@ function buildSearchQuery(release: LinkableRelease) {
   ].filter(Boolean);
 
   return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+function isPurchasableRelease(releaseType: ReleaseType) {
+  return (
+    releaseType === ReleaseType.SINGLE ||
+    releaseType === ReleaseType.ALBUM ||
+    releaseType === ReleaseType.EP
+  );
 }
 
 function fallbackPlatformUrl(

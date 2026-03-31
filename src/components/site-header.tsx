@@ -62,8 +62,22 @@ export function SiteHeader() {
   const router = useRouter();
   const lastScrollY = useRef(0);
   const ticking = useRef(false);
+  const compactStateRef = useRef(false);
   const forceExpandedHeader = menuOpen || searchOpen;
   const showCompactHeader = isCompact && !forceExpandedHeader;
+
+  function commitCompact(next: boolean) {
+    if (compactStateRef.current === next) {
+      return;
+    }
+
+    compactStateRef.current = next;
+    setIsCompact(next);
+  }
+
+  useEffect(() => {
+    compactStateRef.current = isCompact;
+  }, [isCompact]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -135,43 +149,35 @@ export function SiteHeader() {
     }
 
     lastScrollY.current = window.scrollY;
-
     function handleScroll() {
-      const isMobileViewport = window.innerWidth < 1024;
-
-      if (isMobileViewport) {
-        const currentY = window.scrollY;
-        if (currentY <= 4) {
-          setIsCompact(false);
-        } else if (currentY > lastScrollY.current) {
-          setIsCompact(true);
-        } else if (currentY < lastScrollY.current) {
-          setIsCompact(false);
-        }
-
-        lastScrollY.current = currentY;
-        return;
-      }
-
       if (ticking.current) {
         return;
       }
 
       ticking.current = true;
       window.requestAnimationFrame(() => {
+        const isMobileViewport = window.innerWidth < 1024;
         const currentY = window.scrollY;
         const delta = currentY - lastScrollY.current;
+        let nextCompact = compactStateRef.current;
 
-        if (currentY <= 32) {
-          setIsCompact(false);
-        } else if (delta > 8 && currentY > 140) {
-          setIsCompact(true);
-        } else if (delta < -8) {
-          setIsCompact(false);
+        if (currentY <= (isMobileViewport ? 8 : 32)) {
+          nextCompact = false;
+        } else if (isMobileViewport) {
+          if (delta > 6 && currentY > 64) {
+            nextCompact = true;
+          } else if (delta < -6) {
+            nextCompact = false;
+          }
+        } else if (delta > 10 && currentY > 140) {
+          nextCompact = true;
+        } else if (delta < -10) {
+          nextCompact = false;
         }
 
         lastScrollY.current = currentY;
         ticking.current = false;
+        commitCompact(nextCompact);
       });
     }
 
@@ -262,7 +268,7 @@ export function SiteHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-40">
+      <header className="sticky top-0 z-40 [backface-visibility:hidden] [transform:translateZ(0)]">
         {showCompactHeader ? (
           <div className="py-2 md:py-3">
             <Link href="/" className="block text-center">

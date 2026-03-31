@@ -82,3 +82,9 @@ model Vote {
 
   @@unique([releaseId, deviceId])
 }
+
+model AppState {
+  key       String   @id
+  value     String?
+  updatedAt DateTime @updatedAt
+}

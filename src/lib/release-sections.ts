@@ -59,9 +59,9 @@ const HOMEPAGE_LIMITS = {
   topRated: 8,
   topRatedCandidates: 24,
   topEngaged: 8,
-  topEngagedCandidates: 72,
+  topEngagedCandidates: 96,
 } as const;
-const TOP_ENGAGED_LOOKBACK_DAYS = 45;
+const TOP_ENGAGED_LOOKBACK_DAYS = 60;
 
 const ARCHIVE_PAGE_SIZE = 24;
 const SECTION_CACHE_TTL_MS = 12_000;
@@ -484,39 +484,34 @@ function getEngagementScore(
     1,
     (Date.now() - release.publishedAt.getTime()) / (1000 * 60 * 60),
   );
-
-  const discussionWeight = Math.log1p(commentCount) * 13;
-  const scoreWeight = Math.log1p(redditScore) * 10;
-  const approvalWeight = Math.max(0, upvoteRatio - 0.5) * 16;
-  const awardsWeight = Math.log1p(awardCount) * 5;
-  const crosspostWeight = Math.log1p(crosspostCount) * 4;
-  const communityWeight =
-    (communityVotes > 0 ? Math.log1p(communityVotes) * 3.25 : 0) +
-    (communityAverage > 0 ? communityAverage / 18 : 0);
-  const discussionIntensity =
+  const scoreVelocity = redditScore / Math.pow(ageHours + 2, 0.72);
+  const commentVelocity = commentCount / Math.pow(ageHours + 2, 0.62);
+  const scoreReach = Math.log1p(redditScore) * 7.5;
+  const discussionReach = Math.log1p(commentCount) * 10.5;
+  const discussionDepth =
     commentCount > 0
-      ? Math.min(8, (commentCount / Math.max(redditScore, 1)) * 10)
+      ? Math.min(14, (commentCount / Math.max(redditScore, 8)) * 18)
       : 0;
-  const recencyWeight =
-    ageHours <= 24
-      ? 1.12
-      : ageHours <= 72
-        ? 1
-        : ageHours <= 168
-          ? 0.93
-          : ageHours <= 720
-            ? 0.82
-            : 0.72;
+  const approvalWeight = typeof release.upvoteRatio === "number" ? (upvoteRatio - 0.7) * 24 : 0;
+  const awardsWeight = Math.log1p(awardCount) * 6.5;
+  const crosspostWeight = Math.log1p(crosspostCount) * 5;
+  const communityWeight =
+    (communityVotes > 0 ? Math.log1p(communityVotes) * 3.4 : 0) +
+    (communityAverage > 0 ? communityAverage / 20 : 0);
+  const sustainedAttentionBonus =
+    ageHours >= 12 && ageHours <= 168 && redditScore >= 25 && commentCount >= 6 ? 4 : 0;
 
   return (
-    (discussionWeight +
-      scoreWeight +
-      approvalWeight +
-      awardsWeight +
-      crosspostWeight +
-      communityWeight +
-      discussionIntensity) *
-    recencyWeight
+    scoreVelocity * 1.15 +
+    commentVelocity * 2.8 +
+    scoreReach +
+    discussionReach +
+    discussionDepth +
+    approvalWeight +
+    awardsWeight +
+    crosspostWeight +
+    communityWeight +
+    sustainedAttentionBonus
   );
 }
 
@@ -528,8 +523,11 @@ function getTopEngagedWhere(): Prisma.ReleaseWhereInput {
       gte: cutoffDate,
     },
     OR: [
-      { commentCount: { gte: 2 } },
-      { score: { gte: 8 } },
+      { commentCount: { gte: 4 } },
+      { score: { gte: 18 } },
+      {
+        AND: [{ score: { gte: 10 } }, { commentCount: { gte: 3 } }],
+      },
       { awardCount: { gt: 0 } },
       { crosspostCount: { gt: 0 } },
       { scoreCount: { gt: 0 } },

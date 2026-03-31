@@ -29,9 +29,12 @@ type SyncOptions = {
 type NormalizedReleaseRecord = NonNullable<ReturnType<typeof normalizeRedditPost>>;
 
 const HOMEPAGE_SYNC_POST_LIMIT = 36;
+const HOMEPAGE_SYNC_STATE_KEY = "homepage-sync";
+const HOMEPAGE_SYNC_STALE_MS = 45_000;
 
 declare global {
   var __moosqaHomepageSyncPromise: Promise<SyncResult> | null | undefined;
+  var __moosqaLastHomepageSyncAt: number | null | undefined;
 }
 
 export async function syncIndieheadsReleases(options: SyncOptions = {}) {
@@ -47,6 +50,7 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
   const { created, updated, failed } = await upsertNormalizedReleases(releases, { lightweight });
 
   const enriched = enrich ? await enrichRecentReleases(Math.max(12, sanitized + created)) : 0;
+  await markHomepageSyncFresh();
   clearReleaseDataCaches();
 
   return {
@@ -65,6 +69,10 @@ export async function refreshHomepageData() {
   await ensureDatabase();
 
   try {
+    if (await isHomepageSyncFresh()) {
+      return;
+    }
+
     await runSharedHomepageSync();
     return;
   } catch (error) {
@@ -275,6 +283,7 @@ async function syncLatestHomepageReleases() {
   const { created, updated, failed } = await upsertNormalizedReleases(releases, {
     lightweight: true,
   });
+  await markHomepageSyncFresh();
   clearReleaseDataCaches();
 
   return {
@@ -287,6 +296,40 @@ async function syncLatestHomepageReleases() {
     sanitized: 0,
     enriched: 0,
   };
+}
+
+async function isHomepageSyncFresh() {
+  const now = Date.now();
+  const cachedSyncAt = globalThis.__moosqaLastHomepageSyncAt ?? null;
+  if (cachedSyncAt && now - cachedSyncAt < HOMEPAGE_SYNC_STALE_MS) {
+    return true;
+  }
+
+  const syncState = await prisma.appState.findUnique({
+    where: { key: HOMEPAGE_SYNC_STATE_KEY },
+    select: { updatedAt: true },
+  });
+
+  if (!syncState) {
+    return false;
+  }
+
+  globalThis.__moosqaLastHomepageSyncAt = syncState.updatedAt.getTime();
+  return now - syncState.updatedAt.getTime() < HOMEPAGE_SYNC_STALE_MS;
+}
+
+async function markHomepageSyncFresh() {
+  const syncedAt = new Date();
+  globalThis.__moosqaLastHomepageSyncAt = syncedAt.getTime();
+
+  await prisma.appState.upsert({
+    where: { key: HOMEPAGE_SYNC_STATE_KEY },
+    update: { value: syncedAt.toISOString() },
+    create: {
+      key: HOMEPAGE_SYNC_STATE_KEY,
+      value: syncedAt.toISOString(),
+    },
+  });
 }
 
 async function upsertNormalizedReleases(
