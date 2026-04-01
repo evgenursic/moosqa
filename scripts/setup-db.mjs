@@ -31,6 +31,15 @@ if (generate.status !== 0) {
   process.exit(generate.status ?? 1);
 }
 
+const harden = spawnSync("node", ["scripts/harden-db.mjs"], {
+  stdio: "inherit",
+  shell: true,
+});
+
+if (harden.status !== 0) {
+  process.exit(harden.status ?? 1);
+}
+
 console.log("Postgres schema is ready.");
 
 function runDbPush(databaseUrl) {

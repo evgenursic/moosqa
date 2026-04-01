@@ -11,6 +11,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma db push",
     "db:push": "prisma db push",
+    "db:harden": "node scripts/harden-db.mjs",
     "db:setup": "node scripts/setup-db.mjs",
     "postinstall": "prisma generate"
   },
