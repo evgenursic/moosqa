@@ -13,6 +13,7 @@
     "db:push": "prisma db push",
     "db:harden": "node scripts/harden-db.mjs",
     "db:setup": "node scripts/setup-db.mjs",
+    "backfill:ai": "npx tsx scripts/backfill-ai-summaries.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

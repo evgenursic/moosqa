@@ -136,7 +136,7 @@ export function getDisplaySummary(input: {
   genreName?: string | null | undefined;
 }) {
   const normalizedAiSummary = input.aiSummary?.trim();
-  if (normalizedAiSummary) {
+  if (normalizedAiSummary && !mentionsReleaseIdentity(normalizedAiSummary, input)) {
     return normalizedAiSummary;
   }
 
@@ -148,7 +148,8 @@ export function getDisplaySummary(input: {
   const loweredSummary = normalizedSummary.toLowerCase();
   if (
     loweredSummary.includes("spotted on r/indieheads") ||
-    loweredSummary.includes("synced ")
+    loweredSummary.includes("synced ") ||
+    mentionsReleaseIdentity(normalizedSummary, input)
   ) {
     return buildStaticSummaryFallback(input);
   }
@@ -163,30 +164,103 @@ function buildStaticSummaryFallback(input: {
   releaseType?: ReleaseType | undefined;
   genreName?: string | null | undefined;
 }) {
-  const subject = input.artistName?.trim() || input.projectTitle?.trim() || input.title?.trim() || "This release";
-  const workTitle =
-    input.artistName?.trim() && input.projectTitle?.trim()
-      ? input.projectTitle.trim()
-      : input.title?.trim() || input.projectTitle?.trim() || subject;
   const genre = getSummaryGenreLabel(input.genreName, input.releaseType || ReleaseType.OTHER).toLowerCase();
+  const texture = inferFallbackTexture(genre, input.releaseType || ReleaseType.OTHER);
+  const mood = inferFallbackMood(genre, input.releaseType || ReleaseType.OTHER);
 
   if (input.releaseType === ReleaseType.PERFORMANCE || input.releaseType === ReleaseType.LIVE_SESSION) {
-    if (workTitle !== subject) {
-      return `${subject} brings ${workTitle} into a live frame here, with ${genre} detail pushed closer to the room.`;
-    }
-
-    return `${subject} is captured in a live setting here, with ${genre} detail replacing studio polish.`;
+    return `The live take keeps ${texture} close to the room, with ${mood} detail replacing studio polish.`;
   }
 
   if (input.releaseType === ReleaseType.ALBUM) {
-    return `${subject} is front and center on ${workTitle}, shaped around a ${genre} palette rather than a placeholder rollout blurb.`;
+    return `This album leans into ${genre}, with ${texture} and ${mood} doing most of the scene-setting.`;
   }
 
   if (input.releaseType === ReleaseType.EP) {
-    return `${subject} uses ${workTitle} to sketch a compact ${genre} statement with enough detail to stand on its own.`;
+    return `This EP sketches a compact ${genre} frame, letting ${texture} carry the weight.`;
   }
 
-  return `${subject} pushes ${workTitle} forward through a ${genre} angle that still gives the card something concrete to say.`;
+  return `The single leans on ${texture}, with ${mood} giving its ${genre} shape a more defined contour.`;
+}
+
+function mentionsReleaseIdentity(
+  value: string,
+  input: {
+    artistName?: string | null | undefined;
+    projectTitle?: string | null | undefined;
+    title?: string | null | undefined;
+  },
+) {
+  const normalizedValue = normalizeIdentityText(value);
+  const candidates = [input.artistName, input.projectTitle, input.title]
+    .map((candidate) => normalizeIdentityText(candidate || ""))
+    .filter((candidate) => candidate.length >= 4);
+
+  return candidates.some((candidate) => normalizedValue.includes(candidate));
+}
+
+function normalizeIdentityText(value: string) {
+  return decodeHtmlEntities(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function inferFallbackTexture(genre: string, releaseType: ReleaseType) {
+  if (releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION) {
+    return "room sound";
+  }
+
+  if (genre.includes("dream") || genre.includes("shoegaze")) {
+    return "hazy layers";
+  }
+
+  if (genre.includes("folk") || genre.includes("americana")) {
+    return "acoustic detail";
+  }
+
+  if (genre.includes("synth") || genre.includes("electronic")) {
+    return "electronic texture";
+  }
+
+  if (genre.includes("punk") || genre.includes("post-punk")) {
+    return "ragged momentum";
+  }
+
+  if (genre.includes("ambient") || genre.includes("drone")) {
+    return "slow-moving atmosphere";
+  }
+
+  return "the arrangement";
+}
+
+function inferFallbackMood(genre: string, releaseType: ReleaseType) {
+  if (releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION) {
+    return "closer-mic";
+  }
+
+  if (genre.includes("dream") || genre.includes("shoegaze")) {
+    return "dreamy";
+  }
+
+  if (genre.includes("slowcore") || genre.includes("ambient")) {
+    return "slow-burn";
+  }
+
+  if (genre.includes("punk") || genre.includes("hardcore")) {
+    return "urgent";
+  }
+
+  if (genre.includes("folk") || genre.includes("americana")) {
+    return "earthbound";
+  }
+
+  if (genre.includes("synth") || genre.includes("electronic")) {
+    return "futurist";
+  }
+
+  return "tonal";
 }
 
 function getSummaryGenreLabel(

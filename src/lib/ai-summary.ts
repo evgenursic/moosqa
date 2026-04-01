@@ -39,6 +39,10 @@ let client: OpenAI | null = null;
 const GENERIC_SUMMARY_PATTERNS = [
   "lands with a",
   "arrives with a focused",
+  "forward through",
+  "sharper route into",
+  "more purposeful move",
+  "cleaner angle",
   "easy to place on a first listen",
   "opening moments",
   "puts its hook at the center",
@@ -154,8 +158,9 @@ export async function generateAiSummary(input: SummaryInput) {
             "Be specific to the supplied context and make every blurb feel distinct from the last one.",
             "Use exactly one sentence and keep it under 28 words.",
             "Do not mention Reddit.",
+            "Do not repeat the main artist name, billing, or release title already visible on the card.",
             "Avoid stock phrasing such as lands with, arrives with, immediate, easy to place on a first listen, opening moments, or clean entry point.",
-            "Prefer concrete details from the source text: collaborators, venue, cover/reissue angle, track count, label, outlet, or release framing.",
+            "Prefer concrete details from the source text: venue, instrumentation, cover/reissue angle, track count, label, outlet, live framing, or lyrical mood.",
           ].join(" "),
         },
         {
@@ -180,7 +185,7 @@ export async function generateAiSummary(input: SummaryInput) {
       ],
     });
 
-    return sanitizeSummary(response.output_text) || buildFallbackSummary(input);
+    return sanitizeSummary(response.output_text, input) || buildFallbackSummary(input);
   } catch {
     return buildFallbackSummary(input);
   }
@@ -242,32 +247,12 @@ function buildFallbackSummary(input: SummaryInput) {
     return finalizeSummary(buildPerformanceSummary(facts, seed));
   }
 
-  if (facts.upcomingProject && facts.guestArtist) {
-    return finalizeSummary(
-      chooseVariant(seed, [
-        `${facts.workTitle} pairs ${facts.subject} with ${facts.guestArtist}, giving the single a direct path into ${facts.upcomingProject}`,
-        `${facts.guestArtist} enters ${facts.workTitle}, turning it into the clearest preview yet of ${facts.upcomingProject}`,
-        `${facts.workTitle} uses ${facts.guestArtist} as the hinge into ${facts.upcomingProject}, rather than treating the collaboration like decoration`,
-      ]),
-    );
-  }
-
-  if (facts.upcomingProject) {
-    return finalizeSummary(
-      chooseVariant(seed, [
-        `${facts.workTitle} acts as the first proper look at ${facts.upcomingProject}, with ${facts.detailCue || facts.genrePhrase || "the arrangement"} carrying most of the momentum`,
-        `${facts.upcomingProject} sits just ahead of ${facts.workTitle}, which frames ${facts.subject} through ${withArticle(facts.detailCue || buildStyleFrame(facts.genrePhrase, facts.moodCue) || "sharper detail")}`,
-        `${facts.workTitle} sets up ${facts.upcomingProject} without overstating it, leaning instead on ${facts.detailCue || facts.themeCue || "the song's central idea"}`,
-      ]),
-    );
-  }
-
   if (facts.isCoverSet) {
     return finalizeSummary(
       chooseVariant(seed, [
-        `${facts.workTitle} makes the cover angle explicit, giving ${facts.subject} room to reshape familiar material through ${withArticle(buildStyleFrame(facts.genrePhrase, facts.moodCue) || facts.detailCue || "more personal lens")}`,
-        `${facts.workTitle} treats the source material like something to reframe, not just replay, with ${facts.detailCue || facts.themeCue || "its own character"} doing the heavy lifting`,
-        `${facts.workTitle} lands as a covers-minded turn for ${facts.subject}, with ${facts.guestArtist ? `${facts.guestArtist} helping tilt the mood` : `${facts.detailCue || "the arrangement"} setting the tone`}`,
+        `The cover angle matters less than the recasting, with ${facts.detailCue || buildStyleFrame(facts.genrePhrase, facts.moodCue) || "the arrangement"} giving familiar material a different weight`,
+        `Instead of replaying the source, the performance leans on ${facts.detailCue || facts.themeCue || "its own character"} to make the reframing stick`,
+        `The cover framing stays visible, but ${facts.detailCue || buildThemeFrame(facts.themeCue, facts.moodCue) || "the tonal shift"} is what actually changes the read`,
       ]),
     );
   }
@@ -275,9 +260,9 @@ function buildFallbackSummary(input: SummaryInput) {
   if (facts.isReimagining) {
     return finalizeSummary(
       chooseVariant(seed, [
-        `${facts.workTitle} reworks the material through ${facts.detailCue || withArticle(facts.genrePhrase || "more radical frame")}, giving ${facts.subject} something more than a straight revisit`,
-        `${facts.workTitle} treats the source like a reimagining project, pulling ${facts.detailCue || facts.themeCue || "new tension"} out of familiar ground`,
-        `${facts.originalYear ? `${facts.workTitle} revisits material first issued in ${facts.originalYear}` : facts.workTitle} and pushes it through ${facts.detailCue || buildStyleFrame(facts.genrePhrase, facts.moodCue) || "a different frame"}`,
+        `The reworking leans on ${facts.detailCue || withArticle(facts.genrePhrase || "a more radical frame")} rather than settling for a straight revisit`,
+        `A fresh arrangement pulls ${facts.detailCue || facts.themeCue || "new tension"} out of familiar material without leaning on nostalgia alone`,
+        `${facts.originalYear ? `Material first issued in ${facts.originalYear}` : "Earlier material"} is recast through ${facts.detailCue || buildStyleFrame(facts.genrePhrase, facts.moodCue) || "a different frame"}`,
       ]),
     );
   }
@@ -285,10 +270,30 @@ function buildFallbackSummary(input: SummaryInput) {
   if (facts.isReissue) {
     return finalizeSummary(
       chooseVariant(seed, [
-        `${facts.workTitle} comes back with an archival pull, keeping ${facts.subject} tied to ${withArticle(facts.genrePhrase || facts.themeCue || "sharper historical frame")}`,
-        `${facts.workTitle} comes back with an archival pull, keeping ${facts.subject} tied to ${withArticle(buildStyleFrame(facts.genrePhrase, facts.moodCue) || facts.themeCue || "sharper historical frame")}`,
-        `${facts.workTitle} reads like more than a simple reissue, especially with ${facts.detailCue || facts.themeCue || "the original atmosphere"} still intact`,
-        `${facts.workTitle} returns with its archival angle upfront, leaving ${facts.subject} in ${withArticle(facts.genrePhrase || "well-worn but vivid")} lane`,
+        `The archival pull stays intact here, with ${facts.detailCue || facts.themeCue || "the original atmosphere"} still doing more than enough work`,
+        `This reissue leans into ${withArticle(buildStyleFrame(facts.genrePhrase, facts.moodCue) || facts.themeCue || "sharper historical frame")} instead of treating the material like museum glass`,
+        `The return feels vivid rather than dutiful, especially once ${facts.detailCue || facts.genrePhrase || "the sonic grain"} settles in`,
+        `${facts.originalYear ? `The original ${facts.originalYear} frame` : "The earlier frame"} remains audible, but ${facts.detailCue || "the detail work"} keeps it from feeling sealed off`,
+      ]),
+    );
+  }
+
+  if (facts.upcomingProject && facts.guestArtist) {
+    return finalizeSummary(
+      chooseVariant(seed, [
+        `A guest feature turns this preview into a sharper bridge toward ${inferUpcomingProjectFrame(context, titleCueSource)}, with ${facts.detailCue || "the arrangement"} doing the real setup work`,
+        `Rather than sounding ornamental, the featured voice shifts the single toward ${facts.detailCue || buildThemeFrame(facts.themeCue, facts.moodCue) || "a more pointed frame"}`,
+        `The collaboration feels structural here, using ${facts.detailCue || facts.themeCue || "the contrast in tone"} to hint at ${inferUpcomingProjectFrame(context, titleCueSource)}`,
+      ]),
+    );
+  }
+
+  if (facts.upcomingProject) {
+    return finalizeSummary(
+      chooseVariant(seed, [
+        `This preview points toward ${inferUpcomingProjectFrame(context, titleCueSource)}, leaning on ${facts.detailCue || facts.genrePhrase || "the arrangement"} rather than a blunt teaser hook`,
+        `The coming release is framed through ${withArticle(buildStyleFrame(facts.genrePhrase, facts.moodCue) || facts.detailCue || "clearer sonic angle")}, which keeps the preview from feeling generic`,
+        `Most of the setup work lands in ${facts.detailCue || facts.themeCue || "the arrangement"}, giving the rollout a more specific shape than a standard advance single`,
       ]),
     );
   }
@@ -299,29 +304,9 @@ function buildFallbackSummary(input: SummaryInput) {
   ) {
     return finalizeSummary(
       chooseVariant(seed, [
-        `${facts.workTitle} arrives as ${aOrAn(`${facts.trackCount}-track`)} ${facts.trackCount}-track ${getTypeLabel(input.releaseType)} from ${facts.subject}, built around ${facts.detailCue || facts.genrePhrase || "a clear sonic identity"}`,
-        `${facts.trackCount} tracks in, ${facts.workTitle} already sketches ${withArticle(buildStyleFrame(facts.genrePhrase, facts.moodCue) || facts.themeCue || "clear silhouette")} for ${facts.subject}`,
-        `${facts.workTitle} spreads ${facts.subject} across ${facts.trackCount} tracks, with ${facts.detailCue || facts.themeCue || "the strongest details"} carrying the release`,
-      ]),
-    );
-  }
-
-  if (facts.referenceWork) {
-    return finalizeSummary(
-      chooseVariant(seed, [
-        `${facts.workTitle} nods to ${facts.referenceWork}, but ${facts.subject} turns that reference toward ${withArticle(buildThemeFrame(facts.themeCue, facts.moodCue) || buildStyleFrame(facts.genrePhrase, facts.moodCue) || "more personal angle")}`,
-        `${facts.referenceWork} sits somewhere behind ${facts.workTitle}, but ${facts.subject} uses it more as a springboard than a template`,
-        `${facts.workTitle} borrows the outline of ${facts.referenceWork} and pushes ${facts.subject} toward ${withArticle(buildThemeFrame(facts.themeCue, facts.moodCue) || buildStyleFrame(facts.genrePhrase, facts.moodCue) || "different texture")}`,
-      ]),
-    );
-  }
-
-  if (facts.descriptiveClause) {
-    return finalizeSummary(
-      chooseVariant(seed, [
-        `${facts.workTitle} ${facts.descriptiveClause}, which gives ${facts.subject} a more specific shape than the title alone suggests`,
-        `${facts.descriptiveClause} becomes the key to ${facts.workTitle}, keeping ${facts.subject} anchored in ${withArticle(buildStyleFrame(facts.genrePhrase, facts.moodCue) || facts.themeCue || "distinct lane")}`,
-        `${facts.workTitle} stands out because it ${facts.descriptiveClause}, not because it follows the usual rollout script`,
+        `Across ${facts.trackCount} tracks, this ${getTypeLabel(input.releaseType)} leans on ${facts.detailCue || facts.genrePhrase || "a clear sonic identity"} instead of filler`,
+        `${facts.trackCount} tracks are enough to sketch ${withArticle(buildStyleFrame(facts.genrePhrase, facts.moodCue) || facts.themeCue || "clear silhouette")}, with ${facts.detailCue || "the strongest details"} holding it together`,
+        `The ${facts.trackCount}-track sequence keeps returning to ${facts.detailCue || facts.themeCue || "its sharpest ideas"}, which gives the release a coherent pull`,
       ]),
     );
   }
@@ -329,20 +314,20 @@ function buildFallbackSummary(input: SummaryInput) {
   if (input.releaseType === ReleaseType.ALBUM || input.releaseType === ReleaseType.EP) {
     return finalizeSummary(
       chooseVariant(seed, [
-        `${facts.workTitle} gives ${facts.subject} ${withArticle(buildStyleFrame(facts.genrePhrase, facts.moodCue) || "broader frame")} for this ${getTypeLabel(input.releaseType)}, with ${facts.detailCue || buildThemeFrame(facts.themeCue, facts.moodCue) || "the sequencing"} doing the real work`,
-        `${facts.workTitle} feels less like background catalog and more like a defined ${getTypeLabel(input.releaseType)} statement from ${facts.subject}, especially around ${facts.detailCue || facts.genrePhrase || "the sonic palette"}`,
-        `${facts.workTitle} keeps ${facts.subject} centered on ${facts.detailCue || facts.themeCue || facts.genrePhrase || "its strongest ideas"}, rather than just filling out the runtime`,
+        `This ${getTypeLabel(input.releaseType)} sits in ${withArticle(buildStyleFrame(facts.genrePhrase, facts.moodCue) || "broader frame")}, with ${facts.detailCue || buildThemeFrame(facts.themeCue, facts.moodCue) || "the sequencing"} doing the heavy lifting`,
+        `The set feels defined by ${facts.detailCue || facts.genrePhrase || "its sonic palette"}, not just by the fact that it runs longer than a single`,
+        `Most of the weight lands in ${facts.detailCue || facts.themeCue || facts.genrePhrase || "its strongest ideas"}, which keeps the runtime purposeful`,
       ]),
     );
   }
 
   return finalizeSummary(
     chooseVariant(seed, [
-      `${facts.workTitle} gives ${facts.subject} ${withArticle(buildThemeFrame(facts.themeCue, facts.moodCue) || buildStyleFrame(facts.genrePhrase, facts.moodCue) || "cleaner angle")}, with ${facts.detailCue || "the main idea"} pushed close to the front`,
-      `${facts.workTitle} keeps ${facts.subject} moving through ${withArticle(buildStyleFrame(facts.genrePhrase, facts.moodCue) || facts.moodCue || "more deliberate mood")}, while ${facts.detailCue || "the arrangement"} handles the shape`,
-      `${facts.workTitle} leans on ${facts.detailCue || "a clear melodic center"}, which gives ${facts.subject} a more defined outline`,
-      `${facts.workTitle} reads as ${withArticle(buildThemeFrame(facts.themeCue, facts.moodCue) || facts.moodCue || buildStyleFrame(facts.genrePhrase, facts.moodCue) || "more purposeful move")} for ${facts.subject}, especially through ${facts.detailCue || "the arrangement"}`,
-      `${facts.workTitle} gives ${facts.subject} a sharper route into ${withArticle(buildStyleFrame(facts.genrePhrase, facts.moodCue) || facts.themeCue || "its own lane")}, with ${facts.detailCue || "the pacing"} setting the contour`,
+      `The single leans on ${facts.detailCue || "a clear melodic center"}, which gives ${withArticle(buildStyleFrame(facts.genrePhrase, facts.moodCue) || facts.themeCue || "the hook")} a cleaner shape`,
+      `${withArticle(buildStyleFrame(facts.genrePhrase, facts.moodCue) || "defined frame")} holds the single together, while ${facts.detailCue || "the arrangement"} keeps it from flattening out`,
+      `${facts.detailCue || "The arrangement"} does most of the work here, pulling the ${buildThemeFrame(facts.themeCue, facts.moodCue) || facts.moodCue || facts.genrePhrase || "overall mood"} into focus`,
+      `The strongest impression comes from ${facts.detailCue || facts.genrePhrase || "the texture"}, with ${facts.themeCue || facts.moodCue || "the emotional angle"} filling in the rest`,
+      `Rather than chasing scale, the single stays locked into ${facts.detailCue || facts.themeCue || "its sharpest details"}, and that restraint gives it shape`,
     ]),
   );
 }
@@ -379,96 +364,91 @@ function extractFacts(
 function buildPerformanceSummary(facts: SummaryFacts, seed: number) {
   const setting = facts.performanceSetting || "this live setting";
   const liveStopMatch = setting.match(/^a live stop at (.+)$/i);
-  const focus =
-    facts.workTitle &&
-    facts.workTitle.toLowerCase() !== facts.subject.toLowerCase() &&
-    !isGenericPerformanceFocus(facts.workTitle)
-      ? facts.workTitle
-      : null;
-  const focusLead = focus ? `${facts.subject}'s ${focus}` : facts.subject;
+  const detail = facts.detailCue || "the room sound";
+  const secondary = buildThemeFrame(facts.themeCue, facts.moodCue) || facts.moodCue || facts.genrePhrase || "the mood";
 
   if (facts.guestArtist) {
     if (setting === "this live setting") {
       return chooseVariant(seed, [
-        `${facts.subject} and ${facts.guestArtist} pull ${focus || "the song"} into a more exposed live shape, with ${facts.detailCue || "the interplay"} doing the rest`,
-        `${facts.guestArtist} changes the balance of ${focusLead}, giving ${facts.subject} more room for ${facts.detailCue || "the arrangement"} to shift`,
-        `${facts.subject} uses ${facts.guestArtist} as a live foil here, especially once ${facts.detailCue || "the setup"} starts to loosen up`,
+        `A guest voice changes the balance of the live take, pushing ${detail} and ${secondary} closer to the surface`,
+        `The live arrangement opens up around the guest feature, leaving ${detail} to do most of the reshaping`,
+        `A featured voice turns the live version outward, with ${detail} carrying the extra tension`,
       ]);
     }
 
     return chooseVariant(seed, [
-      `${capitalizeFirst(setting)} gives ${facts.subject} and ${facts.guestArtist} enough space for ${facts.detailCue || "the interplay"} to come forward`,
-      `${capitalizeFirst(setting)} keeps ${focusLead} close to the mic while ${facts.guestArtist} changes the balance around the arrangement`,
-      `${capitalizeFirst(setting)} sharpens the exchange between ${facts.subject} and ${facts.guestArtist}, especially through ${facts.detailCue || "the exposed setup"}`,
+      `${capitalizeFirst(setting)} gives the guest feature real weight, especially once ${detail} starts to reshape the performance`,
+      `In ${stripLeadingArticle(setting)}, the collaboration matters because ${detail} and ${secondary} are pushed closer to the mic`,
+      `${capitalizeFirst(setting)} turns the guest feature into part of the arrangement rather than a side detail, with ${detail} doing the work`,
     ]);
   }
 
   if (liveStopMatch?.[1]) {
     return chooseVariant(seed, [
-      `At ${liveStopMatch[1]}, ${focusLead} lets ${facts.detailCue || "the room sound"} do more of the storytelling`,
-      `At ${liveStopMatch[1]}, ${facts.subject} gets a tighter frame, which pushes ${focus ? `${focus} and ${facts.detailCue || "small arrangement details"}` : facts.detailCue || "small arrangement details"} forward`,
-      `At ${liveStopMatch[1]}, ${focusLead} comes through with more space around ${facts.detailCue || "the live setup"}`,
+      `At ${liveStopMatch[1]}, ${detail} does more of the storytelling than studio polish ever could`,
+      `The stop at ${liveStopMatch[1]} keeps the performance tight enough for ${detail} and ${secondary} to register clearly`,
+      `At ${liveStopMatch[1]}, the room sound leaves ${detail} and ${secondary} out in front`,
     ]);
   }
 
   if (/tiny desk/i.test(setting)) {
     return chooseVariant(seed, [
-      `The Tiny Desk setup gives ${focusLead} a more tactile shape, with ${facts.detailCue || "ensemble detail"} rising to the surface`,
-      `In the Tiny Desk room, ${focusLead} sounds less polished and more immediate, especially once ${facts.detailCue || "the arrangement"} takes over`,
-      `The Tiny Desk framing brings ${facts.subject} close enough for ${focus ? `${focus} and ${facts.detailCue || "small ensemble moves"}` : facts.detailCue || "small ensemble moves"} to register clearly`,
+      `The Tiny Desk setup pulls ${detail} close enough to feel tactile, with ${secondary} replacing any remaining polish`,
+      `In the Tiny Desk room, ${detail} carries the performance while ${secondary} gives the take a looser edge`,
+      `The Tiny Desk framing trims away studio gloss and lets ${detail} handle most of the emotional lift`,
     ]);
   }
 
   if (/world cafe/i.test(setting)) {
     return chooseVariant(seed, [
-      `The World Cafe session puts ${focusLead} in a warmer room, with ${facts.detailCue || "small arrangement shifts"} carrying more of the mood`,
-      `World Cafe gives ${facts.subject} a looser frame here, letting ${focus || facts.detailCue || "the live setup"} breathe a bit longer`,
-      `In the World Cafe room, ${focusLead} feels more conversational, especially through ${facts.detailCue || "the stripped arrangement"}`,
+      `The World Cafe session gives ${detail} a warmer frame, with ${secondary} spreading through the room`,
+      `In the World Cafe setting, ${detail} does the heavy lifting while ${secondary} keeps the take conversational`,
+      `World Cafe leaves enough air around ${detail} for the live read to feel less fixed`,
     ]);
   }
 
   if (/audiotree/i.test(setting)) {
     return chooseVariant(seed, [
-      `Audiotree gives ${facts.subject} enough room to stretch ${focus || "the set"}, with ${facts.detailCue || "the live arrangement"} doing the heavy lifting`,
-      `The Audiotree taping makes ${focusLead} feel more physical, especially once ${facts.detailCue || "the room sound"} takes over`,
-      `On Audiotree, ${facts.subject} leans into ${facts.detailCue || "the session setup"}, which makes ${focus || "the performance"} hit differently`,
+      `The Audiotree taping makes ${detail} feel more physical, with ${secondary} coming through in the gaps`,
+      `On Audiotree, the session setup leans hard on ${detail}, which gives the live take a more tactile edge`,
+      `Audiotree strips the performance back to ${detail} and ${secondary}, and that narrower frame helps`,
     ]);
   }
 
   if (/jimmy kimmel/i.test(setting) || /late show/i.test(setting) || /late night/i.test(setting) || /fallon/i.test(setting) || /colbert/i.test(setting)) {
     return chooseVariant(seed, [
-      `${capitalizeFirst(setting)} frames ${focusLead} with a tighter broadcast snap, leaving ${facts.detailCue || "the core arrangement"} out front`,
-      `On ${stripLeadingArticle(setting)}, ${facts.subject} keeps ${focus || "the performance"} direct, with ${facts.detailCue || "the live band"} carrying most of the punch`,
-      `${capitalizeFirst(setting)} gives ${focusLead} a brighter TV-stage edge, especially once ${facts.detailCue || "the performance details"} start to surface`,
+      `${capitalizeFirst(setting)} keeps the broadcast frame tight, leaving ${detail} to cut through the stage gloss`,
+      `The TV-stage setup gives ${detail} a brighter edge, while ${secondary} keeps the take from turning slick`,
+      `On ${stripLeadingArticle(setting)}, ${detail} holds the focus even with the brighter broadcast framing`,
     ]);
   }
 
   if (/brodie sessions/i.test(setting) || /parfait palace/i.test(setting)) {
     return chooseVariant(seed, [
-      `${capitalizeFirst(setting)} catches ${facts.subject} in a closer frame, which makes ${focus || facts.detailCue || "the arrangement"} feel less fixed`,
-      `In ${stripLeadingArticle(setting)}, ${focusLead} turns more intimate, with ${facts.detailCue || "the room tone"} filling in the rest`,
-      `${capitalizeFirst(setting)} lets ${facts.subject} redraw ${focus || "the song"} through ${facts.detailCue || "a more exposed setup"}`,
+      `${capitalizeFirst(setting)} keeps the room small enough for ${detail} and ${secondary} to do the work`,
+      `In ${stripLeadingArticle(setting)}, the closer frame makes ${detail} feel less fixed and more human-scale`,
+      `${capitalizeFirst(setting)} cuts back the distance, which pushes ${detail} closer to the surface`,
     ]);
   }
 
   if (setting === "this live setting") {
     return chooseVariant(seed, [
-      `${focusLead} feels more exposed in live form, with ${facts.detailCue || facts.themeCue || "the room sound"} carrying the weight`,
-      `${facts.subject} pushes ${focus || "the performance"} into a rougher live frame here, letting ${facts.detailCue || facts.themeCue || "small details"} do more of the work`,
-      `In live form, ${focusLead} trades studio neatness for ${facts.detailCue || facts.themeCue || "a more immediate feel"}`,
-      `${facts.subject} lets ${focus || "the set"} breathe more freely here, especially once ${facts.detailCue || facts.themeCue || "the live setup"} takes over`,
+      `The live take trades studio neatness for ${detail}, letting ${secondary} carry the remaining weight`,
+      `A looser room frame brings ${detail} to the front and leaves the performance feeling less sealed off`,
+      `Live playback strips things back to ${detail}, with ${secondary} doing most of the scene-setting`,
+      `The room sound matters here because it puts ${detail} and ${secondary} ahead of polish`,
     ]);
   }
 
   return chooseVariant(seed, [
-    `${capitalizeFirst(setting)} brings ${focusLead} into closer view, with ${facts.detailCue || facts.themeCue || "the arrangement"} doing more of the storytelling`,
-    `${capitalizeFirst(setting)} strips ${focusLead} back to ${facts.detailCue || facts.themeCue || "the essentials"}, which gives the performance a different weight`,
-    `${capitalizeFirst(setting)} leaves ${focusLead} with nowhere to hide, pushing ${facts.detailCue || facts.themeCue || "the room sound"} to the front`,
-    `${capitalizeFirst(setting)} gives ${facts.subject} a tighter frame, letting ${focus ? `${focus} and ${facts.detailCue || facts.themeCue || "small details"}` : facts.detailCue || facts.themeCue || "small details"} reshape the performance`,
+    `${capitalizeFirst(setting)} brings ${detail} closer to the front, while ${secondary} fills in the rest`,
+    `${capitalizeFirst(setting)} trims the arrangement back to ${detail}, which gives the performance a different weight`,
+    `${capitalizeFirst(setting)} leaves ${detail} and ${secondary} exposed enough to reshape the whole take`,
+    `${capitalizeFirst(setting)} turns the room itself into part of the arrangement, especially around ${detail}`,
   ]);
 }
 
-function sanitizeSummary(value: string | undefined) {
+function sanitizeSummary(value: string | undefined, input?: SummaryInput) {
   if (!value) {
     return null;
   }
@@ -484,7 +464,32 @@ function sanitizeSummary(value: string | undefined) {
     return null;
   }
 
+  if (input && mentionsCardIdentity(normalized, input)) {
+    return null;
+  }
+
   return finalizeSummary(normalized);
+}
+
+function mentionsCardIdentity(value: string, input: SummaryInput) {
+  const normalizedValue = normalizeIdentityText(value);
+  const identityCandidates = [
+    input.artistName,
+    input.projectTitle,
+    input.title,
+  ]
+    .map((candidate) => normalizeIdentityText(candidate || ""))
+    .filter((candidate) => candidate.length >= 4);
+
+  return identityCandidates.some((candidate) => normalizedValue.includes(candidate));
+}
+
+function normalizeIdentityText(value: string) {
+  return decodeHtmlEntities(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function getTypeLabel(releaseType: ReleaseType) {
@@ -637,6 +642,20 @@ function extractUpcomingProject(value: string) {
   }
 
   return null;
+}
+
+function inferUpcomingProjectFrame(...values: string[]) {
+  const haystack = values.join(" ").toLowerCase();
+  if (/\b(lp|album|full-length|full length)\b/.test(haystack)) {
+    return "the coming full-length";
+  }
+  if (/\bep\b/.test(haystack)) {
+    return "the coming EP";
+  }
+  if (/\bmixtape\b/.test(haystack)) {
+    return "the coming mixtape";
+  }
+  return "the next project";
 }
 
 function extractPerformanceSetting(value: string) {
@@ -906,17 +925,6 @@ function capitalizeWords(value: string) {
 
 function stripLeadingArticle(value: string) {
   return value.replace(/^(a|an|the)\s+/i, "");
-}
-
-function isGenericPerformanceFocus(value: string) {
-  const normalized = value.toLowerCase().trim();
-  return (
-    normalized === "live" ||
-    normalized === "performance" ||
-    normalized === "session" ||
-    normalized === "full session" ||
-    normalized === "tiny desk concert"
-  );
 }
 
 function finalizeSummary(value: string) {
