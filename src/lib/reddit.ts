@@ -1,21 +1,25 @@
 import { ReleaseType } from "@/generated/prisma/enums";
 import { decodeHtmlEntities, slugify, trimText } from "@/lib/utils";
 
-const REDDIT_URLS = [
-  "https://www.reddit.com/r/indieheads/new.json?limit=100&raw_json=1",
-  "https://api.reddit.com/r/indieheads/new?limit=100&raw_json=1",
-  "https://www.reddit.com/r/indieheads/new/.json?limit=100&raw_json=1",
-  "https://old.reddit.com/r/indieheads/new.json?limit=100&raw_json=1",
-  "https://www.reddit.com/r/indieheads/.json?limit=100&raw_json=1",
+const REDDIT_JSON_ENDPOINTS = [
+  "https://www.reddit.com/r/indieheads/new.json",
+  "https://api.reddit.com/r/indieheads/new",
+  "https://www.reddit.com/r/indieheads/new/.json",
+  "https://old.reddit.com/r/indieheads/new.json",
+  "https://www.reddit.com/r/indieheads/.json",
 ];
 const REDDIT_RSS_URL = "https://www.reddit.com/r/indieheads/new.rss";
 const USER_AGENT = "moosqa/0.1 (+https://moosqa.local)";
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 const REDDIT_FETCH_TIMEOUT_MS = 10000;
+const REDDIT_PAGE_LIMIT = 100;
+const REDDIT_LOOKBACK_DAYS = 4;
+const REDDIT_MAX_PAGES = 5;
 
 type RedditListing = {
   data?: {
+    after?: string | null;
     children?: Array<{
       data: RedditPost;
     }>;
@@ -79,39 +83,14 @@ export type NormalizedRelease = {
 };
 
 export async function fetchRedditPosts() {
-  let lastError: Error | null = null;
   const headerVariants = getRedditHeaderVariants();
+  let lastError: Error | null = null;
   let jsonPosts: RedditPost[] = [];
 
-  for (const redditUrl of REDDIT_URLS) {
-    for (const headers of headerVariants) {
-      try {
-        const response = await fetch(redditUrl, {
-          headers,
-          cache: "no-store",
-          next: { revalidate: 0 },
-          signal: AbortSignal.timeout(REDDIT_FETCH_TIMEOUT_MS),
-        });
-
-        if (!response.ok) {
-          lastError = new Error(`Reddit sync failed with status ${response.status} for ${redditUrl}`);
-          continue;
-        }
-
-        const payload = (await response.json()) as RedditListing;
-        const posts = payload.data?.children?.map((child) => child.data) ?? [];
-        if (posts.length > 0) {
-          jsonPosts = posts;
-          break;
-        }
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-      }
-    }
-
-    if (jsonPosts.length > 0) {
-      break;
-    }
+  try {
+    jsonPosts = await fetchRedditPostsFromJson(headerVariants);
+  } catch (error) {
+    lastError = error instanceof Error ? error : new Error(String(error));
   }
 
   try {
@@ -132,6 +111,93 @@ export async function fetchRedditPosts() {
   }
 
   throw lastError || new Error("Reddit sync failed for all endpoints.");
+}
+
+async function fetchRedditPostsFromJson(headerVariants: Array<Record<string, string>>) {
+  const cutoffUtc = Math.floor(
+    (Date.now() - REDDIT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000) / 1000,
+  );
+  let lastError: Error | null = null;
+  let bestPosts: RedditPost[] = [];
+
+  for (const endpoint of REDDIT_JSON_ENDPOINTS) {
+    for (const headers of headerVariants) {
+      const accumulated: RedditPost[] = [];
+      const seenIds = new Set<string>();
+      let after: string | null = null;
+
+      for (let page = 0; page < REDDIT_MAX_PAGES; page += 1) {
+        const redditUrl = buildRedditJsonUrl(endpoint, after);
+
+        try {
+          const response = await fetch(redditUrl, {
+            headers,
+            cache: "no-store",
+            next: { revalidate: 0 },
+            signal: AbortSignal.timeout(REDDIT_FETCH_TIMEOUT_MS),
+          });
+
+          if (!response.ok) {
+            lastError = new Error(`Reddit sync failed with status ${response.status} for ${redditUrl}`);
+            break;
+          }
+
+          const payload = (await response.json()) as RedditListing;
+          const posts = payload.data?.children?.map((child) => child.data) ?? [];
+          if (posts.length === 0) {
+            break;
+          }
+
+          for (const post of posts) {
+            if (seenIds.has(post.id)) {
+              continue;
+            }
+
+            accumulated.push(post);
+            seenIds.add(post.id);
+          }
+
+          const oldestFetchedUtc = posts.at(-1)?.created_utc ?? null;
+          after = payload.data?.after ?? null;
+
+          if (!after || (oldestFetchedUtc !== null && oldestFetchedUtc <= cutoffUtc)) {
+            break;
+          }
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          break;
+        }
+      }
+
+      if (accumulated.length > bestPosts.length) {
+        bestPosts = accumulated;
+      }
+
+      const oldestAccumulatedUtc = accumulated.at(-1)?.created_utc ?? null;
+      if (
+        accumulated.length > 0 &&
+        (oldestAccumulatedUtc !== null && oldestAccumulatedUtc <= cutoffUtc)
+      ) {
+        return accumulated;
+      }
+    }
+  }
+
+  if (bestPosts.length > 0) {
+    return bestPosts;
+  }
+
+  throw lastError || new Error("Reddit JSON sync failed.");
+}
+
+function buildRedditJsonUrl(endpoint: string, after: string | null) {
+  const url = new URL(endpoint);
+  url.searchParams.set("limit", String(REDDIT_PAGE_LIMIT));
+  url.searchParams.set("raw_json", "1");
+  if (after) {
+    url.searchParams.set("after", after);
+  }
+  return url.toString();
 }
 
 function getRedditHeaderVariants() {

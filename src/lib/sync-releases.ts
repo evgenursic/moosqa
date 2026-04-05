@@ -296,21 +296,22 @@ async function runSharedHomepageSync() {
 
 async function syncLatestHomepageReleases() {
   const posts = await fetchRedditPosts();
-  const releases = posts
+  const normalizedReleases = posts
     .map(normalizeRedditPost)
-    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+  const releases = normalizedReleases
     .slice(0, HOMEPAGE_SYNC_POST_LIMIT);
 
   const { created, updated, failed } = await upsertNormalizedReleases(releases, {
     lightweight: true,
   });
-  const missingRecentRemoved = await pruneMissingRecentReleases(posts, releases);
+  const missingRecentRemoved = await pruneMissingRecentReleases(posts, normalizedReleases);
   await markHomepageSyncFresh();
   clearReleaseDataCaches();
 
   return {
     scanned: posts.length,
-    matched: releases.length,
+    matched: normalizedReleases.length,
     created,
     updated,
     failed,
