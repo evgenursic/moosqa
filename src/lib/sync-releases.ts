@@ -487,6 +487,11 @@ async function buildReleaseDataForUpsert(
 
     return {
       ...release,
+      releaseDate:
+        existing?.releaseDate ||
+        effectiveSourceMetadata?.releaseDate ||
+        release.releaseDate ||
+        null,
       imageUrl:
         release.imageUrl ||
         existing?.imageUrl ||
@@ -562,6 +567,11 @@ async function buildReleaseDataForUpsert(
 
   return {
     ...release,
+    releaseDate:
+      release.releaseDate ||
+      sourceMetadata?.releaseDate ||
+      existing?.releaseDate ||
+      null,
     imageUrl: release.imageUrl || existing?.imageUrl || sourceMetadata?.sourceImageUrl || null,
     thumbnailUrl:
       release.thumbnailUrl ||
@@ -772,6 +782,7 @@ function mergeSourceMetadataHints(
         sourceExcerpt?: string | null;
         genreName?: string | null;
         labelName?: string | null;
+        releaseDate?: Date | null;
         sourceImageUrl?: string | null;
         youtubeUrl?: string | null;
         youtubeMusicUrl?: string | null;
@@ -787,6 +798,7 @@ function mergeSourceMetadataHints(
         sourceExcerpt?: string | null;
         genreName?: string | null;
         labelName?: string | null;
+        releaseDate?: Date | null;
         sourceImageUrl?: string | null;
         youtubeUrl?: string | null;
         youtubeMusicUrl?: string | null;
@@ -807,6 +819,7 @@ function mergeSourceMetadataHints(
     genreName:
       pickPreferredGenreProfile(primary?.genreName || null, fallback?.genreName || null) || null,
     labelName: primary?.labelName || fallback?.labelName || null,
+    releaseDate: primary?.releaseDate || fallback?.releaseDate || null,
     sourceImageUrl: primary?.sourceImageUrl || fallback?.sourceImageUrl || null,
     youtubeUrl: primary?.youtubeUrl || fallback?.youtubeUrl || null,
     youtubeMusicUrl: primary?.youtubeMusicUrl || fallback?.youtubeMusicUrl || null,

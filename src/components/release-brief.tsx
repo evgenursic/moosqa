@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ReleaseType } from "@/generated/prisma/enums";
 import { getListeningLinks } from "@/lib/listening-links";
 import { ReleaseArtwork } from "@/components/release-artwork";
-import { cn, formatPubDate, formatScore, getDisplayGenre } from "@/lib/utils";
+import { cn, formatPrimaryReleaseDateLabel, formatScore, getDisplayGenre } from "@/lib/utils";
 
 type ReleaseBriefProps = {
   release: {
@@ -22,6 +22,7 @@ type ReleaseBriefProps = {
     officialWebsiteUrl?: string | null;
     officialStoreUrl?: string | null;
     genreName?: string | null;
+    releaseDate?: Date | null;
     scoreAverage: number;
     scoreCount: number;
     publishedAt: Date;
@@ -91,5 +92,10 @@ function renderEmphasis(
       : `${release.outletName || "Source"} / search fallback`;
   }
 
-  return `${formatPubDate(release.publishedAt)} / ${release.outletName || "Source pending"}`;
+  const releaseDateLabel = formatPrimaryReleaseDateLabel(release.releaseType, release.releaseDate);
+  if (releaseDateLabel) {
+    return `${releaseDateLabel} / ${release.outletName || "Source pending"}`;
+  }
+
+  return `${release.outletName || "Source pending"}`;
 }

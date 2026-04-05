@@ -272,7 +272,13 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
     aiSummary,
     labelName,
     genreName,
-    releaseDate: musicMetadata.releaseDate || release.releaseDate || null,
+    releaseDate:
+      musicMetadata.releaseDate ||
+      sourceMetadata.releaseDate ||
+      fallbackBandcampMetadata?.releaseDate ||
+      searchedBandcampMetadata?.releaseDate ||
+      release.releaseDate ||
+      null,
     youtubeUrl:
       directYouTube ||
       sourceMetadata.youtubeUrl ||

@@ -86,6 +86,7 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
 
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
   const releaseHeading = release.artistName || release.projectTitle || release.title;
+  const releaseDateLabel = formatPrimaryReleaseDateLabel(release.releaseType, release.releaseDate);
 
   return (
     <main className="min-h-screen px-4 py-6 md:px-8">
@@ -106,7 +107,7 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
             </div>
 
             <div className="flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.18em] text-black/55">
-              <span>{formatPrimaryReleaseDateLabel(release.releaseType, release.releaseDate, release.publishedAt)}</span>
+              {releaseDateLabel ? <span>{releaseDateLabel}</span> : null}
               <span>{formatRelative(release.publishedAt)}</span>
               <span>{release.outletName || "Source pending"}</span>
               <span>{displayGenre}</span>

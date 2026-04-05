@@ -6,8 +6,6 @@ import { ReleaseArtwork } from "@/components/release-artwork";
 import { TopRatedVisual } from "@/components/top-rated-visual";
 import {
   formatPrimaryReleaseDateLabel,
-  formatPubDate,
-  formatRelative,
   formatReleaseTypeLabel,
   formatScore,
   getDisplayGenre,
@@ -85,7 +83,7 @@ export function ReleaseCard({
           ) : null}
         </div>
         <p className="section-kicker text-black/43">
-          {formatReleaseTypeLabel(release.releaseType)} / {formatPubDate(release.publishedAt)} / {formatRelative(release.publishedAt)}
+          {formatReleaseTypeLabel(release.releaseType)}
         </p>
         <Link href={`/releases/${release.slug}`} className="block cursor-pointer">
           <h3
@@ -146,9 +144,9 @@ function getMetaItems(
   context: NonNullable<ReleaseCardProps["context"]>,
 ) {
   const items = [
-    formatPrimaryReleaseDateLabel(release.releaseType, release.releaseDate || null, release.publishedAt),
+    formatPrimaryReleaseDateLabel(release.releaseType, release.releaseDate || null),
     release.outletName || "Source pending",
-  ];
+  ].filter((item): item is string => Boolean(item));
 
   if (context === "top-rated") {
     return items;

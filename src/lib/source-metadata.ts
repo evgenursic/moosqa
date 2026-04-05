@@ -11,6 +11,7 @@ type SourceMetadata = {
   artistNameHint?: string | null;
   genreName?: string | null;
   labelName?: string | null;
+  releaseDate?: Date | null;
   sourceImageUrl?: string | null;
   youtubeUrl?: string | null;
   youtubeMusicUrl?: string | null;
@@ -87,6 +88,12 @@ async function resolveSourceMetadataInternal(
       ) || null;
     const sourceExcerpt =
       pickBestDescription(descriptionCandidates) || null;
+    const releaseDate =
+      extractStructuredReleaseDate(jsonLd, sourcePlatform) ||
+      extractMetaReleaseDate(html) ||
+      extractBandcampReleaseDate(html) ||
+      extractTextualReleaseDate([sourceTitle, sourceExcerpt].filter(Boolean).join(". ")) ||
+      null;
     const rawGenreCandidates = [
       sourcePlatform !== "youtube" && sourcePlatform !== "youtube-music"
         ? getMetaContent(html, "keywords")
@@ -125,6 +132,7 @@ async function resolveSourceMetadataInternal(
       artistNameHint: youtubeOEmbed?.artistName || null,
       genreName,
       labelName: rawLabelName,
+      releaseDate,
       sourceImageUrl,
       youtubeUrl: platformLinks.youtubeUrl || platformLinkCandidates.youtubeUrl || null,
       youtubeMusicUrl:
@@ -637,6 +645,155 @@ function decodeHtml(value: string) {
     .replace(/&gt;/g, ">");
 }
 
+function extractMetaReleaseDate(html: string) {
+  const candidates = [
+    getMetaContent(html, "music:release_date"),
+    getMetaContent(html, "release_date"),
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = parseDateCandidate(candidate);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function extractBandcampReleaseDate(html: string) {
+  const jsonMatch = html.match(/"album_release_date"\s*:\s*"([^"]+)"/i);
+  const textMatch = html.match(/\breleased\s+([A-Z][a-z]+ \d{1,2}, \d{4})/i);
+  const dataAttrMatch = html.match(/data-release-date=["']([^"']+)["']/i);
+
+  return (
+    parseDateCandidate(jsonMatch?.[1] || null) ||
+    parseDateCandidate(textMatch?.[1] || null) ||
+    parseDateCandidate(dataAttrMatch?.[1] || null) ||
+    null
+  );
+}
+
+function extractStructuredReleaseDate(jsonLd: unknown[], sourcePlatform: string | null) {
+  const allowedMusicTypes = new Set([
+    "MusicAlbum",
+    "MusicRecording",
+    "MusicRelease",
+    "MusicComposition",
+  ]);
+
+  for (const node of jsonLd) {
+    const structuredDate = findReleaseDateInJsonLdNode(node, allowedMusicTypes, sourcePlatform);
+    if (structuredDate) {
+      return structuredDate;
+    }
+  }
+
+  return null;
+}
+
+function findReleaseDateInJsonLdNode(
+  node: unknown,
+  allowedMusicTypes: Set<string>,
+  sourcePlatform: string | null,
+): Date | null {
+  if (!node) {
+    return null;
+  }
+
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const nested = findReleaseDateInJsonLdNode(item, allowedMusicTypes, sourcePlatform);
+      if (nested) {
+        return nested;
+      }
+    }
+
+    return null;
+  }
+
+  if (typeof node !== "object") {
+    return null;
+  }
+
+  const record = node as Record<string, unknown>;
+  const rawType = record["@type"];
+  const types = (Array.isArray(rawType) ? rawType : [rawType]).flatMap((value) =>
+    typeof value === "string" ? [value] : [],
+  );
+  const isMusicNode = types.some((value) => allowedMusicTypes.has(value));
+  const isBandcampLikeNode = sourcePlatform === "bandcamp" && types.length > 0;
+
+  if (isMusicNode || isBandcampLikeNode) {
+    const directDate =
+      parseDateCandidate(asString(record.datePublished)) ||
+      parseDateCandidate(asString(record.dateCreated)) ||
+      parseDateCandidate(asString(record.releaseDate)) ||
+      parseDateCandidate(asString(record.startDate));
+
+    if (directDate) {
+      return directDate;
+    }
+  }
+
+  for (const value of Object.values(record)) {
+    const nested = findReleaseDateInJsonLdNode(value, allowedMusicTypes, sourcePlatform);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return null;
+}
+
+function extractTextualReleaseDate(text: string) {
+  if (!text) {
+    return null;
+  }
+
+  const patterns = [
+    /\b(?:released|release date|out|due|arrives|arriving|coming)\s+(?:on\s+)?([A-Z][a-z]+ \d{1,2}, \d{4})/i,
+    /\b(?:released|release date|out|due|arrives|arriving|coming)\s+(?:on\s+)?(\d{4}-\d{2}-\d{2})/i,
+    /\b([A-Z][a-z]+ \d{1,2}, \d{4})\s+(?:release|arrival|street date)\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    const parsed = parseDateCandidate(match?.[1] || null);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function parseDateCandidate(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value
+    .replace(/GMT|UTC/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function asString(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
 function getLinkHref(html: string, relValue: string) {
   const escapedRel = relValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const patterns = [
@@ -664,6 +821,7 @@ function mergeSourceMetadata(base: SourceMetadata, deep: SourceMetadata): Source
         ? deep.genreName
         : base.genreName || null,
     labelName: deep.labelName || base.labelName || null,
+    releaseDate: deep.releaseDate || base.releaseDate || null,
     sourceImageUrl: deep.sourceImageUrl || base.sourceImageUrl || null,
     youtubeUrl: deep.youtubeUrl || base.youtubeUrl || null,
     youtubeMusicUrl: deep.youtubeMusicUrl || base.youtubeMusicUrl || null,

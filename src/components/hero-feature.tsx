@@ -6,7 +6,6 @@ import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import {
   formatPrimaryReleaseDateLabel,
-  formatRelative,
   formatReleaseTypeLabel,
   getDisplayGenre,
   getDisplaySummary,
@@ -42,6 +41,7 @@ type HeroFeatureProps = {
 
 export function HeroFeature({ release }: HeroFeatureProps) {
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
+  const releaseDateLabel = formatPrimaryReleaseDateLabel(release.releaseType, release.releaseDate);
 
   return (
     <article className="border-b border-[var(--color-line)] pb-10">
@@ -88,8 +88,7 @@ export function HeroFeature({ release }: HeroFeatureProps) {
             <span>{displayGenre}</span>
             <span>{formatReleaseTypeLabel(release.releaseType)}</span>
             <span>{release.outletName || "Source pending"}</span>
-            <span>{formatPrimaryReleaseDateLabel(release.releaseType, release.releaseDate, release.publishedAt)}</span>
-            <span>{formatRelative(release.publishedAt)}</span>
+            {releaseDateLabel ? <span>{releaseDateLabel}</span> : null}
           </div>
 
           <ListeningLinks release={release} />

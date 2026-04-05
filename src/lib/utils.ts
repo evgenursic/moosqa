@@ -81,21 +81,16 @@ export function formatReleaseTypeLabel(releaseType: ReleaseType) {
 export function formatPrimaryReleaseDateLabel(
   releaseType: ReleaseType,
   releaseDate: Date | null | undefined,
-  publishedAt: Date,
 ) {
-  if (releaseDate) {
-    if (releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION) {
-      return `Performance ${formatPubDate(releaseDate)}`;
-    }
-
-    return `Release ${formatPubDate(releaseDate)}`;
+  if (!releaseDate) {
+    return null;
   }
 
   if (releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION) {
-    return `Posted ${formatPubDate(publishedAt)}`;
+    return `Performance ${formatPubDate(releaseDate)}`;
   }
 
-  return `Posted ${formatPubDate(publishedAt)}`;
+  return `Release ${formatPubDate(releaseDate)}`;
 }
 
 export function getDisplayGenre(
