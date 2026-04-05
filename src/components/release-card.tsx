@@ -57,6 +57,7 @@ export function ReleaseCard({
 }: ReleaseCardProps) {
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
   const metaItems = getMetaItems(release, context);
+  const showEngagementVisual = hasEngagementData(release);
 
   return (
     <article className="group min-w-0 border-t border-[var(--color-line)] pt-6">
@@ -113,7 +114,7 @@ export function ReleaseCard({
           <TopRatedVisual average={release.scoreAverage} count={release.scoreCount} />
         ) : null}
 
-        {context === "top-engaged" ? (
+        {showEngagementVisual ? (
           <TopEngagedVisual
             score={release.score}
             commentCount={release.commentCount}
@@ -172,4 +173,14 @@ function getMetaItems(
   }
 
   return items;
+}
+
+function hasEngagementData(release: ReleaseCardProps["release"]) {
+  return (
+    (release.score ?? 0) > 0 ||
+    (release.commentCount ?? 0) > 0 ||
+    typeof release.upvoteRatio === "number" ||
+    (release.awardCount ?? 0) > 0 ||
+    (release.crosspostCount ?? 0) > 0
+  );
 }
