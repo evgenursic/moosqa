@@ -7,6 +7,7 @@ import { RatingMeter } from "@/components/rating-meter";
 import { BackToHomeButton } from "@/components/back-to-home-button";
 import { MobileReleaseNav } from "@/components/mobile-release-nav";
 import { ReleaseArtwork } from "@/components/release-artwork";
+import { TopEngagedVisual } from "@/components/top-engaged-visual";
 import { getSiteUrl } from "@/lib/site";
 import { getReleaseBySlug } from "@/lib/sync-releases";
 import {
@@ -112,9 +113,6 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
               <span>{release.outletName || "Source pending"}</span>
               <span>{displayGenre}</span>
               {release.labelName ? <span>{release.labelName}</span> : null}
-              <span>
-                Reddit score {release.score ?? 0} / {release.commentCount ?? 0} comments
-              </span>
             </div>
 
             <div className="max-w-4xl border border-[var(--color-line)] bg-[var(--color-panel)] p-6 text-sm leading-7 text-black/66">
@@ -131,6 +129,14 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
                 })}
               </p>
             </div>
+
+            <TopEngagedVisual
+              score={release.score}
+              commentCount={release.commentCount}
+              upvoteRatio={release.upvoteRatio}
+              awardCount={release.awardCount}
+              crosspostCount={release.crosspostCount}
+            />
 
             <ListeningLinks release={release} />
 
