@@ -55,13 +55,12 @@ type ReleaseSectionDefinition = {
 };
 
 const HOMEPAGE_LIMITS = {
-  latest: 24,
-  latestCandidates: 60,
   topRated: 8,
   topRatedCandidates: 24,
   topEngaged: 8,
   topEngagedCandidates: 96,
 } as const;
+const LATEST_POSTS_LOOKBACK_DAYS = 4;
 const TOP_ENGAGED_LOOKBACK_DAYS = 60;
 
 const ARCHIVE_PAGE_SIZE = 24;
@@ -90,7 +89,7 @@ let searchIndexCache:
 export const releaseSectionDefinitions: Record<ReleaseSectionKey, ReleaseSectionDefinition> = {
   latest: {
     key: "latest",
-    title: "Recent posts",
+    title: "Latest posts",
     homeId: "latest",
     description: "All recent singles, albums, EPs, and live performances pulled from r/indieheads in one feed.",
     readMoreLabel: "Read more recent posts",
@@ -193,6 +192,7 @@ export async function getHomepageSectionsData() {
 
 async function getHomepageSectionsDataUncached() {
   await ensureDatabase();
+  const latestCutoffDate = new Date(Date.now() - LATEST_POSTS_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
 
   const [
     latestCandidates,
@@ -203,8 +203,12 @@ async function getHomepageSectionsDataUncached() {
   ] = await Promise.all([
     prisma.release.findMany({
       select: releaseListingSelect,
+      where: {
+        publishedAt: {
+          gte: latestCutoffDate,
+        },
+      },
       orderBy: { publishedAt: "desc" },
-      take: HOMEPAGE_LIMITS.latestCandidates,
     }),
     prisma.release.findMany({
       select: releaseListingSelect,
@@ -233,7 +237,7 @@ async function getHomepageSectionsDataUncached() {
   ]);
 
   return {
-    latest: prepareDisplayReleases(latestCandidates).slice(0, HOMEPAGE_LIMITS.latest),
+    latest: prepareDisplayReleases(latestCandidates),
     topRated: prepareDisplayReleases(topRatedCandidates).slice(0, HOMEPAGE_LIMITS.topRated),
     topEngaged: prepareDisplayReleases(
       mergeReleasePools(topEngagedByComments, topEngagedByScore, topEngagedByAwards).sort(
