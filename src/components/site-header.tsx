@@ -49,9 +49,9 @@ const leftLinks: NavLink[] = [
 ];
 
 const rightLinks: NavLink[] = [
-  { href: "/#albums", label: "Albums", sectionId: "albums" },
-  { href: "/#eps", label: "EPs", sectionId: "eps" },
-  { href: "/#live", label: "Live", sectionId: "live" },
+  { href: "/browse/albums", label: "Albums" },
+  { href: "/browse/eps", label: "EPs" },
+  { href: "/browse/live", label: "Live" },
 ];
 
 export function SiteHeader() {

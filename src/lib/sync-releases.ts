@@ -28,7 +28,6 @@ type SyncOptions = {
 
 type NormalizedReleaseRecord = NonNullable<ReturnType<typeof normalizeRedditPost>>;
 
-const HOMEPAGE_SYNC_POST_LIMIT = 36;
 const HOMEPAGE_SYNC_STATE_KEY = "homepage-sync";
 const HOMEPAGE_SYNC_STALE_MS = 45_000;
 const RECENT_FEED_PRUNE_MIN_POSTS = 50;
@@ -299,10 +298,8 @@ async function syncLatestHomepageReleases() {
   const normalizedReleases = posts
     .map(normalizeRedditPost)
     .filter((item): item is NonNullable<typeof item> => item !== null);
-  const releases = normalizedReleases
-    .slice(0, HOMEPAGE_SYNC_POST_LIMIT);
 
-  const { created, updated, failed } = await upsertNormalizedReleases(releases, {
+  const { created, updated, failed } = await upsertNormalizedReleases(normalizedReleases, {
     lightweight: true,
   });
   const missingRecentRemoved = await pruneMissingRecentReleases(posts, normalizedReleases);

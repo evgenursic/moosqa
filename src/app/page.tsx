@@ -69,7 +69,7 @@ export default async function Home({ searchParams }: HomePageProps) {
 
         <section id="latest" className="scroll-mt-32 py-10 md:scroll-mt-40 lg:scroll-mt-52">
           <div className="mb-8">
-            <p className="section-kicker text-black/43">Latest posts</p>
+            <p className="section-kicker text-black/43">Recent posts</p>
             <h1 className="mt-3 text-6xl leading-none text-[var(--color-ink)] serif-display">
               New releases first.
             </h1>
@@ -116,21 +116,6 @@ export default async function Home({ searchParams }: HomePageProps) {
         <ReleaseCardSection
           section="top-engaged"
           releases={sections.topEngaged}
-        />
-
-        <ReleaseCardSection
-          section="albums"
-          releases={sections.albums}
-        />
-
-        <ReleaseCardSection
-          section="eps"
-          releases={sections.eps}
-        />
-
-        <ReleaseCardSection
-          section="live"
-          releases={sections.live}
         />
 
         <SiteFooter />
