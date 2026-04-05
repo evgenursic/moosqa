@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ListeningLinks } from "@/components/listening-links";
 import { ReleaseArtwork } from "@/components/release-artwork";
+import { TopEngagedVisual } from "@/components/top-engaged-visual";
 import { TopRatedVisual } from "@/components/top-rated-visual";
 import {
   formatPrimaryReleaseDateLabel,
@@ -112,6 +113,16 @@ export function ReleaseCard({
           <TopRatedVisual average={release.scoreAverage} count={release.scoreCount} />
         ) : null}
 
+        {context === "top-engaged" ? (
+          <TopEngagedVisual
+            score={release.score}
+            commentCount={release.commentCount}
+            upvoteRatio={release.upvoteRatio}
+            awardCount={release.awardCount}
+            crosspostCount={release.crosspostCount}
+          />
+        ) : null}
+
         <p className="mt-4 text-sm leading-6 text-black/66">
           {getDisplaySummary({
             aiSummary: release.aiSummary,
@@ -153,26 +164,6 @@ function getMetaItems(
   }
 
   if (context === "top-engaged") {
-    if ((release.score ?? 0) > 0) {
-      items.push(`Reddit ${release.score} score`);
-    }
-
-    if ((release.commentCount ?? 0) > 0) {
-      items.push(`${release.commentCount} comments`);
-    }
-
-    if (typeof release.upvoteRatio === "number") {
-      items.push(`${Math.round(release.upvoteRatio * 100)}% upvoted`);
-    }
-
-    if ((release.awardCount ?? 0) > 0) {
-      items.push(`${release.awardCount} ${release.awardCount === 1 ? "award" : "awards"}`);
-    } else if ((release.crosspostCount ?? 0) > 0) {
-      items.push(
-        `${release.crosspostCount} ${release.crosspostCount === 1 ? "crosspost" : "crossposts"}`,
-      );
-    }
-
     if ((release.scoreCount ?? 0) > 0) {
       items.push(`MooSQA ${formatScore(release.scoreAverage || 0)} / ${release.scoreCount} users`);
     }
