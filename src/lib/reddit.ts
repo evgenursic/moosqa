@@ -597,6 +597,8 @@ export function shouldKeepReleaseRecord(input: {
     "discussion",
     "review",
     "playlist",
+    "new music friday",
+    "catch-up",
     "magazine",
     "podcast",
     "ama",
