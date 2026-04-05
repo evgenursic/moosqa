@@ -34,6 +34,7 @@ export type ReleaseListingItem = {
   labelName: string | null;
   genreName: string | null;
   aiSummary: string | null;
+  releaseDate: Date | null;
   publishedAt: Date;
   scoreAverage: number;
   scoreCount: number;
@@ -166,6 +167,7 @@ const releaseListingSelect = {
   labelName: true,
   genreName: true,
   aiSummary: true,
+  releaseDate: true,
   publishedAt: true,
   scoreAverage: true,
   scoreCount: true,

@@ -4,7 +4,13 @@ import { ReleaseType } from "@/generated/prisma/enums";
 import { ListeningLinks } from "@/components/listening-links";
 import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
-import { formatPubDate, formatRelative, formatReleaseTypeLabel, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
+import {
+  formatPrimaryReleaseDateLabel,
+  formatRelative,
+  formatReleaseTypeLabel,
+  getDisplayGenre,
+  getDisplaySummary,
+} from "@/lib/utils";
 
 type HeroFeatureProps = {
   release: {
@@ -20,6 +26,7 @@ type HeroFeatureProps = {
     outletName: string | null;
     labelName: string | null;
     genreName: string | null;
+    releaseDate: Date | null;
     publishedAt: Date;
     scoreAverage: number;
     scoreCount: number;
@@ -81,7 +88,7 @@ export function HeroFeature({ release }: HeroFeatureProps) {
             <span>{displayGenre}</span>
             <span>{formatReleaseTypeLabel(release.releaseType)}</span>
             <span>{release.outletName || "Source pending"}</span>
-            <span>{formatPubDate(release.publishedAt)}</span>
+            <span>{formatPrimaryReleaseDateLabel(release.releaseType, release.releaseDate, release.publishedAt)}</span>
             <span>{formatRelative(release.publishedAt)}</span>
           </div>
 

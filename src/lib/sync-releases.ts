@@ -31,6 +31,7 @@ type NormalizedReleaseRecord = NonNullable<ReturnType<typeof normalizeRedditPost
 const HOMEPAGE_SYNC_POST_LIMIT = 36;
 const HOMEPAGE_SYNC_STATE_KEY = "homepage-sync";
 const HOMEPAGE_SYNC_STALE_MS = 45_000;
+const RECENT_FEED_PRUNE_MIN_POSTS = 50;
 
 declare global {
   var __moosqaHomepageSyncPromise: Promise<SyncResult> | null | undefined;
@@ -40,7 +41,7 @@ declare global {
 export async function syncIndieheadsReleases(options: SyncOptions = {}) {
   const { enrich = true, lightweight = true } = options;
   await ensureDatabase();
-  const removed = await purgeFilteredReleases();
+  const filteredRemoved = await purgeFilteredReleases();
   const sanitized = await sanitizeStoredMetadata();
   const posts = await fetchRedditPosts();
   const releases = posts
@@ -48,6 +49,7 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
   const { created, updated, failed } = await upsertNormalizedReleases(releases, { lightweight });
+  const missingRecentRemoved = await pruneMissingRecentReleases(posts, releases);
 
   const enrichTarget = lightweight
     ? Math.max(12, sanitized + created)
@@ -62,7 +64,7 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
     created,
     updated,
     failed,
-    removed,
+    removed: filteredRemoved + missingRecentRemoved,
     sanitized,
     enriched,
   };
@@ -302,6 +304,7 @@ async function syncLatestHomepageReleases() {
   const { created, updated, failed } = await upsertNormalizedReleases(releases, {
     lightweight: true,
   });
+  const missingRecentRemoved = await pruneMissingRecentReleases(posts, releases);
   await markHomepageSyncFresh();
   clearReleaseDataCaches();
 
@@ -311,7 +314,7 @@ async function syncLatestHomepageReleases() {
     created,
     updated,
     failed,
-    removed: 0,
+    removed: missingRecentRemoved,
     sanitized: 0,
     enriched: 0,
   };
@@ -370,6 +373,7 @@ async function upsertNormalizedReleases(
       sourceItemId: true,
       aiSummary: true,
       genreName: true,
+      releaseDate: true,
       imageUrl: true,
       thumbnailUrl: true,
       youtubeUrl: true,
@@ -422,6 +426,7 @@ async function buildReleaseDataForUpsert(
     id: string;
     aiSummary: string | null;
     genreName: string | null;
+    releaseDate: Date | null;
     imageUrl: string | null;
     thumbnailUrl: string | null;
     youtubeUrl: string | null;
@@ -573,6 +578,58 @@ async function buildReleaseDataForUpsert(
     officialStoreUrl: sourceMetadata?.officialStoreUrl || existing?.officialStoreUrl || null,
     aiSummary: fallbackAiSummary,
   };
+}
+
+async function pruneMissingRecentReleases(
+  posts: Awaited<ReturnType<typeof fetchRedditPosts>>,
+  releases: NormalizedReleaseRecord[],
+) {
+  if (posts.length < RECENT_FEED_PRUNE_MIN_POSTS) {
+    return 0;
+  }
+
+  const retainedIds = new Set(releases.map((release) => release.sourceItemId));
+  const oldestFetchedTimestamp = Math.min(...posts.map((post) => post.created_utc * 1000));
+  const oldestFetchedDate = new Date(oldestFetchedTimestamp);
+
+  const missingRecentReleases = await prisma.release.findMany({
+    where: {
+      source: "REDDIT",
+      publishedAt: {
+        gte: oldestFetchedDate,
+      },
+    },
+    select: {
+      id: true,
+      sourceItemId: true,
+    },
+  });
+
+  const removableIds = missingRecentReleases
+    .filter((release) => !retainedIds.has(release.sourceItemId))
+    .map((release) => release.id);
+
+  if (removableIds.length === 0) {
+    return 0;
+  }
+
+  await prisma.vote.deleteMany({
+    where: {
+      releaseId: {
+        in: removableIds,
+      },
+    },
+  });
+
+  const deleted = await prisma.release.deleteMany({
+    where: {
+      id: {
+        in: removableIds,
+      },
+    },
+  });
+
+  return deleted.count;
 }
 
 function resolvePreferredGenre(input: {

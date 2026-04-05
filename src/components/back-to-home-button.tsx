@@ -19,6 +19,11 @@ export function BackToHomeButton({
   }, [router]);
 
   function handleNavigateHome() {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
     router.push("/");
   }
 

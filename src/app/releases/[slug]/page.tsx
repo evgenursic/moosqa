@@ -5,10 +5,18 @@ import { cache } from "react";
 import { ListeningLinks } from "@/components/listening-links";
 import { RatingMeter } from "@/components/rating-meter";
 import { BackToHomeButton } from "@/components/back-to-home-button";
+import { MobileReleaseNav } from "@/components/mobile-release-nav";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { getSiteUrl } from "@/lib/site";
 import { getReleaseBySlug } from "@/lib/sync-releases";
-import { formatPubDate, formatRelative, formatReleaseTypeLabel, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
+import {
+  formatPrimaryReleaseDateLabel,
+  formatPubDate,
+  formatRelative,
+  formatReleaseTypeLabel,
+  getDisplayGenre,
+  getDisplaySummary,
+} from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -77,18 +85,20 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
   }
 
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
+  const releaseHeading = release.artistName || release.projectTitle || release.title;
 
   return (
     <main className="min-h-screen px-4 py-6 md:px-8">
+      <MobileReleaseNav title={releaseHeading} />
       <div className="mx-auto max-w-[1500px] bg-[var(--color-paper)] px-2 md:px-4">
-        <div className="grid gap-10 border-b border-[var(--color-line)] py-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="grid gap-10 border-b border-[var(--color-line)] py-6 pt-12 lg:grid-cols-[1.05fr_0.95fr] lg:pt-6">
           <section className="space-y-6">
             <BackToHomeButton className="section-kicker inline-flex cursor-pointer text-black/43 transition hover:text-[var(--color-accent-strong)]" />
 
             <div>
               <p className="section-kicker text-black/43">{formatReleaseTypeLabel(release.releaseType)}</p>
               <h1 className="mt-4 max-w-5xl text-6xl leading-[0.92] text-[var(--color-ink)] serif-display md:text-7xl">
-                {release.artistName || release.projectTitle || release.title}
+                {releaseHeading}
               </h1>
               <p className="mt-4 max-w-4xl text-2xl leading-tight text-black/72 serif-display">
                 {release.artistName && release.projectTitle ? release.projectTitle : release.title}
@@ -96,7 +106,7 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
             </div>
 
             <div className="flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.18em] text-black/55">
-              <span>{formatPubDate(release.publishedAt)}</span>
+              <span>{formatPrimaryReleaseDateLabel(release.releaseType, release.releaseDate, release.publishedAt)}</span>
               <span>{formatRelative(release.publishedAt)}</span>
               <span>{release.outletName || "Source pending"}</span>
               <span>{displayGenre}</span>

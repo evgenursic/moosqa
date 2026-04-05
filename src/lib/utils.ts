@@ -78,6 +78,26 @@ export function formatReleaseTypeLabel(releaseType: ReleaseType) {
   return releaseType.replace("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+export function formatPrimaryReleaseDateLabel(
+  releaseType: ReleaseType,
+  releaseDate: Date | null | undefined,
+  publishedAt: Date,
+) {
+  if (releaseDate) {
+    if (releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION) {
+      return `Performance ${formatPubDate(releaseDate)}`;
+    }
+
+    return `Release ${formatPubDate(releaseDate)}`;
+  }
+
+  if (releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION) {
+    return `Posted ${formatPubDate(publishedAt)}`;
+  }
+
+  return `Posted ${formatPubDate(publishedAt)}`;
+}
+
 export function getDisplayGenre(
   genreName: string | null | undefined,
   releaseType: ReleaseType,

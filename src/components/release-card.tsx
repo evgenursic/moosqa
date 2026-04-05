@@ -4,7 +4,15 @@ import { ReleaseType } from "@/generated/prisma/enums";
 import { ListeningLinks } from "@/components/listening-links";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { TopRatedVisual } from "@/components/top-rated-visual";
-import { formatPubDate, formatRelative, formatReleaseTypeLabel, formatScore, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
+import {
+  formatPrimaryReleaseDateLabel,
+  formatPubDate,
+  formatRelative,
+  formatReleaseTypeLabel,
+  formatScore,
+  getDisplayGenre,
+  getDisplaySummary,
+} from "@/lib/utils";
 
 type ReleaseCardProps = {
   release: {
@@ -27,6 +35,7 @@ type ReleaseCardProps = {
     labelName?: string | null;
     genreName?: string | null;
     aiSummary?: string | null;
+    releaseDate?: Date | null;
     publishedAt: Date;
     scoreAverage: number;
     scoreCount: number;
@@ -136,7 +145,10 @@ function getMetaItems(
   release: ReleaseCardProps["release"],
   context: NonNullable<ReleaseCardProps["context"]>,
 ) {
-  const items = [release.outletName || "Source pending"];
+  const items = [
+    formatPrimaryReleaseDateLabel(release.releaseType, release.releaseDate || null, release.publishedAt),
+    release.outletName || "Source pending",
+  ];
 
   if (context === "top-rated") {
     return items;
@@ -170,6 +182,5 @@ function getMetaItems(
     return items;
   }
 
-  items.push(`Community ${formatScore(release.scoreAverage || 0)} / ${release.scoreCount} ratings`);
   return items;
 }

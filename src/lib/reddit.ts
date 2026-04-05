@@ -37,6 +37,13 @@ type RedditPost = {
   upvote_ratio?: number;
   total_awards_received?: number;
   num_crossposts?: number;
+  removed_by_category?: string | null;
+  removed_by?: string | null;
+  removal_reason?: string | null;
+  banned_by?: string | null;
+  banned_at_utc?: number | null;
+  author?: string;
+  is_robot_indexable?: boolean;
   preview?: {
     images?: Array<{
       source?: {
@@ -327,6 +334,10 @@ function mergeRedditPostLists(primary: RedditPost[], secondary: RedditPost[]) {
 }
 
 export function normalizeRedditPost(post: RedditPost): NormalizedRelease | null {
+  if (isRemovedPost(post)) {
+    return null;
+  }
+
   const releaseType = detectReleaseType(post.title, post.link_flair_text);
   const cleanTitle = stripTag(post.title);
   const sourceUrl = resolvePrimarySourceUrl(post);
@@ -556,6 +567,22 @@ function resolvePrimarySourceUrl(post: RedditPost) {
 
   const selftextUrl = extractFirstExternalUrl(post.selftext || "");
   return selftextUrl || post.url;
+}
+
+function isRemovedPost(post: RedditPost) {
+  if (post.removed_by_category || post.removed_by || post.removal_reason || post.banned_by || post.banned_at_utc) {
+    return true;
+  }
+
+  if (post.is_robot_indexable === false) {
+    return true;
+  }
+
+  if ((post.author || "").trim().toLowerCase() === "[deleted]") {
+    return true;
+  }
+
+  return false;
 }
 
 function isRedditSelfPost(url: string) {
