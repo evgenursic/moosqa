@@ -118,6 +118,21 @@ export default async function Home({ searchParams }: HomePageProps) {
           releases={sections.topEngaged}
         />
 
+        <ReleaseCardSection
+          section="albums"
+          releases={sections.albums}
+        />
+
+        <ReleaseCardSection
+          section="eps"
+          releases={sections.eps}
+        />
+
+        <ReleaseCardSection
+          section="live"
+          releases={sections.live}
+        />
+
         <SiteFooter />
       </div>
     </main>

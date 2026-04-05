@@ -55,12 +55,15 @@ type ReleaseSectionDefinition = {
 };
 
 const HOMEPAGE_LIMITS = {
+  latest: 15,
+  latestCandidates: 48,
+  gridSection: 12,
+  gridCandidates: 24,
   topRated: 8,
   topRatedCandidates: 24,
   topEngaged: 8,
   topEngagedCandidates: 96,
 } as const;
-const LATEST_POSTS_LOOKBACK_DAYS = 4;
 const TOP_ENGAGED_LOOKBACK_DAYS = 60;
 
 const ARCHIVE_PAGE_SIZE = 24;
@@ -89,7 +92,7 @@ let searchIndexCache:
 export const releaseSectionDefinitions: Record<ReleaseSectionKey, ReleaseSectionDefinition> = {
   latest: {
     key: "latest",
-    title: "Latest posts",
+    title: "Recent posts",
     homeId: "latest",
     description: "All recent singles, albums, EPs, and live performances pulled from r/indieheads in one feed.",
     readMoreLabel: "Read more recent posts",
@@ -192,7 +195,6 @@ export async function getHomepageSectionsData() {
 
 async function getHomepageSectionsDataUncached() {
   await ensureDatabase();
-  const latestCutoffDate = new Date(Date.now() - LATEST_POSTS_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
 
   const [
     latestCandidates,
@@ -200,15 +202,14 @@ async function getHomepageSectionsDataUncached() {
     topEngagedByComments,
     topEngagedByScore,
     topEngagedByAwards,
+    albumCandidates,
+    epCandidates,
+    liveCandidates,
   ] = await Promise.all([
     prisma.release.findMany({
       select: releaseListingSelect,
-      where: {
-        publishedAt: {
-          gte: latestCutoffDate,
-        },
-      },
       orderBy: { publishedAt: "desc" },
+      take: HOMEPAGE_LIMITS.latestCandidates,
     }),
     prisma.release.findMany({
       select: releaseListingSelect,
@@ -234,19 +235,41 @@ async function getHomepageSectionsDataUncached() {
       orderBy: [{ awardCount: "desc" }, { crosspostCount: "desc" }, { publishedAt: "desc" }],
       take: Math.ceil(HOMEPAGE_LIMITS.topEngagedCandidates / 2),
     }),
+    prisma.release.findMany({
+      select: releaseListingSelect,
+      where: { releaseType: ReleaseType.ALBUM },
+      orderBy: { publishedAt: "desc" },
+      take: HOMEPAGE_LIMITS.gridCandidates,
+    }),
+    prisma.release.findMany({
+      select: releaseListingSelect,
+      where: { releaseType: ReleaseType.EP },
+      orderBy: { publishedAt: "desc" },
+      take: HOMEPAGE_LIMITS.gridCandidates,
+    }),
+    prisma.release.findMany({
+      select: releaseListingSelect,
+      where: {
+        releaseType: {
+          in: [ReleaseType.PERFORMANCE, ReleaseType.LIVE_SESSION],
+        },
+      },
+      orderBy: { publishedAt: "desc" },
+      take: HOMEPAGE_LIMITS.gridCandidates,
+    }),
   ]);
 
   return {
-    latest: prepareDisplayReleases(latestCandidates),
+    latest: prepareDisplayReleases(latestCandidates).slice(0, HOMEPAGE_LIMITS.latest),
     topRated: prepareDisplayReleases(topRatedCandidates).slice(0, HOMEPAGE_LIMITS.topRated),
     topEngaged: prepareDisplayReleases(
       mergeReleasePools(topEngagedByComments, topEngagedByScore, topEngagedByAwards).sort(
         sortByEngagement,
       ),
     ).slice(0, HOMEPAGE_LIMITS.topEngaged),
-    albums: [],
-    eps: [],
-    live: [],
+    albums: prepareDisplayReleases(albumCandidates).slice(0, HOMEPAGE_LIMITS.gridSection),
+    eps: prepareDisplayReleases(epCandidates).slice(0, HOMEPAGE_LIMITS.gridSection),
+    live: prepareDisplayReleases(liveCandidates).slice(0, HOMEPAGE_LIMITS.gridSection),
   };
 }
 
