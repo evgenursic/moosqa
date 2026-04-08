@@ -4,39 +4,58 @@ import { MessageSquare, Sparkles, TrendingUp } from "lucide-react";
 type TopEngagedVisualProps = {
   score: number | null | undefined;
   commentCount: number | null | undefined;
-  upvoteRatio: number | null | undefined;
   awardCount: number | null | undefined;
   crosspostCount: number | null | undefined;
 };
 
-const TOTAL_MAX = 260;
+const INDEX_WEIGHT_CAP = 320;
 
 export function TopEngagedVisual({
   score,
   commentCount,
-  upvoteRatio,
   awardCount,
   crosspostCount,
 }: TopEngagedVisualProps) {
   const redditScore = Math.max(score ?? 0, 0);
   const comments = Math.max(commentCount ?? 0, 0);
-  const combined = redditScore + comments;
-  const approval = typeof upvoteRatio === "number" ? Math.round(upvoteRatio * 100) : null;
-  const meterWidth = clampPercent((combined / TOTAL_MAX) * 100);
-  const tone = getEngagementTone(redditScore, comments);
+  const awards = Math.max(awardCount ?? 0, 0);
+  const crossposts = Math.max(crosspostCount ?? 0, 0);
+  const weightedScore = redditScore;
+  const weightedComments = comments * 3;
+  const weightedBonus = awards * 10 + crossposts * 8;
+  const weightedTotal = weightedScore + weightedComments + weightedBonus;
+  const engagementIndex = getEngagementIndex(weightedTotal);
+  const scoreSegment = clampPercent((weightedScore / INDEX_WEIGHT_CAP) * 100, 0);
+  const commentSegment = clampPercent((weightedComments / INDEX_WEIGHT_CAP) * 100, 0);
+  const bonusSegment = clampPercent((weightedBonus / INDEX_WEIGHT_CAP) * 100, 0);
+  const totalMeterWidth = clampPercent(scoreSegment + commentSegment + bonusSegment);
+  const tone = getEngagementTone(engagementIndex);
 
   return (
     <div className="mt-5 border border-[var(--color-line)] bg-[var(--color-panel)]/84 p-4">
-      <div className="grid gap-4 md:grid-cols-[8.5rem_minmax(0,1fr)]">
-        <div className="flex min-h-[8.5rem] flex-col justify-between border border-[var(--color-line)] bg-white/50 p-3">
+      <div className="grid gap-4 md:grid-cols-[9rem_minmax(0,1fr)]">
+        <div className="flex min-h-[9rem] flex-col justify-between border border-[var(--color-line)] bg-white/52 p-3">
           <p className="text-[10px] uppercase tracking-[0.18em] text-black/46">Engagement</p>
           <div>
-            <p className="truncate text-[2.25rem] leading-none text-[var(--color-ink)] serif-display">
-              {combined}
+            <p className="truncate text-[2.4rem] leading-none text-[var(--color-ink)] serif-display">
+              {engagementIndex}%
             </p>
             <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-black/48">
               Score + comments
             </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-[10px] uppercase tracking-[0.14em] text-black/52">
+            <CompactMetric
+              icon={<TrendingUp size={11} strokeWidth={2} />}
+              label="Score"
+              value={redditScore}
+            />
+            <CompactMetric
+              icon={<MessageSquare size={11} strokeWidth={2} />}
+              label="Comments"
+              value={comments}
+            />
           </div>
         </div>
 
@@ -46,40 +65,33 @@ export function TopEngagedVisual({
             {tone}
           </p>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <MetricTile
-              icon={<TrendingUp size={13} strokeWidth={1.9} />}
-              label="Reddit score"
-              value={redditScore}
-            />
-            <MetricTile
-              icon={<MessageSquare size={13} strokeWidth={1.9} />}
-              label="Comments"
-              value={comments}
-            />
-          </div>
-
           <div className="engagement-meter mt-4">
-            <span className="engagement-meter-fill engagement-meter-fill--score" style={{ width: `${meterWidth}%` }} />
+            <span
+              className="engagement-meter-fill engagement-meter-fill--score"
+              style={{ width: `${scoreSegment}%` }}
+            />
+            <span
+              className="engagement-meter-fill engagement-meter-fill--comment"
+              style={{ left: `${scoreSegment}%`, width: `${commentSegment}%` }}
+            />
+            <span
+              className="engagement-meter-fill engagement-meter-fill--bonus"
+              style={{ left: `${scoreSegment + commentSegment}%`, width: `${bonusSegment}%` }}
+            />
+            <span className="engagement-meter-cap" style={{ width: `${totalMeterWidth}%` }} />
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            {approval !== null ? (
-              <StatChip
-                icon={<TrendingUp size={11} strokeWidth={2} />}
-                label={`${approval}% upvoted`}
-              />
-            ) : null}
-            {(awardCount ?? 0) > 0 ? (
+            {awards > 0 ? (
               <StatChip
                 icon={<Sparkles size={11} strokeWidth={2} />}
-                label={`${awardCount} ${awardCount === 1 ? "award" : "awards"}`}
+                label={`${awards} ${awards === 1 ? "award" : "awards"}`}
               />
             ) : null}
-            {(crosspostCount ?? 0) > 0 ? (
+            {crossposts > 0 ? (
               <StatChip
                 icon={<MessageSquare size={11} strokeWidth={2} />}
-                label={`${crosspostCount} ${crosspostCount === 1 ? "crosspost" : "crossposts"}`}
+                label={`${crossposts} ${crossposts === 1 ? "crosspost" : "crossposts"}`}
               />
             ) : null}
           </div>
@@ -89,7 +101,7 @@ export function TopEngagedVisual({
   );
 }
 
-function MetricTile({
+function CompactMetric({
   icon,
   label,
   value,
@@ -99,15 +111,18 @@ function MetricTile({
   value: number;
 }) {
   return (
-    <div className="min-w-0 border border-[var(--color-line)] bg-white/52 px-3 py-3">
-      <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-black/48">
-        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-paper)] text-[var(--color-ink)]">
+    <div className="min-w-0 border border-[var(--color-line)] bg-[var(--color-paper)]/64 px-2 py-2">
+      <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.14em] text-black/46">
+        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-line)] bg-white/70 text-[var(--color-ink)]">
           {icon}
         </span>
         <span className="truncate">{label}</span>
       </div>
-      <p className="mt-3 truncate text-[1.9rem] leading-none text-[var(--color-ink)] serif-display">
-        {value}
+      <p
+        className="mt-2 truncate text-[1.2rem] leading-none text-[var(--color-ink)] serif-display"
+        title={String(value)}
+      >
+        {formatCompactStat(value)}
       </p>
     </div>
   );
@@ -128,24 +143,38 @@ function StatChip({
   );
 }
 
-function getEngagementTone(score: number, comments: number) {
-  const combined = score + comments;
-
-  if (combined >= 140) {
+function getEngagementTone(index: number) {
+  if (index >= 82) {
     return "Strong community pull";
   }
 
-  if (combined >= 80) {
+  if (index >= 62) {
     return "Clear reader interest";
   }
 
-  if (combined >= 35) {
+  if (index >= 38) {
     return "Building traction";
   }
 
   return "Early response";
 }
 
-function clampPercent(value: number) {
-  return Math.max(8, Math.min(100, Math.round(value)));
+function getEngagementIndex(weightedTotal: number) {
+  if (weightedTotal <= 0) {
+    return 0;
+  }
+
+  const scaled = (Math.log10(weightedTotal + 1) / Math.log10(INDEX_WEIGHT_CAP + 1)) * 100;
+  return clampPercent(scaled, 0);
+}
+
+function clampPercent(value: number, minimum = 8) {
+  return Math.max(minimum, Math.min(100, Math.round(value)));
+}
+
+function formatCompactStat(value: number) {
+  return new Intl.NumberFormat("en", {
+    notation: value >= 1000 ? "compact" : "standard",
+    maximumFractionDigits: 1,
+  }).format(value);
 }

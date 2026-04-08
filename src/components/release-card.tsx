@@ -118,7 +118,6 @@ export function ReleaseCard({
           <TopEngagedVisual
             score={release.score}
             commentCount={release.commentCount}
-            upvoteRatio={release.upvoteRatio}
             awardCount={release.awardCount}
             crosspostCount={release.crosspostCount}
           />
@@ -179,7 +178,6 @@ function hasEngagementData(release: ReleaseCardProps["release"]) {
   return (
     (release.score ?? 0) > 0 ||
     (release.commentCount ?? 0) > 0 ||
-    typeof release.upvoteRatio === "number" ||
     (release.awardCount ?? 0) > 0 ||
     (release.crosspostCount ?? 0) > 0
   );

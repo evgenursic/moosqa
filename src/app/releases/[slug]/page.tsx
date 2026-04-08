@@ -133,7 +133,6 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
             <TopEngagedVisual
               score={release.score}
               commentCount={release.commentCount}
-              upvoteRatio={release.upvoteRatio}
               awardCount={release.awardCount}
               crosspostCount={release.crosspostCount}
             />
