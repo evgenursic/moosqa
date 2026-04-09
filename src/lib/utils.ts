@@ -93,6 +93,39 @@ export function formatPrimaryReleaseDateLabel(
   return `Release ${formatPubDate(releaseDate)}`;
 }
 
+export function formatContextualReleaseDateLabel(
+  releaseType: ReleaseType,
+  releaseDate: Date | null | undefined,
+  outletName: string | null | undefined,
+) {
+  if (!releaseDate) {
+    return null;
+  }
+
+  const outlet = (outletName || "").trim().toLowerCase();
+  if (outlet === "youtube") {
+    return `YouTube ${formatPubDate(releaseDate)}`;
+  }
+
+  if (outlet === "youtube music") {
+    return `YouTube Music ${formatPubDate(releaseDate)}`;
+  }
+
+  if (outlet === "bandcamp") {
+    return `Bandcamp ${formatPubDate(releaseDate)}`;
+  }
+
+  return formatPrimaryReleaseDateLabel(releaseType, releaseDate);
+}
+
+export function formatRedditDateLabel(publishedAt: Date | null | undefined) {
+  if (!publishedAt) {
+    return null;
+  }
+
+  return `Reddit ${formatPubDate(publishedAt)}`;
+}
+
 export function getDisplayGenre(
   genreName: string | null | undefined,
   releaseType: ReleaseType,

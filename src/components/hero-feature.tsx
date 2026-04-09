@@ -5,7 +5,8 @@ import { ListeningLinks } from "@/components/listening-links";
 import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import {
-  formatPrimaryReleaseDateLabel,
+  formatContextualReleaseDateLabel,
+  formatRedditDateLabel,
   formatReleaseTypeLabel,
   getDisplayGenre,
   getDisplaySummary,
@@ -41,7 +42,12 @@ type HeroFeatureProps = {
 
 export function HeroFeature({ release }: HeroFeatureProps) {
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
-  const releaseDateLabel = formatPrimaryReleaseDateLabel(release.releaseType, release.releaseDate);
+  const releaseDateLabel = formatContextualReleaseDateLabel(
+    release.releaseType,
+    release.releaseDate,
+    release.outletName,
+  );
+  const redditDateLabel = formatRedditDateLabel(release.publishedAt);
 
   return (
     <article className="border-b border-[var(--color-line)] pb-10">
@@ -89,6 +95,7 @@ export function HeroFeature({ release }: HeroFeatureProps) {
             <span>{formatReleaseTypeLabel(release.releaseType)}</span>
             <span>{release.outletName || "Source pending"}</span>
             {releaseDateLabel ? <span>{releaseDateLabel}</span> : null}
+            {redditDateLabel ? <span>{redditDateLabel}</span> : null}
           </div>
 
           <ListeningLinks release={release} />

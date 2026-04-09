@@ -11,9 +11,9 @@ import { TopEngagedVisual } from "@/components/top-engaged-visual";
 import { getSiteUrl } from "@/lib/site";
 import { getReleaseBySlug } from "@/lib/sync-releases";
 import {
-  formatPrimaryReleaseDateLabel,
+  formatContextualReleaseDateLabel,
   formatPubDate,
-  formatRelative,
+  formatRedditDateLabel,
   formatReleaseTypeLabel,
   getDisplayGenre,
   getDisplaySummary,
@@ -87,7 +87,12 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
 
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
   const releaseHeading = release.artistName || release.projectTitle || release.title;
-  const releaseDateLabel = formatPrimaryReleaseDateLabel(release.releaseType, release.releaseDate);
+  const releaseDateLabel = formatContextualReleaseDateLabel(
+    release.releaseType,
+    release.releaseDate,
+    release.outletName,
+  );
+  const redditDateLabel = formatRedditDateLabel(release.publishedAt);
 
   return (
     <main className="min-h-screen px-4 py-6 md:px-8">
@@ -109,7 +114,7 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
 
             <div className="flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.18em] text-black/55">
               {releaseDateLabel ? <span>{releaseDateLabel}</span> : null}
-              <span>{formatRelative(release.publishedAt)}</span>
+              {redditDateLabel ? <span>{redditDateLabel}</span> : null}
               <span>{release.outletName || "Source pending"}</span>
               <span>{displayGenre}</span>
               {release.labelName ? <span>{release.labelName}</span> : null}
@@ -133,8 +138,6 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
             <TopEngagedVisual
               score={release.score}
               commentCount={release.commentCount}
-              awardCount={release.awardCount}
-              crosspostCount={release.crosspostCount}
             />
 
             <ListeningLinks release={release} />

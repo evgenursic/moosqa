@@ -193,15 +193,10 @@ img {
 
 .engagement-meter {
   position: relative;
-  height: 0.68rem;
+  height: 0.72rem;
   overflow: hidden;
   border-radius: 9999px;
-  background:
-    linear-gradient(
-      90deg,
-      rgba(82, 110, 170, 0.14) 0%,
-      rgba(82, 110, 170, 0.08) 100%
-    );
+  background: rgba(29, 34, 48, 0.08);
   box-shadow: inset 0 0 0 1px rgba(29, 34, 48, 0.08);
 }
 
@@ -212,42 +207,86 @@ img {
   min-width: 0;
 }
 
-.engagement-meter-fill--score {
-  background:
-    linear-gradient(
-      90deg,
-      rgba(54, 112, 208, 0.92) 0%,
-      rgba(108, 155, 236, 0.96) 100%
-    );
-  box-shadow: 0 0 18px rgba(82, 110, 170, 0.18);
+.engagement-meter-fill--a {
+  background: linear-gradient(90deg, #1e9f52 0%, #7bd66c 100%);
 }
 
-.engagement-meter-fill--comment {
-  background:
-    linear-gradient(
-      90deg,
-      rgba(111, 167, 103, 0.92) 0%,
-      rgba(156, 204, 120, 0.96) 100%
-  );
-  box-shadow: 0 0 18px rgba(105, 162, 103, 0.18);
+.engagement-meter-fill--b {
+  background: linear-gradient(90deg, #1976d2 0%, #5da9e9 100%);
 }
 
-.engagement-meter-fill--bonus {
-  background:
-    linear-gradient(
-      90deg,
-      rgba(218, 152, 69, 0.92) 0%,
-      rgba(239, 186, 102, 0.96) 100%
-    );
-  box-shadow: 0 0 18px rgba(207, 149, 75, 0.16);
+.engagement-meter-fill--c {
+  background: linear-gradient(90deg, #d8c600 0%, #f4dd4f 100%);
 }
 
-.engagement-meter-cap {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: 999px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-  pointer-events: none;
+.engagement-meter-fill--d {
+  background: linear-gradient(90deg, #f59e0b 0%, #f7b955 100%);
+}
+
+.engagement-meter-fill--e {
+  background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
+}
+
+.engagement-grade {
+  display: flex;
+  min-width: 5.5rem;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.1rem;
+  border: 1px solid rgba(29, 34, 48, 0.08);
+  padding: 0.75rem 0.85rem;
+  color: #fff;
+}
+
+.engagement-grade--expanded {
+  min-height: 8.6rem;
+}
+
+.engagement-grade--a {
+  background: linear-gradient(135deg, #0d8a47 0%, #7fd857 100%);
+}
+
+.engagement-grade--b {
+  background: linear-gradient(135deg, #1068c8 0%, #58a8ea 100%);
+}
+
+.engagement-grade--c {
+  background: linear-gradient(135deg, #c4b400 0%, #ecd94c 100%);
+  color: rgba(29, 34, 48, 0.92);
+}
+
+.engagement-grade--d {
+  background: linear-gradient(135deg, #e58a00 0%, #f3b34f 100%);
+  color: rgba(29, 34, 48, 0.92);
+}
+
+.engagement-grade--e {
+  background: linear-gradient(135deg, #d62828 0%, #ef5350 100%);
+}
+
+.engagement-grade-letter {
+  font-size: 0.85rem;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.engagement-grade-value {
+  margin-top: 0.3rem;
+  font-family: var(--font-space-mono), monospace;
+  font-size: 1.7rem;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.engagement-grade-caption {
+  margin-top: 0.35rem;
+  font-size: 0.62rem;
+  line-height: 1.2;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.85;
 }
 
 .glass-wordmark {

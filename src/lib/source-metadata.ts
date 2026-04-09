@@ -649,9 +649,20 @@ function extractMetaReleaseDate(html: string) {
   const candidates = [
     getMetaContent(html, "music:release_date"),
     getMetaContent(html, "release_date"),
+    getMetaContent(html, "article:published_time"),
+    getMetaContent(html, "og:published_time"),
+    getMetaContent(html, "video:release_date"),
+    extractMetaItemPropDate(html, "datePublished"),
+    extractMetaItemPropDate(html, "uploadDate"),
+    extractJsonFieldDate(html, "uploadDate"),
+    extractJsonFieldDate(html, "datePublished"),
   ];
 
   for (const candidate of candidates) {
+    if (candidate instanceof Date) {
+      return candidate;
+    }
+
     const parsed = parseDateCandidate(candidate);
     if (parsed) {
       return parsed;
@@ -682,6 +693,10 @@ function extractStructuredReleaseDate(jsonLd: unknown[], sourcePlatform: string 
     "MusicComposition",
   ]);
 
+  if (sourcePlatform === "youtube" || sourcePlatform === "youtube-music") {
+    allowedMusicTypes.add("VideoObject");
+  }
+
   for (const node of jsonLd) {
     const structuredDate = findReleaseDateInJsonLdNode(node, allowedMusicTypes, sourcePlatform);
     if (structuredDate) {
@@ -690,6 +705,36 @@ function extractStructuredReleaseDate(jsonLd: unknown[], sourcePlatform: string 
   }
 
   return null;
+}
+
+function extractMetaItemPropDate(html: string, itemProp: string) {
+  const escaped = itemProp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const patterns = [
+    new RegExp(
+      `<meta[^>]+itemprop=["']${escaped}["'][^>]+content=["']([^"']+)["']`,
+      "i",
+    ),
+    new RegExp(
+      `<meta[^>]+content=["']([^"']+)["'][^>]+itemprop=["']${escaped}["']`,
+      "i",
+    ),
+  ];
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    const parsed = parseDateCandidate(match?.[1] || null);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function extractJsonFieldDate(html: string, fieldName: string) {
+  const escaped = fieldName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = html.match(new RegExp(`"${escaped}"\\s*:\\s*"([^"]+)"`, "i"));
+  return parseDateCandidate(match?.[1] || null);
 }
 
 function findReleaseDateInJsonLdNode(

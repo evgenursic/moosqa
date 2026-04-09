@@ -6,7 +6,8 @@ import { ReleaseArtwork } from "@/components/release-artwork";
 import { TopEngagedVisual } from "@/components/top-engaged-visual";
 import { TopRatedVisual } from "@/components/top-rated-visual";
 import {
-  formatPrimaryReleaseDateLabel,
+  formatContextualReleaseDateLabel,
+  formatRedditDateLabel,
   formatReleaseTypeLabel,
   formatScore,
   getDisplayGenre,
@@ -118,8 +119,7 @@ export function ReleaseCard({
           <TopEngagedVisual
             score={release.score}
             commentCount={release.commentCount}
-            awardCount={release.awardCount}
-            crosspostCount={release.crosspostCount}
+            compact
           />
         ) : null}
 
@@ -155,7 +155,12 @@ function getMetaItems(
   context: NonNullable<ReleaseCardProps["context"]>,
 ) {
   const items = [
-    formatPrimaryReleaseDateLabel(release.releaseType, release.releaseDate || null),
+    formatContextualReleaseDateLabel(
+      release.releaseType,
+      release.releaseDate || null,
+      release.outletName || null,
+    ),
+    formatRedditDateLabel(release.publishedAt),
     release.outletName || "Source pending",
   ].filter((item): item is string => Boolean(item));
 
@@ -177,8 +182,6 @@ function getMetaItems(
 function hasEngagementData(release: ReleaseCardProps["release"]) {
   return (
     (release.score ?? 0) > 0 ||
-    (release.commentCount ?? 0) > 0 ||
-    (release.awardCount ?? 0) > 0 ||
-    (release.crosspostCount ?? 0) > 0
+    (release.commentCount ?? 0) > 0
   );
 }

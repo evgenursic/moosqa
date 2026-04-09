@@ -3,7 +3,13 @@ import Link from "next/link";
 import { ReleaseType } from "@/generated/prisma/enums";
 import { getListeningLinks } from "@/lib/listening-links";
 import { ReleaseArtwork } from "@/components/release-artwork";
-import { cn, formatPrimaryReleaseDateLabel, formatScore, getDisplayGenre } from "@/lib/utils";
+import {
+  cn,
+  formatContextualReleaseDateLabel,
+  formatRedditDateLabel,
+  formatScore,
+  getDisplayGenre,
+} from "@/lib/utils";
 
 type ReleaseBriefProps = {
   release: {
@@ -92,10 +98,12 @@ function renderEmphasis(
       : `${release.outletName || "Source"} / search fallback`;
   }
 
-  const releaseDateLabel = formatPrimaryReleaseDateLabel(release.releaseType, release.releaseDate);
-  if (releaseDateLabel) {
-    return `${releaseDateLabel} / ${release.outletName || "Source pending"}`;
-  }
-
-  return `${release.outletName || "Source pending"}`;
+  const sourceDateLabel = formatContextualReleaseDateLabel(
+    release.releaseType,
+    release.releaseDate,
+    release.outletName,
+  );
+  const redditDateLabel = formatRedditDateLabel(release.publishedAt);
+  const meta = [sourceDateLabel, redditDateLabel, release.outletName || "Source pending"].filter(Boolean);
+  return meta.join(" / ");
 }
