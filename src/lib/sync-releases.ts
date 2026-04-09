@@ -31,7 +31,7 @@ type NormalizedReleaseRecord = NonNullable<ReturnType<typeof normalizeRedditPost
 const HOMEPAGE_SYNC_STATE_KEY = "homepage-sync";
 const HOMEPAGE_SYNC_STALE_MS = 45_000;
 const RECENT_FEED_PRUNE_MIN_POSTS = 50;
-const LIGHTWEIGHT_SOURCE_LOOKUP_LIMIT = 6;
+const LIGHTWEIGHT_SOURCE_LOOKUP_LIMIT = 10;
 
 declare global {
   var __moosqaHomepageSyncPromise: Promise<SyncResult> | null | undefined;
@@ -418,7 +418,8 @@ async function upsertNormalizedReleases(
               !existing.imageUrl ||
               !existing.thumbnailUrl ||
               !existing.genreName ||
-              !isSpecificGenreProfile(existing.genreName)
+              !isSpecificGenreProfile(existing.genreName) ||
+              !existing.releaseDate
             );
           })
           .slice(0, LIGHTWEIGHT_SOURCE_LOOKUP_LIMIT)

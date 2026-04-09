@@ -5,6 +5,8 @@ const USER_AGENT =
   process.env.SOURCE_FETCH_USER_AGENT ||
   `MooSQA/0.3 (${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"})`;
 
+const MAX_SOURCE_METADATA_DEPTH = 2;
+
 type SourceMetadata = {
   sourceTitle?: string | null;
   sourceExcerpt?: string | null;
@@ -38,6 +40,10 @@ async function resolveSourceMetadataInternal(
   options: ResolveSourceOptions,
   depth: number,
 ): Promise<SourceMetadata> {
+  if (depth > MAX_SOURCE_METADATA_DEPTH) {
+    return {};
+  }
+
   try {
     const response = await fetch(sourceUrl, {
       headers: {
@@ -154,6 +160,22 @@ async function resolveSourceMetadataInternal(
       const matchedBandcampUrl = findBestBandcampDiscographyUrl(html, finalUrl, options);
       if (matchedBandcampUrl && matchedBandcampUrl !== finalUrl) {
         const deepMetadata = await resolveSourceMetadataInternal(matchedBandcampUrl, options, depth + 1);
+        return mergeSourceMetadata(baseMetadata, deepMetadata);
+      }
+    }
+
+    if (
+      sourcePlatform === "youtube-music" &&
+      depth === 0 &&
+      (!baseMetadata.releaseDate || !baseMetadata.youtubeUrl)
+    ) {
+      const canonicalYouTubeUrl = buildCanonicalYouTubeWatchUrl(finalUrl);
+      if (canonicalYouTubeUrl && canonicalYouTubeUrl !== finalUrl) {
+        const deepMetadata = await resolveSourceMetadataInternal(
+          canonicalYouTubeUrl,
+          options,
+          depth + 1,
+        );
         return mergeSourceMetadata(baseMetadata, deepMetadata);
       }
     }
@@ -1099,6 +1121,15 @@ function extractYouTubeId(url: string) {
   }
 
   return null;
+}
+
+function buildCanonicalYouTubeWatchUrl(url: string) {
+  const videoId = extractYouTubeId(url);
+  if (!videoId) {
+    return null;
+  }
+
+  return `https://www.youtube.com/watch?v=${videoId}`;
 }
 
 async function resolveYouTubeOEmbedMetadata(url: string) {
