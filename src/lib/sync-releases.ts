@@ -31,6 +31,7 @@ type NormalizedReleaseRecord = NonNullable<ReturnType<typeof normalizeRedditPost
 const HOMEPAGE_SYNC_STATE_KEY = "homepage-sync";
 const HOMEPAGE_SYNC_STALE_MS = 45_000;
 const RECENT_FEED_PRUNE_MIN_POSTS = 50;
+const LIGHTWEIGHT_SOURCE_LOOKUP_LIMIT = 6;
 
 declare global {
   var __moosqaHomepageSyncPromise: Promise<SyncResult> | null | undefined;
@@ -369,6 +370,23 @@ async function upsertNormalizedReleases(
     select: {
       id: true,
       sourceItemId: true,
+      slug: true,
+      title: true,
+      artistName: true,
+      projectTitle: true,
+      releaseType: true,
+      flair: true,
+      summary: true,
+      outletName: true,
+      redditPermalink: true,
+      sourceUrl: true,
+      domain: true,
+      score: true,
+      commentCount: true,
+      upvoteRatio: true,
+      awardCount: true,
+      crosspostCount: true,
+      rawJson: true,
       aiSummary: true,
       genreName: true,
       releaseDate: true,
@@ -379,6 +397,8 @@ async function upsertNormalizedReleases(
       bandcampUrl: true,
       officialWebsiteUrl: true,
       officialStoreUrl: true,
+      labelName: true,
+      publishedAt: true,
       metadataEnrichedAt: true,
     },
   });
@@ -386,6 +406,25 @@ async function upsertNormalizedReleases(
     existingReleases.map((release) => [release.sourceItemId, release]),
   );
   const artistGenreHints = await loadArtistGenreHints(releases);
+  const lightweightLookupEligibleIds = lightweight
+    ? new Set(
+        releases
+          .slice()
+          .sort((left, right) => right.publishedAt.getTime() - left.publishedAt.getTime())
+          .filter((release) => {
+            const existing = existingBySourceItemId.get(release.sourceItemId) || null;
+            return (
+              !existing ||
+              !existing.imageUrl ||
+              !existing.thumbnailUrl ||
+              !existing.genreName ||
+              !isSpecificGenreProfile(existing.genreName)
+            );
+          })
+          .slice(0, LIGHTWEIGHT_SOURCE_LOOKUP_LIMIT)
+          .map((release) => release.sourceItemId),
+      )
+    : null;
 
   for (const release of releases) {
     try {
@@ -396,17 +435,23 @@ async function upsertNormalizedReleases(
       const releaseData = await buildReleaseDataForUpsert(release, existing, {
         lightweight,
         artistGenreHint,
-      });
-
-      await prisma.release.upsert({
-        where: { sourceItemId: release.sourceItemId },
-        update: releaseData,
-        create: releaseData,
+        allowSourceLookup: lightweightLookupEligibleIds?.has(release.sourceItemId) ?? true,
       });
 
       if (existing) {
+        if (!hasReleaseDataChanges(existing, releaseData)) {
+          continue;
+        }
+
+        await prisma.release.update({
+          where: { sourceItemId: release.sourceItemId },
+          data: releaseData,
+        });
         updated += 1;
       } else {
+        await prisma.release.create({
+          data: releaseData,
+        });
         created += 1;
       }
     } catch (error) {
@@ -432,11 +477,18 @@ async function buildReleaseDataForUpsert(
     bandcampUrl: string | null;
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
+    labelName: string | null;
+    publishedAt: Date;
     metadataEnrichedAt: Date | null;
   } | null,
-  options: { lightweight?: boolean; artistGenreHint?: string | null } = {},
+  options: {
+    lightweight?: boolean;
+    artistGenreHint?: string | null;
+    allowSourceLookup?: boolean;
+  } = {},
 ) {
   if (options.lightweight) {
+    const shouldLookupSourceMetadata = options.allowSourceLookup ?? false;
     const hasStableListeningLinks =
       Boolean(existing?.youtubeUrl) &&
       Boolean(existing?.youtubeMusicUrl) &&
@@ -454,7 +506,7 @@ async function buildReleaseDataForUpsert(
       !hasStableListeningLinks ||
       !hasStablePurchaseLink ||
       !recentlyEnriched;
-    const sourceMetadata = shouldHydrateSourceMetadata
+    const sourceMetadata = shouldLookupSourceMetadata && shouldHydrateSourceMetadata
       ? await resolveSourceMetadata(release.sourceUrl, {
           artistName: release.artistName,
           projectTitle: release.projectTitle,
@@ -480,7 +532,7 @@ async function buildReleaseDataForUpsert(
       : null;
     const effectiveSourceMetadata = mergeSourceMetadataHints(
       sourceMetadata,
-      supplementalSourceMetadata,
+      shouldLookupSourceMetadata ? supplementalSourceMetadata : null,
     );
 
     return {
@@ -510,6 +562,7 @@ async function buildReleaseDataForUpsert(
         release,
         sourceMetadata: effectiveSourceMetadata,
       }),
+      labelName: effectiveSourceMetadata?.labelName || existing?.labelName || null,
       youtubeUrl:
         effectiveSourceMetadata?.youtubeUrl ||
         existing?.youtubeUrl ||
@@ -579,6 +632,7 @@ async function buildReleaseDataForUpsert(
       sourceMetadata?.sourceImageUrl ||
       null,
     genreName: fallbackGenre,
+    labelName: sourceMetadata?.labelName || existing?.labelName || null,
     youtubeUrl: sourceMetadata?.youtubeUrl || existing?.youtubeUrl || null,
     youtubeMusicUrl: sourceMetadata?.youtubeMusicUrl || existing?.youtubeMusicUrl || null,
     bandcampUrl: sourceMetadata?.bandcampUrl || existing?.bandcampUrl || null,
@@ -841,4 +895,113 @@ function isPurchasableReleaseType(releaseType: ReleaseType) {
     releaseType === ReleaseType.ALBUM ||
     releaseType === ReleaseType.EP
   );
+}
+
+function hasReleaseDataChanges(
+  existing: {
+    slug: string;
+    title: string;
+    artistName: string | null;
+    projectTitle: string | null;
+    releaseType: ReleaseType;
+    flair: string | null;
+    summary: string | null;
+    outletName: string | null;
+    redditPermalink: string;
+    sourceUrl: string;
+    imageUrl: string | null;
+    thumbnailUrl: string | null;
+    youtubeUrl: string | null;
+    youtubeMusicUrl: string | null;
+    bandcampUrl: string | null;
+    officialWebsiteUrl: string | null;
+    officialStoreUrl: string | null;
+    labelName: string | null;
+    genreName: string | null;
+    releaseDate: Date | null;
+    publishedAt: Date;
+    domain: string | null;
+    score: number | null;
+    commentCount: number | null;
+    upvoteRatio: number | null;
+    awardCount: number | null;
+    crosspostCount: number | null;
+    rawJson: string | null;
+    aiSummary: string | null;
+  },
+  next: {
+    slug: string;
+    title: string;
+    artistName: string | null;
+    projectTitle: string | null;
+    releaseType: ReleaseType;
+    flair: string | null;
+    summary: string | null;
+    outletName: string | null;
+    redditPermalink: string;
+    sourceUrl: string;
+    imageUrl: string | null;
+    thumbnailUrl: string | null;
+    youtubeUrl: string | null;
+    youtubeMusicUrl: string | null;
+    bandcampUrl: string | null;
+    officialWebsiteUrl: string | null;
+    officialStoreUrl: string | null;
+    labelName: string | null;
+    genreName: string | null;
+    releaseDate: Date | null;
+    publishedAt: Date;
+    domain: string | null;
+    score: number | null;
+    commentCount: number | null;
+    upvoteRatio: number | null;
+    awardCount: number | null;
+    crosspostCount: number | null;
+    rawJson: string;
+    aiSummary: string | null;
+  },
+) {
+  return (
+    existing.slug !== next.slug ||
+    existing.title !== next.title ||
+    existing.artistName !== next.artistName ||
+    existing.projectTitle !== next.projectTitle ||
+    existing.releaseType !== next.releaseType ||
+    existing.flair !== next.flair ||
+    existing.summary !== next.summary ||
+    existing.outletName !== next.outletName ||
+    existing.redditPermalink !== next.redditPermalink ||
+    existing.sourceUrl !== next.sourceUrl ||
+    existing.imageUrl !== next.imageUrl ||
+    existing.thumbnailUrl !== next.thumbnailUrl ||
+    existing.youtubeUrl !== next.youtubeUrl ||
+    existing.youtubeMusicUrl !== next.youtubeMusicUrl ||
+    existing.bandcampUrl !== next.bandcampUrl ||
+    existing.officialWebsiteUrl !== next.officialWebsiteUrl ||
+    existing.officialStoreUrl !== next.officialStoreUrl ||
+    existing.labelName !== next.labelName ||
+    existing.genreName !== next.genreName ||
+    existing.domain !== next.domain ||
+    existing.score !== next.score ||
+    existing.commentCount !== next.commentCount ||
+    existing.upvoteRatio !== next.upvoteRatio ||
+    existing.awardCount !== next.awardCount ||
+    existing.crosspostCount !== next.crosspostCount ||
+    existing.rawJson !== next.rawJson ||
+    existing.aiSummary !== next.aiSummary ||
+    !datesEqual(existing.releaseDate, next.releaseDate) ||
+    !datesEqual(existing.publishedAt, next.publishedAt)
+  );
+}
+
+function datesEqual(left: Date | null, right: Date | null) {
+  if (left === null && right === null) {
+    return true;
+  }
+
+  if (left === null || right === null) {
+    return false;
+  }
+
+  return left.getTime() === right.getTime();
 }
