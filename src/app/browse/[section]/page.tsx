@@ -148,6 +148,8 @@ function ArchivePagination({
       {page > 1 ? (
         <Link
           href={`/browse/${section}?page=${page - 1}`}
+          prefetch
+          scroll={false}
           className="inline-flex items-center border border-[var(--color-line)] px-4 py-3 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
         >
           Previous
@@ -163,6 +165,8 @@ function ArchivePagination({
           <Link
             key={`${section}-${value}`}
             href={`/browse/${section}?page=${value}`}
+            prefetch
+            scroll={false}
             aria-current={value === page ? "page" : undefined}
             className={
               value === page
@@ -178,6 +182,8 @@ function ArchivePagination({
       {page < pageCount ? (
         <Link
           href={`/browse/${section}?page=${page + 1}`}
+          prefetch
+          scroll={false}
           className="inline-flex items-center border border-[var(--color-line)] px-4 py-3 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
         >
           Next

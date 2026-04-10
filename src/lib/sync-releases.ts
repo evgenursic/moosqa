@@ -1,4 +1,5 @@
 import { ReleaseType } from "@/generated/prisma/enums";
+import { Prisma } from "@/generated/prisma/client";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
 import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
@@ -31,7 +32,7 @@ type NormalizedReleaseRecord = NonNullable<ReturnType<typeof normalizeRedditPost
 const HOMEPAGE_SYNC_STATE_KEY = "homepage-sync";
 const HOMEPAGE_SYNC_STALE_MS = 45_000;
 const RECENT_FEED_PRUNE_MIN_POSTS = 50;
-const LIGHTWEIGHT_SOURCE_LOOKUP_LIMIT = 10;
+const LIGHTWEIGHT_SOURCE_LOOKUP_LIMIT = 3;
 
 declare global {
   var __moosqaHomepageSyncPromise: Promise<SyncResult> | null | undefined;
@@ -361,6 +362,7 @@ async function upsertNormalizedReleases(
   let created = 0;
   let updated = 0;
   let failed = 0;
+  const engagementUpdates: EngagementMetricUpdate[] = [];
   const existingReleases = await prisma.release.findMany({
     where: {
       sourceItemId: {
@@ -440,7 +442,17 @@ async function upsertNormalizedReleases(
       });
 
       if (existing) {
-        if (!hasReleaseDataChanges(existing, releaseData)) {
+        if (!hasCoreReleaseDataChanges(existing, releaseData)) {
+          if (hasEngagementMetricChanges(existing, releaseData)) {
+            engagementUpdates.push({
+              sourceItemId: release.sourceItemId,
+              score: releaseData.score,
+              commentCount: releaseData.commentCount,
+              upvoteRatio: releaseData.upvoteRatio,
+              awardCount: releaseData.awardCount,
+              crosspostCount: releaseData.crosspostCount,
+            });
+          }
           continue;
         }
 
@@ -450,8 +462,10 @@ async function upsertNormalizedReleases(
         });
         updated += 1;
       } else {
-        await prisma.release.create({
-          data: releaseData,
+        await prisma.release.upsert({
+          where: { sourceItemId: release.sourceItemId },
+          update: releaseData,
+          create: releaseData,
         });
         created += 1;
       }
@@ -461,8 +475,19 @@ async function upsertNormalizedReleases(
     }
   }
 
+  updated += await flushEngagementMetricUpdates(engagementUpdates);
+
   return { created, updated, failed };
 }
+
+type EngagementMetricUpdate = {
+  sourceItemId: string;
+  score: number | null;
+  commentCount: number | null;
+  upvoteRatio: number | null;
+  awardCount: number | null;
+  crosspostCount: number | null;
+};
 
 async function buildReleaseDataForUpsert(
   release: NormalizedReleaseRecord,
@@ -528,7 +553,7 @@ async function buildReleaseDataForUpsert(
         !existing?.imageUrl &&
         !existing?.thumbnailUrl &&
         !sourceMetadata?.sourceImageUrl);
-    const supplementalSourceMetadata = needsSupplementalBandcampLookup
+    const supplementalSourceMetadata = shouldLookupSourceMetadata && needsSupplementalBandcampLookup
       ? await resolveSupplementalBandcampMetadata(release)
       : null;
     const effectiveSourceMetadata = mergeSourceMetadataHints(
@@ -898,7 +923,36 @@ function isPurchasableReleaseType(releaseType: ReleaseType) {
   );
 }
 
-function hasReleaseDataChanges(
+async function flushEngagementMetricUpdates(updates: EngagementMetricUpdate[]) {
+  if (updates.length === 0) {
+    return 0;
+  }
+
+  const values = Prisma.join(
+    updates.map((update) =>
+      Prisma.sql`(${update.sourceItemId}, ${update.score}, ${update.commentCount}, ${update.upvoteRatio}, ${update.awardCount}, ${update.crosspostCount})`,
+    ),
+  );
+
+  await prisma.$executeRaw`
+    UPDATE "Release" AS r
+    SET
+      "score" = metrics."score"::integer,
+      "commentCount" = metrics."commentCount"::integer,
+      "upvoteRatio" = metrics."upvoteRatio"::double precision,
+      "awardCount" = metrics."awardCount"::integer,
+      "crosspostCount" = metrics."crosspostCount"::integer,
+      "updatedAt" = NOW()
+    FROM (
+      VALUES ${values}
+    ) AS metrics("sourceItemId", "score", "commentCount", "upvoteRatio", "awardCount", "crosspostCount")
+    WHERE r."sourceItemId" = metrics."sourceItemId"::text
+  `;
+
+  return updates.length;
+}
+
+function hasCoreReleaseDataChanges(
   existing: {
     slug: string;
     title: string;
@@ -922,12 +976,6 @@ function hasReleaseDataChanges(
     releaseDate: Date | null;
     publishedAt: Date;
     domain: string | null;
-    score: number | null;
-    commentCount: number | null;
-    upvoteRatio: number | null;
-    awardCount: number | null;
-    crosspostCount: number | null;
-    rawJson: string | null;
     aiSummary: string | null;
   },
   next: {
@@ -953,12 +1001,6 @@ function hasReleaseDataChanges(
     releaseDate: Date | null;
     publishedAt: Date;
     domain: string | null;
-    score: number | null;
-    commentCount: number | null;
-    upvoteRatio: number | null;
-    awardCount: number | null;
-    crosspostCount: number | null;
-    rawJson: string;
     aiSummary: string | null;
   },
 ) {
@@ -983,15 +1025,34 @@ function hasReleaseDataChanges(
     existing.labelName !== next.labelName ||
     existing.genreName !== next.genreName ||
     existing.domain !== next.domain ||
+    existing.aiSummary !== next.aiSummary ||
+    !datesEqual(existing.releaseDate, next.releaseDate) ||
+    !datesEqual(existing.publishedAt, next.publishedAt)
+  );
+}
+
+function hasEngagementMetricChanges(
+  existing: {
+    score: number | null;
+    commentCount: number | null;
+    upvoteRatio: number | null;
+    awardCount: number | null;
+    crosspostCount: number | null;
+  },
+  next: {
+    score: number | null;
+    commentCount: number | null;
+    upvoteRatio: number | null;
+    awardCount: number | null;
+    crosspostCount: number | null;
+  },
+) {
+  return (
     existing.score !== next.score ||
     existing.commentCount !== next.commentCount ||
     existing.upvoteRatio !== next.upvoteRatio ||
     existing.awardCount !== next.awardCount ||
-    existing.crosspostCount !== next.crosspostCount ||
-    existing.rawJson !== next.rawJson ||
-    existing.aiSummary !== next.aiSummary ||
-    !datesEqual(existing.releaseDate, next.releaseDate) ||
-    !datesEqual(existing.publishedAt, next.publishedAt)
+    existing.crosspostCount !== next.crosspostCount
   );
 }
 
