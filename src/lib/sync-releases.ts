@@ -11,7 +11,7 @@ import { enrichRecentReleases } from "@/lib/release-enrichment";
 import { clearReleaseDataCaches } from "@/lib/release-sections";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
 
-type SyncResult = {
+export type SyncResult = {
   scanned: number;
   matched: number;
   created: number;
@@ -28,9 +28,39 @@ type SyncOptions = {
 };
 
 type NormalizedReleaseRecord = NonNullable<ReturnType<typeof normalizeRedditPost>>;
+type SyncStatusSource = "api" | "homepage";
+type StoredSyncStatus = {
+  version: 1;
+  isRunning: boolean;
+  lastSource: SyncStatusSource | null;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  lastDurationMs: number | null;
+  consecutiveFailures: number;
+  lastError: string | null;
+  lastResult: SyncResult | null;
+};
+export type SyncStatusSummary = {
+  level: "healthy" | "running" | "warning" | "error" | "idle";
+  label: string;
+  message: string;
+  isRunning: boolean;
+  isStale: boolean;
+  lastSource: SyncStatusSource | null;
+  lastAttemptAt: Date | null;
+  lastSuccessAt: Date | null;
+  lastFailureAt: Date | null;
+  lastDurationMs: number | null;
+  consecutiveFailures: number;
+  lastError: string | null;
+  lastResult: SyncResult | null;
+};
 
 const HOMEPAGE_SYNC_STATE_KEY = "homepage-sync";
+const SYNC_STATUS_STATE_KEY = "sync-status";
 const HOMEPAGE_SYNC_STALE_MS = 45_000;
+const SYNC_STATUS_STALE_MS = 1000 * 60 * 12;
 const RECENT_FEED_PRUNE_MIN_POSTS = 50;
 const LIGHTWEIGHT_SOURCE_LOOKUP_LIMIT = 3;
 
@@ -40,35 +70,37 @@ declare global {
 }
 
 export async function syncIndieheadsReleases(options: SyncOptions = {}) {
-  const { enrich = true, lightweight = true } = options;
-  await ensureDatabase();
-  const filteredRemoved = await purgeFilteredReleases();
-  const sanitized = await sanitizeStoredMetadata();
-  const posts = await fetchRedditPosts();
-  const releases = posts
-    .map(normalizeRedditPost)
-    .filter((item): item is NonNullable<typeof item> => item !== null);
+  return runSyncWithStatus("api", async () => {
+    const { enrich = true, lightweight = true } = options;
+    await ensureDatabase();
+    const filteredRemoved = await purgeFilteredReleases();
+    const sanitized = await sanitizeStoredMetadata();
+    const posts = await fetchRedditPosts();
+    const releases = posts
+      .map(normalizeRedditPost)
+      .filter((item): item is NonNullable<typeof item> => item !== null);
 
-  const { created, updated, failed } = await upsertNormalizedReleases(releases, { lightweight });
-  const missingRecentRemoved = await pruneMissingRecentReleases(posts, releases);
+    const { created, updated, failed } = await upsertNormalizedReleases(releases, { lightweight });
+    const missingRecentRemoved = await pruneMissingRecentReleases(posts, releases);
 
-  const enrichTarget = lightweight
-    ? Math.max(12, sanitized + created)
-    : Math.max(60, sanitized + created + updated);
-  const enriched = enrich ? await enrichRecentReleases(enrichTarget) : 0;
-  await markHomepageSyncFresh();
-  clearReleaseDataCaches();
+    const enrichTarget = lightweight
+      ? Math.max(12, sanitized + created)
+      : Math.max(60, sanitized + created + updated);
+    const enriched = enrich ? await enrichRecentReleases(enrichTarget) : 0;
+    await markHomepageSyncFresh();
+    clearReleaseDataCaches();
 
-  return {
-    scanned: posts.length,
-    matched: releases.length,
-    created,
-    updated,
-    failed,
-    removed: filteredRemoved + missingRecentRemoved,
-    sanitized,
-    enriched,
-  };
+    return {
+      scanned: posts.length,
+      matched: releases.length,
+      created,
+      updated,
+      failed,
+      removed: filteredRemoved + missingRecentRemoved,
+      sanitized,
+      enriched,
+    };
+  });
 }
 
 export async function refreshHomepageData() {
@@ -88,6 +120,50 @@ export async function refreshHomepageData() {
 
 export async function ensureSeedData() {
   await refreshHomepageData();
+}
+
+export async function getSyncStatusSummary(): Promise<SyncStatusSummary> {
+  await ensureDatabase();
+  const stored = await readSyncStatus();
+  const lastAttemptAt = parseStoredDate(stored.lastAttemptAt);
+  const lastSuccessAt = parseStoredDate(stored.lastSuccessAt);
+  const lastFailureAt = parseStoredDate(stored.lastFailureAt);
+  const now = Date.now();
+  const isStale = lastSuccessAt ? now - lastSuccessAt.getTime() > SYNC_STATUS_STALE_MS : true;
+
+  let level: SyncStatusSummary["level"] = "idle";
+  if (stored.isRunning) {
+    level = "running";
+  } else if (stored.consecutiveFailures >= 3) {
+    level = "error";
+  } else if (stored.consecutiveFailures > 0 || isStale) {
+    level = "warning";
+  } else if (lastSuccessAt) {
+    level = "healthy";
+  }
+
+  return {
+    level,
+    label: getSyncStatusLabel(level),
+    message: buildSyncStatusMessage({
+      level,
+      isStale,
+      lastSuccessAt,
+      lastFailureAt,
+      lastSource: stored.lastSource,
+      consecutiveFailures: stored.consecutiveFailures,
+    }),
+    isRunning: stored.isRunning,
+    isStale,
+    lastSource: stored.lastSource,
+    lastAttemptAt,
+    lastSuccessAt,
+    lastFailureAt,
+    lastDurationMs: stored.lastDurationMs,
+    consecutiveFailures: stored.consecutiveFailures,
+    lastError: stored.lastError,
+    lastResult: stored.lastResult,
+  };
 }
 
 export async function getHomepageData() {
@@ -296,28 +372,30 @@ async function runSharedHomepageSync() {
 }
 
 async function syncLatestHomepageReleases() {
-  const posts = await fetchRedditPosts();
-  const normalizedReleases = posts
-    .map(normalizeRedditPost)
-    .filter((item): item is NonNullable<typeof item> => item !== null);
+  return runSyncWithStatus("homepage", async () => {
+    const posts = await fetchRedditPosts();
+    const normalizedReleases = posts
+      .map(normalizeRedditPost)
+      .filter((item): item is NonNullable<typeof item> => item !== null);
 
-  const { created, updated, failed } = await upsertNormalizedReleases(normalizedReleases, {
-    lightweight: true,
+    const { created, updated, failed } = await upsertNormalizedReleases(normalizedReleases, {
+      lightweight: true,
+    });
+    const missingRecentRemoved = await pruneMissingRecentReleases(posts, normalizedReleases);
+    await markHomepageSyncFresh();
+    clearReleaseDataCaches();
+
+    return {
+      scanned: posts.length,
+      matched: normalizedReleases.length,
+      created,
+      updated,
+      failed,
+      removed: missingRecentRemoved,
+      sanitized: 0,
+      enriched: 0,
+    };
   });
-  const missingRecentRemoved = await pruneMissingRecentReleases(posts, normalizedReleases);
-  await markHomepageSyncFresh();
-  clearReleaseDataCaches();
-
-  return {
-    scanned: posts.length,
-    matched: normalizedReleases.length,
-    created,
-    updated,
-    failed,
-    removed: missingRecentRemoved,
-    sanitized: 0,
-    enriched: 0,
-  };
 }
 
 async function isHomepageSyncFresh() {
@@ -352,6 +430,206 @@ async function markHomepageSyncFresh() {
       value: syncedAt.toISOString(),
     },
   });
+}
+
+async function runSyncWithStatus(source: SyncStatusSource, executor: () => Promise<SyncResult>) {
+  const startedAt = new Date();
+  await writeSyncStatus((current) => ({
+    ...current,
+    isRunning: true,
+    lastSource: source,
+    lastAttemptAt: startedAt.toISOString(),
+  }));
+
+  try {
+    const result = await executor();
+    const completedAt = new Date();
+
+    await writeSyncStatus((current) => ({
+      ...current,
+      isRunning: false,
+      lastSource: source,
+      lastAttemptAt: startedAt.toISOString(),
+      lastSuccessAt: completedAt.toISOString(),
+      lastDurationMs: completedAt.getTime() - startedAt.getTime(),
+      consecutiveFailures: 0,
+      lastError: null,
+      lastResult: result,
+    }));
+
+    return result;
+  } catch (error) {
+    const completedAt = new Date();
+    await writeSyncStatus((current) => ({
+      ...current,
+      isRunning: false,
+      lastSource: source,
+      lastAttemptAt: startedAt.toISOString(),
+      lastFailureAt: completedAt.toISOString(),
+      lastDurationMs: completedAt.getTime() - startedAt.getTime(),
+      consecutiveFailures: current.consecutiveFailures + 1,
+      lastError: normalizeSyncError(error),
+    }));
+    throw error;
+  }
+}
+
+async function readSyncStatus(): Promise<StoredSyncStatus> {
+  const row = await prisma.appState.findUnique({
+    where: { key: SYNC_STATUS_STATE_KEY },
+    select: { value: true },
+  });
+
+  if (!row?.value) {
+    return createDefaultSyncStatus();
+  }
+
+  try {
+    const parsed = JSON.parse(row.value) as Partial<StoredSyncStatus>;
+
+    return {
+      version: 1,
+      isRunning: parsed.isRunning === true,
+      lastSource:
+        parsed.lastSource === "api" || parsed.lastSource === "homepage" ? parsed.lastSource : null,
+      lastAttemptAt: typeof parsed.lastAttemptAt === "string" ? parsed.lastAttemptAt : null,
+      lastSuccessAt: typeof parsed.lastSuccessAt === "string" ? parsed.lastSuccessAt : null,
+      lastFailureAt: typeof parsed.lastFailureAt === "string" ? parsed.lastFailureAt : null,
+      lastDurationMs: typeof parsed.lastDurationMs === "number" ? parsed.lastDurationMs : null,
+      consecutiveFailures:
+        typeof parsed.consecutiveFailures === "number" && parsed.consecutiveFailures > 0
+          ? parsed.consecutiveFailures
+          : 0,
+      lastError: typeof parsed.lastError === "string" ? parsed.lastError : null,
+      lastResult: isSyncResultShape(parsed.lastResult) ? parsed.lastResult : null,
+    };
+  } catch {
+    return createDefaultSyncStatus();
+  }
+}
+
+async function writeSyncStatus(
+  updater: (current: StoredSyncStatus) => StoredSyncStatus,
+) {
+  const next = updater(await readSyncStatus());
+
+  await prisma.appState.upsert({
+    where: { key: SYNC_STATUS_STATE_KEY },
+    update: {
+      value: JSON.stringify(next),
+    },
+    create: {
+      key: SYNC_STATUS_STATE_KEY,
+      value: JSON.stringify(next),
+    },
+  });
+}
+
+function createDefaultSyncStatus(): StoredSyncStatus {
+  return {
+    version: 1,
+    isRunning: false,
+    lastSource: null,
+    lastAttemptAt: null,
+    lastSuccessAt: null,
+    lastFailureAt: null,
+    lastDurationMs: null,
+    consecutiveFailures: 0,
+    lastError: null,
+    lastResult: null,
+  };
+}
+
+function parseStoredDate(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function normalizeSyncError(error: unknown) {
+  if (error instanceof Error) {
+    return error.message.trim().slice(0, 280) || "Unknown sync error";
+  }
+
+  if (typeof error === "string") {
+    return error.trim().slice(0, 280) || "Unknown sync error";
+  }
+
+  return "Unknown sync error";
+}
+
+function isSyncResultShape(value: unknown): value is SyncResult {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<Record<keyof SyncResult, unknown>>;
+  return (
+    typeof candidate.scanned === "number" &&
+    typeof candidate.matched === "number" &&
+    typeof candidate.created === "number" &&
+    typeof candidate.updated === "number" &&
+    typeof candidate.failed === "number" &&
+    typeof candidate.removed === "number" &&
+    typeof candidate.sanitized === "number" &&
+    typeof candidate.enriched === "number"
+  );
+}
+
+function getSyncStatusLabel(level: SyncStatusSummary["level"]) {
+  if (level === "healthy") {
+    return "Live";
+  }
+
+  if (level === "running") {
+    return "Refreshing";
+  }
+
+  if (level === "warning") {
+    return "Delayed";
+  }
+
+  if (level === "error") {
+    return "Attention needed";
+  }
+
+  return "Waiting";
+}
+
+function buildSyncStatusMessage(input: {
+  level: SyncStatusSummary["level"];
+  isStale: boolean;
+  lastSuccessAt: Date | null;
+  lastFailureAt: Date | null;
+  lastSource: SyncStatusSource | null;
+  consecutiveFailures: number;
+}) {
+  if (input.level === "running") {
+    return input.lastSource === "api"
+      ? "A background sync is running from GitHub Actions."
+      : "A sync is running during homepage refresh.";
+  }
+
+  if (input.level === "error") {
+    return `${input.consecutiveFailures} sync attempts failed in a row. The feed needs attention.`;
+  }
+
+  if (input.level === "warning" && input.consecutiveFailures > 0 && input.lastFailureAt) {
+    return "The latest sync attempt failed, but the last successful feed is still visible.";
+  }
+
+  if (input.level === "warning" && input.isStale) {
+    return "The feed is older than expected. A fresh sync should arrive on the next cycle.";
+  }
+
+  if (input.lastSuccessAt) {
+    return "Fresh Reddit releases are syncing on schedule.";
+  }
+
+  return "The first successful sync will appear here once the feed is populated.";
 }
 
 async function upsertNormalizedReleases(

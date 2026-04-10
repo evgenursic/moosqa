@@ -5,6 +5,7 @@ import { ReleaseCard } from "@/components/release-card";
 import { ReleaseExplorer } from "@/components/release-explorer";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { SyncStatusStrip } from "@/components/sync-status-strip";
 import {
   getHomepageSectionsData,
   getSearchReleases,
@@ -13,7 +14,7 @@ import {
   releaseSectionDefinitions,
 } from "@/lib/release-sections";
 import { getSiteUrl } from "@/lib/site";
-import { refreshHomepageData } from "@/lib/sync-releases";
+import { getSyncStatusSummary, refreshHomepageData } from "@/lib/sync-releases";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -46,9 +47,10 @@ export default async function Home({ searchParams }: HomePageProps) {
       getSearchParamValue(resolvedSearchParams.direct),
   );
   await refreshHomepageData();
-  const [sections, searchReleases] = await Promise.all([
+  const [sections, searchReleases, syncStatus] = await Promise.all([
     getHomepageSectionsData(),
     hasSearchResults ? getSearchReleases() : Promise.resolve([] as ReleaseListingItem[]),
+    getSyncStatusSummary(),
   ]);
   const latestReleases = sections.latest;
 
@@ -66,6 +68,8 @@ export default async function Home({ searchParams }: HomePageProps) {
             }))}
           />
         ) : null}
+
+        <SyncStatusStrip status={syncStatus} className="mt-6" />
 
         <section id="latest" className="scroll-mt-32 py-10 md:scroll-mt-40 lg:scroll-mt-52">
           <div className="mb-8">

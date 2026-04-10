@@ -5,12 +5,14 @@ import { notFound } from "next/navigation";
 import { ReleaseCard } from "@/components/release-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { SyncStatusStrip } from "@/components/sync-status-strip";
 import {
   getSectionArchivePage,
   isReleaseSectionKey,
   releaseSectionDefinitions,
 } from "@/lib/release-sections";
 import { getSiteUrl } from "@/lib/site";
+import { getSyncStatusSummary } from "@/lib/sync-releases";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -63,11 +65,14 @@ export default async function BrowseSectionPage({
   const page = parsePageParam(resolvedSearchParams.page);
 
   const archive = await getSectionArchivePage(section, page);
+  const syncStatus = await getSyncStatusSummary();
 
   return (
     <main className="editorial-shell flex-1 px-4 pb-10 pt-4 md:px-8">
       <div className="mx-auto max-w-[1760px] bg-[var(--color-paper)] px-2 md:px-4">
         <SiteHeader />
+
+        <SyncStatusStrip status={syncStatus} className="mt-6" />
 
         <section className="border-t border-[var(--color-line)] py-10">
           <div className="flex flex-col gap-5 border-b border-[var(--color-soft-line)] pb-8 lg:flex-row lg:items-end lg:justify-between">
