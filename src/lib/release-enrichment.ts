@@ -9,6 +9,7 @@ import {
   pickPreferredGenreProfile,
 } from "@/lib/genre-profile";
 import { fetchMusicMetadata, type MusicMetadata } from "@/lib/musicbrainz";
+import { assessReleaseQuality } from "@/lib/release-quality";
 import { detectPlatform } from "@/lib/listening-links";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
 
@@ -39,11 +40,22 @@ export async function enrichRecentReleases(limit = 8) {
 
   for (const release of candidates) {
     const metadata = await buildReleaseEnrichment(release);
+    const checkedAt = new Date();
+    const qualitySnapshot = assessReleaseQuality({
+      ...release,
+      ...metadata,
+      qualityCheckedAt: checkedAt,
+    });
     await prisma.release.update({
       where: { id: release.id },
       data: {
         ...metadata,
-        metadataEnrichedAt: new Date(),
+        metadataEnrichedAt: checkedAt,
+        artworkStatus: qualitySnapshot.artworkStatus,
+        genreStatus: qualitySnapshot.genreStatus,
+        linkStatus: qualitySnapshot.linkStatus,
+        qualityScore: qualitySnapshot.qualityScore,
+        qualityCheckedAt: checkedAt,
       },
     });
     enriched += 1;
@@ -116,6 +128,10 @@ function needsEnrichment(release: EnrichableRelease, wantsAi: boolean) {
   }
 
   if (shouldRegenerateAiSummary(release.aiSummary)) {
+    return true;
+  }
+
+  if (assessReleaseQuality(release).needsRetry) {
     return true;
   }
 

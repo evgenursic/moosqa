@@ -60,7 +60,7 @@ export function SyncStatusStrip({ status, className }: SyncStatusStripProps) {
             }
             secondary={
               status.lastResult
-                ? `${status.lastResult.created} new / ${status.lastResult.updated} refreshed`
+                ? `${status.lastResult.created} new / ${status.lastResult.updated} refreshed / ${status.lastResult.qualityImproved} quality fixes`
                 : null
             }
           />

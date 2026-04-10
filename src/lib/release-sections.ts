@@ -31,6 +31,7 @@ export type ReleaseListingItem = {
   bandcampUrl: string | null;
   officialWebsiteUrl: string | null;
   officialStoreUrl: string | null;
+  qualityScore: number;
   labelName: string | null;
   genreName: string | null;
   aiSummary: string | null;
@@ -164,6 +165,7 @@ const releaseListingSelect = {
   bandcampUrl: true,
   officialWebsiteUrl: true,
   officialStoreUrl: true,
+  qualityScore: true,
   labelName: true,
   genreName: true,
   aiSummary: true,

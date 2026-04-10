@@ -27,6 +27,24 @@ enum ReleaseType {
   OTHER
 }
 
+enum ArtworkStatus {
+  MISSING
+  BASIC
+  STRONG
+}
+
+enum GenreStatus {
+  MISSING
+  BASIC
+  STRONG
+}
+
+enum LinkStatus {
+  MISSING
+  PARTIAL
+  STRONG
+}
+
 model Release {
   id              String        @id @default(cuid())
   source          ReleaseSource @default(REDDIT)
@@ -56,6 +74,11 @@ model Release {
   bandcampUrl     String?
   officialWebsiteUrl String?
   officialStoreUrl   String?
+  artworkStatus   ArtworkStatus @default(MISSING)
+  genreStatus     GenreStatus   @default(MISSING)
+  linkStatus      LinkStatus    @default(MISSING)
+  qualityScore    Int           @default(0)
+  qualityCheckedAt DateTime?
   musicbrainzReleaseId String?
   musicbrainzArtistId  String?
   domain          String?
@@ -71,6 +94,7 @@ model Release {
 
   @@index([publishedAt(sort: Desc)])
   @@index([releaseType, publishedAt(sort: Desc)])
+  @@index([qualityScore(sort: Desc), publishedAt(sort: Desc)])
 }
 
 model Vote {

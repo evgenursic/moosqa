@@ -5,20 +5,25 @@ type DedupeCandidate = {
   artistName: string | null;
   projectTitle: string | null;
   releaseType: ReleaseType;
+  qualityScore?: number | null;
+  imageUrl?: string | null;
+  thumbnailUrl?: string | null;
+  publishedAt?: Date | null;
 };
 
 export function dedupeReleasesForDisplay<T extends DedupeCandidate>(releases: T[]) {
-  const seen = new Set<string>();
+  const byKey = new Map<string, T>();
 
-  return releases.filter((release) => {
+  for (const release of releases) {
     const key = buildNearDuplicateKey(release);
-    if (seen.has(key)) {
-      return false;
-    }
+    const existing = byKey.get(key);
 
-    seen.add(key);
-    return true;
-  });
+    if (!existing || compareDedupePriority(release, existing) > 0) {
+      byKey.set(key, release);
+    }
+  }
+
+  return [...byKey.values()];
 }
 
 function buildNearDuplicateKey(release: DedupeCandidate) {
@@ -52,4 +57,34 @@ function normalizeKeyPart(value: string) {
     .replace(/[^\w\s-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function compareDedupePriority(left: DedupeCandidate, right: DedupeCandidate) {
+  const qualityDelta = (left.qualityScore || 0) - (right.qualityScore || 0);
+  if (qualityDelta !== 0) {
+    return qualityDelta;
+  }
+
+  const imageDelta = countArtworkSignals(left) - countArtworkSignals(right);
+  if (imageDelta !== 0) {
+    return imageDelta;
+  }
+
+  const leftPublishedAt = left.publishedAt?.getTime() || 0;
+  const rightPublishedAt = right.publishedAt?.getTime() || 0;
+  return leftPublishedAt - rightPublishedAt;
+}
+
+function countArtworkSignals(release: Pick<DedupeCandidate, "imageUrl" | "thumbnailUrl">) {
+  let score = 0;
+
+  if (release.imageUrl) {
+    score += 2;
+  }
+
+  if (release.thumbnailUrl) {
+    score += 1;
+  }
+
+  return score;
 }

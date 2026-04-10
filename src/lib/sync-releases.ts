@@ -1,4 +1,4 @@
-import { ReleaseType } from "@/generated/prisma/enums";
+import { ArtworkStatus, GenreStatus, LinkStatus, ReleaseType } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
@@ -6,8 +6,9 @@ import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
 import { searchBandcampRelease } from "@/lib/bandcamp-search";
 import { buildGenreProfile, isSpecificGenreProfile, pickPreferredGenreProfile } from "@/lib/genre-profile";
 import { getGenreOverride } from "@/lib/genre-overrides";
+import { assessReleaseQuality } from "@/lib/release-quality";
 import { fetchRedditPosts, normalizeRedditPost, shouldKeepReleaseRecord } from "@/lib/reddit";
-import { enrichRecentReleases } from "@/lib/release-enrichment";
+import { buildReleaseEnrichment, enrichRecentReleases } from "@/lib/release-enrichment";
 import { clearReleaseDataCaches } from "@/lib/release-sections";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
 
@@ -20,6 +21,8 @@ export type SyncResult = {
   removed: number;
   sanitized: number;
   enriched: number;
+  qualityChecked: number;
+  qualityImproved: number;
 };
 
 type SyncOptions = {
@@ -87,6 +90,9 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
       ? Math.max(12, sanitized + created)
       : Math.max(60, sanitized + created + updated);
     const enriched = enrich ? await enrichRecentReleases(enrichTarget) : 0;
+    const quality = lightweight
+      ? { checked: 0, improved: 0 }
+      : await runRecentReleaseQualityPass(12);
     await markHomepageSyncFresh();
     clearReleaseDataCaches();
 
@@ -99,6 +105,8 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
       removed: filteredRemoved + missingRecentRemoved,
       sanitized,
       enriched,
+      qualityChecked: quality.checked,
+      qualityImproved: quality.improved,
     };
   });
 }
@@ -320,6 +328,9 @@ async function sanitizeStoredMetadata() {
       labelName: null,
       aiSummary: null,
       metadataEnrichedAt: null,
+      qualityCheckedAt: null,
+      genreStatus: GenreStatus.MISSING,
+      qualityScore: 0,
     },
   });
 
@@ -349,6 +360,7 @@ async function sanitizeStoredMetadata() {
       data: {
         aiSummary: null,
         metadataEnrichedAt: null,
+        qualityCheckedAt: null,
       },
     });
   }
@@ -394,6 +406,8 @@ async function syncLatestHomepageReleases() {
       removed: missingRecentRemoved,
       sanitized: 0,
       enriched: 0,
+      qualityChecked: 0,
+      qualityImproved: 0,
     };
   });
 }
@@ -575,7 +589,9 @@ function isSyncResultShape(value: unknown): value is SyncResult {
     typeof candidate.failed === "number" &&
     typeof candidate.removed === "number" &&
     typeof candidate.sanitized === "number" &&
-    typeof candidate.enriched === "number"
+    typeof candidate.enriched === "number" &&
+    typeof candidate.qualityChecked === "number" &&
+    typeof candidate.qualityImproved === "number"
   );
 }
 
@@ -632,6 +648,84 @@ function buildSyncStatusMessage(input: {
   return "The first successful sync will appear here once the feed is populated.";
 }
 
+async function runRecentReleaseQualityPass(limit = 6) {
+  if (limit <= 0) {
+    return { checked: 0, improved: 0 };
+  }
+
+  const cutoffDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const recentReleases = await prisma.release.findMany({
+    where: {
+      publishedAt: {
+        gte: cutoffDate,
+      },
+    },
+    orderBy: [{ publishedAt: "desc" }],
+    take: Math.max(limit * 6, 36),
+  });
+
+  const candidates = recentReleases
+    .map((release) => ({
+      release,
+      snapshot: assessReleaseQuality(release),
+    }))
+    .filter((entry) => entry.snapshot.needsRetry)
+    .sort((left, right) => {
+      const priorityDelta = right.snapshot.priorityScore - left.snapshot.priorityScore;
+      if (priorityDelta !== 0) {
+        return priorityDelta;
+      }
+
+      return right.release.publishedAt.getTime() - left.release.publishedAt.getTime();
+    })
+    .slice(0, limit);
+
+  let checked = 0;
+  let improved = 0;
+
+  for (const candidate of candidates) {
+    const checkedAt = new Date();
+    const beforeScore = candidate.snapshot.qualityScore;
+    const metadata = await buildReleaseEnrichment(candidate.release).catch((error) => {
+      console.error(`Quality pass enrichment failed for release ${candidate.release.id}.`, error);
+      return null;
+    });
+    const mergedRelease = {
+      ...candidate.release,
+      ...(metadata || {}),
+    };
+    const qualitySnapshot = assessReleaseQuality({
+      ...mergedRelease,
+      qualityCheckedAt: checkedAt,
+    });
+
+    await prisma.release.update({
+      where: { id: candidate.release.id },
+      data: {
+        ...(metadata || {}),
+        ...(metadata ? { metadataEnrichedAt: checkedAt } : {}),
+        artworkStatus: qualitySnapshot.artworkStatus,
+        genreStatus: qualitySnapshot.genreStatus,
+        linkStatus: qualitySnapshot.linkStatus,
+        qualityScore: qualitySnapshot.qualityScore,
+        qualityCheckedAt: checkedAt,
+      },
+    });
+
+    checked += 1;
+    if (
+      qualitySnapshot.qualityScore > beforeScore ||
+      qualitySnapshot.artworkStatus !== candidate.snapshot.artworkStatus ||
+      qualitySnapshot.genreStatus !== candidate.snapshot.genreStatus ||
+      qualitySnapshot.linkStatus !== candidate.snapshot.linkStatus
+    ) {
+      improved += 1;
+    }
+  }
+
+  return { checked, improved };
+}
+
 async function upsertNormalizedReleases(
   releases: NormalizedReleaseRecord[],
   options: { lightweight?: boolean } = {},
@@ -677,6 +771,11 @@ async function upsertNormalizedReleases(
       bandcampUrl: true,
       officialWebsiteUrl: true,
       officialStoreUrl: true,
+      artworkStatus: true,
+      genreStatus: true,
+      linkStatus: true,
+      qualityScore: true,
+      qualityCheckedAt: true,
       labelName: true,
       publishedAt: true,
       metadataEnrichedAt: true,
@@ -781,6 +880,11 @@ async function buildReleaseDataForUpsert(
     bandcampUrl: string | null;
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
+    artworkStatus: ArtworkStatus;
+    genreStatus: GenreStatus;
+    linkStatus: LinkStatus;
+    qualityScore: number;
+    qualityCheckedAt: Date | null;
     labelName: string | null;
     publishedAt: Date;
     metadataEnrichedAt: Date | null;
@@ -838,8 +942,7 @@ async function buildReleaseDataForUpsert(
       sourceMetadata,
       shouldLookupSourceMetadata ? supplementalSourceMetadata : null,
     );
-
-    return {
+    const nextReleaseData = {
       ...release,
       releaseDate:
         existing?.releaseDate ||
@@ -889,6 +992,8 @@ async function buildReleaseDataForUpsert(
         null,
       aiSummary: existing?.aiSummary || null,
     };
+
+    return withQualityFields(nextReleaseData);
   }
 
   const sourceMetadata =
@@ -920,7 +1025,7 @@ async function buildReleaseDataForUpsert(
       labelName: null,
     }));
 
-  return {
+  return withQualityFields({
     ...release,
     releaseDate:
       release.releaseDate ||
@@ -943,6 +1048,30 @@ async function buildReleaseDataForUpsert(
     officialWebsiteUrl: sourceMetadata?.officialWebsiteUrl || existing?.officialWebsiteUrl || null,
     officialStoreUrl: sourceMetadata?.officialStoreUrl || existing?.officialStoreUrl || null,
     aiSummary: fallbackAiSummary,
+  });
+}
+
+function withQualityFields<T extends {
+  releaseType: ReleaseType;
+  genreName: string | null;
+  imageUrl: string | null;
+  thumbnailUrl: string | null;
+  youtubeUrl: string | null;
+  youtubeMusicUrl: string | null;
+  bandcampUrl: string | null;
+  officialWebsiteUrl: string | null;
+  officialStoreUrl: string | null;
+  releaseDate: Date | null;
+  publishedAt: Date;
+}>(releaseData: T) {
+  const qualitySnapshot = assessReleaseQuality(releaseData);
+
+  return {
+    ...releaseData,
+    artworkStatus: qualitySnapshot.artworkStatus,
+    genreStatus: qualitySnapshot.genreStatus,
+    linkStatus: qualitySnapshot.linkStatus,
+    qualityScore: qualitySnapshot.qualityScore,
   };
 }
 
@@ -1249,6 +1378,10 @@ function hasCoreReleaseDataChanges(
     bandcampUrl: string | null;
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
+    artworkStatus: ArtworkStatus;
+    genreStatus: GenreStatus;
+    linkStatus: LinkStatus;
+    qualityScore: number;
     labelName: string | null;
     genreName: string | null;
     releaseDate: Date | null;
@@ -1274,6 +1407,10 @@ function hasCoreReleaseDataChanges(
     bandcampUrl: string | null;
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
+    artworkStatus: ArtworkStatus;
+    genreStatus: GenreStatus;
+    linkStatus: LinkStatus;
+    qualityScore: number;
     labelName: string | null;
     genreName: string | null;
     releaseDate: Date | null;
@@ -1300,6 +1437,10 @@ function hasCoreReleaseDataChanges(
     existing.bandcampUrl !== next.bandcampUrl ||
     existing.officialWebsiteUrl !== next.officialWebsiteUrl ||
     existing.officialStoreUrl !== next.officialStoreUrl ||
+    existing.artworkStatus !== next.artworkStatus ||
+    existing.genreStatus !== next.genreStatus ||
+    existing.linkStatus !== next.linkStatus ||
+    existing.qualityScore !== next.qualityScore ||
     existing.labelName !== next.labelName ||
     existing.genreName !== next.genreName ||
     existing.domain !== next.domain ||

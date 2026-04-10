@@ -1,0 +1,22 @@
+name: Quality enrichment
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call MooSQA deep sync endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SYNC_URL: https://moosqa-ci4e.vercel.app/api/sync?deep=1
+        run: |
+          curl --fail --show-error --silent \
+            --retry 2 \
+            --retry-delay 8 \
+            --max-time 480 \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            "${SYNC_URL}"

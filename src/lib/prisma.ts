@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { PrismaClient as PrismaClientClass } from "@/generated/prisma/client";
 import type { PrismaClient as PrismaClientInstance } from "@/generated/prisma/client";
 
-const PRISMA_CLIENT_SCHEMA_VERSION = "postgres-production-v1";
+const PRISMA_CLIENT_SCHEMA_VERSION = "postgres-production-v2";
 const runtimeDatabaseUrl =
   process.env.DATABASE_RUNTIME_URL || process.env.DATABASE_URL;
 
