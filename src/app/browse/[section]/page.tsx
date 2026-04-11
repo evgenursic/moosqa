@@ -2,9 +2,9 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { FeedFreshness } from "@/components/feed-freshness";
 import { GenreFilterDrawer } from "@/components/genre-filter-drawer";
 import { ReleaseCard } from "@/components/release-card";
+import { ShareFilterLink } from "@/components/share-filter-link";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import {
@@ -13,7 +13,7 @@ import {
   releaseSectionDefinitions,
 } from "@/lib/release-sections";
 import { getSiteUrl } from "@/lib/site";
-import { getSyncStatusSummary, refreshHomepageData, shouldBlockForHomepageRefresh } from "@/lib/sync-releases";
+import { refreshHomepageData, shouldBlockForHomepageRefresh } from "@/lib/sync-releases";
 
 type BrowseSectionPageProps = {
   params: Promise<{
@@ -22,10 +22,14 @@ type BrowseSectionPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
+export const unstable_instant = false;
+
 export async function generateMetadata({
   params,
+  searchParams,
 }: BrowseSectionPageProps): Promise<Metadata> {
   const { section } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
 
   if (!isReleaseSectionKey(section)) {
     return {
@@ -34,18 +38,36 @@ export async function generateMetadata({
   }
 
   const definition = releaseSectionDefinitions[section];
-  const url = new URL(`/browse/${section}`, getSiteUrl()).toString();
+  const page = parsePageParam(resolvedSearchParams.page);
+  const genre = parseGenreParam(resolvedSearchParams.genre);
+  const url = new URL(buildArchiveHref(section, { page, genre }), getSiteUrl()).toString();
+  const titleParts = [definition.title];
+  if (genre) {
+    titleParts.push(genre);
+  }
+  if (page > 1) {
+    titleParts.push(`Page ${page}`);
+  }
+  const title = `${titleParts.join(" | ")} | MooSQA`;
+  const description = genre
+    ? `${definition.description} Filtered to ${genre}.`
+    : definition.description;
 
   return {
-    title: `${definition.title} | MooSQA`,
-    description: definition.description,
+    title,
+    description,
     alternates: {
       canonical: url,
     },
     openGraph: {
-      title: `${definition.title} | MooSQA`,
-      description: definition.description,
+      title,
+      description,
       url,
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
     },
   };
 }
@@ -68,17 +90,47 @@ export default async function BrowseSectionPage({
     await refreshHomepageData();
   }
 
-  const [archive, syncStatus] = await Promise.all([
-    getSectionArchivePage(section, page, genre),
-    getSyncStatusSummary(),
-  ]);
+  const archive = await getSectionArchivePage(section, page, genre);
   const archiveHref = `${buildArchiveHref(section, { page: archive.page, genre: archive.selectedGenre })}#archive`;
+  const canonicalArchiveHref = buildArchiveHref(section, {
+    page: archive.page,
+    genre: archive.selectedGenre,
+  });
+  const sectionJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: `${archive.title} archive`,
+    url: new URL(canonicalArchiveHref, getSiteUrl()).toString(),
+    description: archive.description,
+    isPartOf: {
+      "@type": "WebSite",
+      name: "MooSQA",
+      url: getSiteUrl(),
+    },
+    mainEntity: {
+      "@type": "ItemList",
+      itemListOrder: "https://schema.org/ItemListOrderDescending",
+      numberOfItems: archive.releases.length,
+      itemListElement: archive.releases.map((release, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        url: new URL(`/releases/${release.slug}`, getSiteUrl()).toString(),
+        name: release.artistName && release.projectTitle
+          ? `${release.artistName} - ${release.projectTitle}`
+          : release.title,
+      })),
+    },
+  };
 
   return (
     <main className="editorial-shell flex-1 px-4 pb-10 pt-4 md:px-8">
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(sectionJsonLd) }}
+      />
       <div className="mx-auto max-w-[1760px] bg-[var(--color-paper)] px-2 md:px-4">
         <SiteHeader />
-        <FeedFreshness summary={syncStatus} className="mt-4" />
 
         <section id="archive" className="border-t border-[var(--color-line)] py-10">
           <div className="flex flex-col gap-5 border-b border-[var(--color-soft-line)] pb-8 lg:flex-row lg:items-end lg:justify-between">
@@ -108,10 +160,17 @@ export default async function BrowseSectionPage({
               </span>
               <Link
                 href={`/#${archive.homeId}`}
+                scroll={false}
                 className="inline-flex items-center border border-[var(--color-line)] px-3 py-2 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
               >
                 Back to homepage section
               </Link>
+              {archive.selectedGenre ? (
+                <ShareFilterLink
+                  href={canonicalArchiveHref}
+                  label={`${archive.title} filtered by ${archive.selectedGenre}`}
+                />
+              ) : null}
             </div>
           </div>
 

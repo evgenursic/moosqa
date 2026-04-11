@@ -211,7 +211,7 @@ export function SiteHeader() {
     if (pathname === "/") {
       const target = document.getElementById(link.sectionId);
       if (target) {
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        target.scrollIntoView({ behavior: "auto", block: "start" });
         window.history.replaceState(null, "", `/#${link.sectionId}`);
         return;
       }

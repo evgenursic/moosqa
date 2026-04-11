@@ -1,20 +1,36 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
+import { getRequiredDebugSecret, readRequestSecret } from "@/lib/admin-auth";
+import {
+  createRateLimitResponse,
+  getRateLimitIdentity,
+  takeRateLimit,
+  withRateLimitHeaders,
+} from "@/lib/rate-limit";
 import { runWeakCardReprocess } from "@/lib/sync-releases";
 
+const DEBUG_REPROCESS_RATE_LIMIT = {
+  key: "api-debug-reprocess",
+  windowMs: 10 * 60_000,
+  max: 4,
+} as const;
+
 export async function POST(request: Request) {
+  const rateLimit = takeRateLimit(
+    DEBUG_REPROCESS_RATE_LIMIT,
+    getRateLimitIdentity(request),
+  );
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit, "Too many debug reprocess requests.");
+  }
+
   const { searchParams } = new URL(request.url);
-  const authorizationHeader = request.headers.get("authorization");
-  const bearerSecret =
-    authorizationHeader?.startsWith("Bearer ")
-      ? authorizationHeader.slice("Bearer ".length)
-      : null;
-  const secret =
-    bearerSecret ||
-    searchParams.get("secret") ||
-    request.headers.get("x-debug-secret");
-  const allowedSecret = process.env.DEBUG_SECRET || process.env.CRON_SECRET;
+  const secret = readRequestSecret(request, {
+    queryParam: "secret",
+    headerName: "x-debug-secret",
+  });
+  const allowedSecret = getRequiredDebugSecret();
 
   if (!allowedSecret || secret !== allowedSecret) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -27,12 +43,12 @@ export async function POST(request: Request) {
   revalidatePath("/debug");
   revalidateTag("releases", "max");
 
-  return NextResponse.json({
+  return withRateLimitHeaders(NextResponse.json({
     ok: true,
     mode: "manual-reprocess",
     ...result,
     processedAt: new Date().toISOString(),
-  });
+  }), rateLimit);
 }
 
 function clampReprocessLimit(value: string | null) {

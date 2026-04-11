@@ -3,7 +3,6 @@ import Link from "next/link";
 import { after, connection } from "next/server";
 import { Suspense } from "react";
 
-import { FeedFreshness } from "@/components/feed-freshness";
 import { HomepageGenreFilter } from "@/components/homepage-genre-filter";
 import { ReleaseCard } from "@/components/release-card";
 import { ReleaseExplorer } from "@/components/release-explorer";
@@ -18,11 +17,7 @@ import {
 } from "@/lib/release-sections";
 import { getHomepageGenreFilters } from "@/lib/search-overlay";
 import { getSiteUrl } from "@/lib/site";
-import {
-  getSyncStatusSummary,
-  refreshHomepageData,
-  shouldBlockForHomepageRefresh,
-} from "@/lib/sync-releases";
+import { refreshHomepageData, shouldBlockForHomepageRefresh } from "@/lib/sync-releases";
 
 export const metadata: Metadata = {
   title: "Music Radar",
@@ -78,22 +73,20 @@ async function HomeContent({ searchParams }: HomePageProps) {
     await refreshHomepageData();
   });
 
-  let [sections, searchReleases, syncStatus, homepageGenres] = await Promise.all([
+  let [sections, searchReleases, homepageGenres] = await Promise.all([
     getHomepageSectionsData(),
     hasSearchResults ? getSearchReleases() : Promise.resolve([] as ReleaseListingItem[]),
-    getSyncStatusSummary(),
     getHomepageGenreFilters(),
   ]);
 
   if (sections.latest.length === 0) {
     await refreshHomepageData();
 
-    [sections, searchReleases, syncStatus, homepageGenres] = await Promise.all([
+    [sections, searchReleases, homepageGenres] = await Promise.all([
       getHomepageSectionsData(),
       hasSearchResults
         ? getSearchReleases({ useCache: false, ttlMs: 0 })
         : Promise.resolve([] as ReleaseListingItem[]),
-      getSyncStatusSummary(),
       getHomepageGenreFilters(),
     ]);
   }
@@ -102,7 +95,6 @@ async function HomeContent({ searchParams }: HomePageProps) {
 
   return (
     <>
-      <FeedFreshness summary={syncStatus} className="mt-4" />
       <HomepageGenreFilter genres={homepageGenres} selectedGenre={selectedGenre} />
 
       {hasSearchResults ? (

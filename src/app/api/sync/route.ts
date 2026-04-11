@@ -1,19 +1,32 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
+import { readRequestSecret } from "@/lib/admin-auth";
+import {
+  createRateLimitResponse,
+  getRateLimitIdentity,
+  takeRateLimit,
+  withRateLimitHeaders,
+} from "@/lib/rate-limit";
 import { runQualityEnrichmentCycle, syncIndieheadsReleases } from "@/lib/sync-releases";
 
+const SYNC_RATE_LIMIT = {
+  key: "api-sync",
+  windowMs: 60_000,
+  max: 12,
+} as const;
+
 export async function GET(request: Request) {
+  const rateLimit = takeRateLimit(SYNC_RATE_LIMIT, getRateLimitIdentity(request));
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit, "Too many sync requests.");
+  }
+
   const { searchParams } = new URL(request.url);
-  const authorizationHeader = request.headers.get("authorization");
-  const bearerSecret =
-    authorizationHeader?.startsWith("Bearer ")
-      ? authorizationHeader.slice("Bearer ".length)
-      : null;
-  const secret =
-    bearerSecret ||
-    searchParams.get("secret") ||
-    request.headers.get("x-cron-secret");
+  const secret = readRequestSecret(request, {
+    queryParam: "secret",
+    headerName: "x-cron-secret",
+  });
 
   if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -29,12 +42,12 @@ export async function GET(request: Request) {
     revalidatePath("/");
     revalidateTag("releases", "max");
 
-    return NextResponse.json({
+    return withRateLimitHeaders(NextResponse.json({
       ok: true,
       mode: "quality",
       ...result,
       syncedAt: new Date().toISOString(),
-    });
+    }), rateLimit);
   }
 
   const result = await syncIndieheadsReleases({
@@ -44,11 +57,11 @@ export async function GET(request: Request) {
   revalidatePath("/");
   revalidateTag("releases", "max");
 
-  return NextResponse.json({
+  return withRateLimitHeaders(NextResponse.json({
     ok: true,
     ...result,
     syncedAt: new Date().toISOString(),
-  });
+  }), rateLimit);
 }
 
 function clampQualityLimit(value: string | null) {

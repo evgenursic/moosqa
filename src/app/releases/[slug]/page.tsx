@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { ReleaseType } from "@/generated/prisma/enums";
 import { ListeningLinks } from "@/components/listening-links";
 import { RatingMeter } from "@/components/rating-meter";
 import { BackToHomeButton } from "@/components/back-to-home-button";
@@ -23,6 +24,8 @@ type ReleasePageProps = {
     slug: string;
   }>;
 };
+
+export const unstable_instant = false;
 
 export async function generateMetadata({ params }: ReleasePageProps): Promise<Metadata> {
   const { slug } = await params;
@@ -80,17 +83,73 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
     notFound();
   }
 
+  const releaseDateValue = release.releaseDate ? new Date(release.releaseDate) : null;
+  const publishedAtValue = new Date(release.publishedAt);
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
   const releaseHeading = release.artistName || release.projectTitle || release.title;
   const releaseDateLabel = formatContextualReleaseDateLabel(
     release.releaseType,
-    release.releaseDate,
+    releaseDateValue,
     release.outletName,
   );
-  const redditDateLabel = formatRedditDateLabel(release.publishedAt);
+  const redditDateLabel = formatRedditDateLabel(publishedAtValue);
+  const releaseUrl = new URL(`/releases/${release.slug}`, getSiteUrl()).toString();
+  const image = release.imageUrl || release.thumbnailUrl || undefined;
+  const schemaType =
+    release.releaseType === ReleaseType.ALBUM || release.releaseType === ReleaseType.EP
+      ? "MusicAlbum"
+      : "MusicRecording";
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": schemaType,
+    name: release.projectTitle || release.title,
+    url: releaseUrl,
+    description: getDisplaySummary({
+      aiSummary: release.aiSummary,
+      summary: release.summary,
+      artistName: release.artistName,
+      projectTitle: release.projectTitle,
+      title: release.title,
+      releaseType: release.releaseType,
+      genreName: release.genreName,
+    }),
+    byArtist: release.artistName
+      ? {
+          "@type": "MusicGroup",
+          name: release.artistName,
+        }
+      : undefined,
+    genre: displayGenre,
+    datePublished: releaseDateValue?.toISOString() || publishedAtValue.toISOString(),
+    image,
+    isPartOf: {
+      "@type": "WebSite",
+      name: "MooSQA",
+      url: getSiteUrl(),
+    },
+    publisher: release.outletName
+      ? {
+          "@type": "Organization",
+          name: release.outletName,
+        }
+      : undefined,
+    offers: [release.bandcampUrl, release.officialStoreUrl, release.officialWebsiteUrl]
+      .filter(Boolean)
+      .map((url) => ({
+        "@type": "Offer",
+        url,
+      })),
+    sameAs: [release.sourceUrl, release.redditPermalink, release.youtubeUrl, release.youtubeMusicUrl]
+      .filter(Boolean),
+  };
 
   return (
     <main className="min-h-screen px-4 py-6 md:px-8">
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <MobileReleaseNav title={releaseHeading} />
       <div className="mx-auto max-w-[1500px] bg-[var(--color-paper)] px-2 md:px-4">
         <div className="grid gap-10 border-b border-[var(--color-line)] py-6 pt-12 lg:grid-cols-[1.05fr_0.95fr] lg:pt-6">

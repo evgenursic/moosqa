@@ -40,6 +40,7 @@ copy .env.example .env
 - `DATABASE_URL`: direct Postgres connection string for Prisma CLI
 - `DATABASE_RUNTIME_URL`: pooled Postgres connection string for the deployed app
 - `CRON_SECRET`: long random secret
+- `DEBUG_SECRET`: separate long random secret for private debug and reprocess endpoints
 - `NEXT_PUBLIC_SITE_URL`: local or deployed site URL
 
 4. Push the schema and generate Prisma client:
@@ -82,18 +83,31 @@ Import this GitHub repository into Vercel and add these environment variables:
 - `DATABASE_URL`
 - `DATABASE_RUNTIME_URL`
 - `CRON_SECRET`
+- `DEBUG_SECRET`
 - `NEXT_PUBLIC_SITE_URL`
 - `OPENAI_API_KEY` (optional)
 - `OPENAI_MODEL` (optional, defaults to `gpt-5-nano`)
 
 ### 4. Deploy
 
-Vercel will run the app as a full Next.js project. The included [vercel.json](./vercel.json) schedules `/api/sync` every 30 minutes.
+Vercel runs the app as a full Next.js project. Production syncing is designed around GitHub Actions because Vercel Hobby cron is limited.
 
 The sync endpoint accepts:
 
 - Vercel Cron `Authorization: Bearer <CRON_SECRET>`
 - manual query usage: `/api/sync?secret=<CRON_SECRET>`
+
+The private debug reprocess endpoint accepts:
+
+- `Authorization: Bearer <DEBUG_SECRET>`
+- manual query usage: `/api/debug/reprocess?secret=<DEBUG_SECRET>`
+
+### 5. GitHub Actions refresh
+
+Add the same `CRON_SECRET` as a GitHub Actions repository secret. The repository includes:
+
+- a frequent Reddit sync workflow
+- a separate quality enrichment workflow
 
 ## Notes on hosting choice
 

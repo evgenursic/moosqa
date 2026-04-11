@@ -1,5 +1,5 @@
 import { clsx, type ClassValue } from "clsx";
-import { format, formatDistanceToNowStrict, isToday, isYesterday } from "date-fns";
+import { format, formatDistanceToNowStrict } from "date-fns";
 import { ReleaseType } from "@/generated/prisma/enums";
 
 export function cn(...inputs: ClassValue[]) {
@@ -39,14 +39,6 @@ export function trimText(value: string | null | undefined, maxLength = 220) {
 }
 
 export function formatPubDate(date: Date) {
-  if (isToday(date)) {
-    return `Today, ${format(date, "HH:mm")}`;
-  }
-
-  if (isYesterday(date)) {
-    return `Yesterday, ${format(date, "HH:mm")}`;
-  }
-
   return format(date, "MMM dd, yyyy");
 }
 

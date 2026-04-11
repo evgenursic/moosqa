@@ -1,10 +1,26 @@
 import { filterAndRankReleaseListings } from "@/lib/release-search";
 import { getSearchReleases } from "@/lib/release-sections";
+import {
+  createRateLimitResponse,
+  getRateLimitIdentity,
+  takeRateLimit,
+  withRateLimitHeaders,
+} from "@/lib/rate-limit";
 
 const DEFAULT_LIMIT = 8;
 const MAX_LIMIT = 16;
+const SEARCH_RATE_LIMIT = {
+  key: "api-search",
+  windowMs: 60_000,
+  max: 40,
+} as const;
 
 export async function GET(request: Request) {
+  const rateLimit = takeRateLimit(SEARCH_RATE_LIMIT, getRateLimitIdentity(request));
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit, "Too many search requests.");
+  }
+
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q") || "";
   const type = searchParams.get("type") || "";
@@ -22,13 +38,13 @@ export async function GET(request: Request) {
     directOnly,
   });
 
-  return Response.json({
+  return withRateLimitHeaders(Response.json({
     total: filtered.length,
     results: filtered.slice(0, limit).map((release) => ({
       ...release,
       publishedAt: release.publishedAt.toISOString(),
     })),
-  });
+  }), rateLimit);
 }
 
 function clampLimit(value: string | null) {

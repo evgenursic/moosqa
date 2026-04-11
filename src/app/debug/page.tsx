@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { Suspense, type ReactNode } from "react";
 
 import { DebugReprocessControls } from "@/components/debug-reprocess-controls";
+import { getRequiredDebugSecret } from "@/lib/admin-auth";
 import { getQualityDashboardData } from "@/lib/quality-dashboard";
 import { formatPubDate } from "@/lib/utils";
 
@@ -31,7 +32,7 @@ async function DebugContent({ searchParams }: DebugPageProps) {
   await connection();
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const secret = getSearchParamValue(resolvedSearchParams.secret);
-  const allowedSecret = process.env.DEBUG_SECRET || process.env.CRON_SECRET || "";
+  const allowedSecret = getRequiredDebugSecret();
 
   if (!allowedSecret || secret !== allowedSecret) {
     notFound();

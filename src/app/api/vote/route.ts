@@ -4,11 +4,22 @@ import { z } from "zod";
 
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
+import {
+  createRateLimitResponse,
+  getRateLimitIdentity,
+  takeRateLimit,
+  withRateLimitHeaders,
+} from "@/lib/rate-limit";
 
 const voteSchema = z.object({
   releaseId: z.string().min(1),
   value: z.number().int().min(1).max(100),
 });
+const VOTE_RATE_LIMIT = {
+  key: "api-vote",
+  windowMs: 60_000,
+  max: 14,
+} as const;
 
 export async function POST(request: Request) {
   await ensureDatabase();
@@ -22,6 +33,14 @@ export async function POST(request: Request) {
 
   if (!deviceId) {
     deviceId = crypto.randomUUID();
+  }
+
+  const rateLimit = takeRateLimit(
+    VOTE_RATE_LIMIT,
+    getRateLimitIdentity(request, `${deviceId}:${body.data.releaseId}`),
+  );
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit, "Too many voting requests.");
   }
 
   const release = await prisma.release.findUnique({
@@ -80,5 +99,5 @@ export async function POST(request: Request) {
     maxAge: 60 * 60 * 24 * 365,
   });
 
-  return response;
+  return withRateLimitHeaders(response, rateLimit);
 }
