@@ -6,6 +6,7 @@ import { dedupeReleasesForDisplay } from "@/lib/display-dedupe";
 import { buildGenreProfile, isSpecificGenreProfile } from "@/lib/genre-profile";
 import { getGenreOverride } from "@/lib/genre-overrides";
 import { prisma } from "@/lib/prisma";
+import { normalizeSearchText } from "@/lib/release-search";
 
 export type ReleaseSectionKey =
   | "latest"
@@ -401,11 +402,20 @@ export async function getSearchGenreFacets(options?: { useCache?: boolean; ttlMs
   return genres;
 }
 
-export async function getSectionArchivePage(section: ReleaseSectionKey, requestedPage = 1) {
+export async function getSectionArchivePage(
+  section: ReleaseSectionKey,
+  requestedPage = 1,
+  requestedGenre?: string | null,
+) {
   await ensureDatabase();
 
   const releases = await getSectionReleases(section);
-  const total = releases.length;
+  const genres = buildSectionGenreFacets(releases);
+  const matchedGenre = matchRequestedGenre(requestedGenre || null, genres);
+  const filteredReleases = matchedGenre
+    ? releases.filter((release) => releaseMatchesGenre(release, matchedGenre))
+    : releases;
+  const total = filteredReleases.length;
   const pageCount = Math.max(1, Math.ceil(total / ARCHIVE_PAGE_SIZE));
   const page = clampPageNumber(requestedPage, pageCount);
   const start = (page - 1) * ARCHIVE_PAGE_SIZE;
@@ -413,10 +423,13 @@ export async function getSectionArchivePage(section: ReleaseSectionKey, requeste
 
   return {
     ...releaseSectionDefinitions[section],
+    genres,
+    overallTotal: releases.length,
     page,
     pageCount,
     total,
-    releases: releases.slice(start, end),
+    selectedGenre: matchedGenre,
+    releases: filteredReleases.slice(start, end),
   };
 }
 
@@ -520,6 +533,95 @@ async function getSectionReleasesUncached(section: ReleaseSectionKey) {
 
 function prepareDisplayReleases(releases: ReleaseListingItem[]) {
   return dedupeReleasesForDisplay(releases).map(refineDisplayGenre);
+}
+
+function buildSectionGenreFacets(releases: ReleaseListingItem[]) {
+  const genreMap = new Map<
+    string,
+    {
+      label: string;
+      count: number;
+      latestPublishedAt: number;
+      bestQualityScore: number;
+    }
+  >();
+
+  for (const release of releases) {
+    const genreName = release.genreName?.trim();
+    if (!genreName || !isSpecificGenreProfile(genreName)) {
+      continue;
+    }
+
+    const key = normalizeSearchText(genreName);
+    if (!key) {
+      continue;
+    }
+
+    const existing = genreMap.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.latestPublishedAt = Math.max(existing.latestPublishedAt, release.publishedAt.getTime());
+      existing.bestQualityScore = Math.max(existing.bestQualityScore, release.qualityScore);
+      continue;
+    }
+
+    genreMap.set(key, {
+      label: genreName,
+      count: 1,
+      latestPublishedAt: release.publishedAt.getTime(),
+      bestQualityScore: release.qualityScore,
+    });
+  }
+
+  return [...genreMap.values()]
+    .sort((left, right) => {
+      const countDelta = right.count - left.count;
+      if (countDelta !== 0) {
+        return countDelta;
+      }
+
+      const qualityDelta = right.bestQualityScore - left.bestQualityScore;
+      if (qualityDelta !== 0) {
+        return qualityDelta;
+      }
+
+      return right.latestPublishedAt - left.latestPublishedAt;
+    })
+    .slice(0, 18)
+    .map((entry) => entry.label);
+}
+
+function matchRequestedGenre(requestedGenre: string | null, genres: string[]) {
+  const normalizedRequestedGenre = normalizeSearchText(requestedGenre || "");
+  if (!normalizedRequestedGenre) {
+    return null;
+  }
+
+  const exactMatch = genres.find((genre) => normalizeSearchText(genre) === normalizedRequestedGenre);
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  return (
+    genres.find((genre) => {
+      const normalizedGenre = normalizeSearchText(genre);
+      return normalizedGenre.includes(normalizedRequestedGenre) || normalizedRequestedGenre.includes(normalizedGenre);
+    }) || null
+  );
+}
+
+function releaseMatchesGenre(release: ReleaseListingItem, selectedGenre: string) {
+  const normalizedReleaseGenre = normalizeSearchText(release.genreName || "");
+  const normalizedSelectedGenre = normalizeSearchText(selectedGenre);
+
+  if (!normalizedReleaseGenre || !normalizedSelectedGenre) {
+    return false;
+  }
+
+  return (
+    normalizedReleaseGenre === normalizedSelectedGenre ||
+    normalizedReleaseGenre.includes(normalizedSelectedGenre)
+  );
 }
 
 function refineDisplayGenre(release: ReleaseListingItem): ReleaseListingItem {

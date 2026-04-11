@@ -7,6 +7,7 @@ import { getArtworkCandidateUrls } from "@/lib/artwork-fallback";
 import { cn } from "@/lib/utils";
 
 type ReleaseArtworkProps = {
+  releaseId?: string | null;
   title: string;
   artistName: string | null;
   projectTitle: string | null;
@@ -15,6 +16,9 @@ type ReleaseArtworkProps = {
   sourceUrl?: string | null;
   youtubeUrl?: string | null;
   youtubeMusicUrl?: string | null;
+  bandcampUrl?: string | null;
+  officialWebsiteUrl?: string | null;
+  officialStoreUrl?: string | null;
   genreName?: string | null;
   className?: string;
   imageClassName?: string;
@@ -22,12 +26,16 @@ type ReleaseArtworkProps = {
 };
 
 export function ReleaseArtwork({
+  releaseId,
   title,
   imageUrl,
   thumbnailUrl,
   sourceUrl,
   youtubeUrl,
   youtubeMusicUrl,
+  bandcampUrl,
+  officialWebsiteUrl,
+  officialStoreUrl,
   genreName,
   className,
   imageClassName,
@@ -37,13 +45,27 @@ export function ReleaseArtwork({
   const artworkCandidates = useMemo(
     () =>
       getArtworkCandidateUrls({
+        releaseId,
         imageUrl,
         thumbnailUrl,
         sourceUrl,
         youtubeUrl,
         youtubeMusicUrl,
+        bandcampUrl,
+        officialWebsiteUrl,
+        officialStoreUrl,
       }),
-    [imageUrl, sourceUrl, thumbnailUrl, youtubeMusicUrl, youtubeUrl],
+    [
+      bandcampUrl,
+      imageUrl,
+      officialStoreUrl,
+      officialWebsiteUrl,
+      releaseId,
+      sourceUrl,
+      thumbnailUrl,
+      youtubeMusicUrl,
+      youtubeUrl,
+    ],
   );
   const [failedUrls, setFailedUrls] = useState<string[]>([]);
   const activeImageUrl = artworkCandidates.find((url) => !failedUrls.includes(url)) || null;

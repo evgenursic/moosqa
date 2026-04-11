@@ -1,11 +1,15 @@
 import { detectPlatform } from "@/lib/listening-links";
 
 type ArtworkCandidateInput = {
+  releaseId?: string | null;
   imageUrl?: string | null;
   thumbnailUrl?: string | null;
   sourceUrl?: string | null;
   youtubeUrl?: string | null;
   youtubeMusicUrl?: string | null;
+  bandcampUrl?: string | null;
+  officialWebsiteUrl?: string | null;
+  officialStoreUrl?: string | null;
 };
 
 export function getArtworkCandidateUrls(input: ArtworkCandidateInput) {
@@ -13,9 +17,19 @@ export function getArtworkCandidateUrls(input: ArtworkCandidateInput) {
     input.imageUrl,
     input.thumbnailUrl,
     ...getDerivedArtworkUrls(input.youtubeUrl || input.youtubeMusicUrl || input.sourceUrl || null),
+    buildArtworkProxyUrl(input.releaseId),
   ];
 
   return [...new Set(candidates.map(normalizeUrl).filter((value): value is string => Boolean(value)))];
+}
+
+export function buildArtworkProxyUrl(releaseId: string | null | undefined) {
+  const normalizedId = releaseId?.trim() || "";
+  if (!normalizedId) {
+    return null;
+  }
+
+  return `/api/artwork?releaseId=${encodeURIComponent(normalizedId)}`;
 }
 
 function getDerivedArtworkUrls(url: string | null) {

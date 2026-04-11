@@ -161,6 +161,7 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
 
           <section className="space-y-6">
             <ReleaseArtwork
+              releaseId={release.id}
               title={release.title}
               artistName={release.artistName}
               projectTitle={release.projectTitle}
@@ -169,6 +170,9 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
               sourceUrl={release.sourceUrl}
               youtubeUrl={release.youtubeUrl || null}
               youtubeMusicUrl={release.youtubeMusicUrl || null}
+              bandcampUrl={release.bandcampUrl || null}
+              officialWebsiteUrl={release.officialWebsiteUrl || null}
+              officialStoreUrl={release.officialStoreUrl || null}
               genreName={displayGenre}
               imageClassName="aspect-[4/3]"
             />

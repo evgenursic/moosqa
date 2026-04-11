@@ -56,6 +56,7 @@ export function ReleaseBrief({
       )}
     >
       <ReleaseArtwork
+        releaseId={release.id}
         title={release.title}
         artistName={release.artistName}
         projectTitle={release.projectTitle}
@@ -64,6 +65,9 @@ export function ReleaseBrief({
         sourceUrl={release.sourceUrl}
         youtubeUrl={release.youtubeUrl || null}
         youtubeMusicUrl={release.youtubeMusicUrl || null}
+        bandcampUrl={release.bandcampUrl || null}
+        officialWebsiteUrl={release.officialWebsiteUrl || null}
+        officialStoreUrl={release.officialStoreUrl || null}
         genreName={displayGenre}
         className="h-[6.5rem]"
         imageClassName="h-full"

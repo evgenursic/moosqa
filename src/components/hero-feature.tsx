@@ -53,6 +53,7 @@ export function HeroFeature({ release }: HeroFeatureProps) {
   return (
     <article className="border-b border-[var(--color-line)] pb-10">
       <ReleaseArtwork
+        releaseId={release.id}
         title={release.title}
         artistName={release.artistName}
         projectTitle={release.projectTitle}
@@ -61,6 +62,9 @@ export function HeroFeature({ release }: HeroFeatureProps) {
         sourceUrl={release.sourceUrl}
         youtubeUrl={release.youtubeUrl || null}
         youtubeMusicUrl={release.youtubeMusicUrl || null}
+        bandcampUrl={release.bandcampUrl || null}
+        officialWebsiteUrl={release.officialWebsiteUrl || null}
+        officialStoreUrl={release.officialStoreUrl || null}
         genreName={displayGenre}
         imageClassName="aspect-[16/10]"
         className="min-h-[20rem]"

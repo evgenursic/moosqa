@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { FeedFreshness } from "@/components/feed-freshness";
 import { ReleaseCard } from "@/components/release-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -11,6 +12,7 @@ import {
   releaseSectionDefinitions,
 } from "@/lib/release-sections";
 import { getSiteUrl } from "@/lib/site";
+import { getSyncStatusSummary } from "@/lib/sync-releases";
 
 export const revalidate = 300;
 
@@ -60,13 +62,18 @@ export default async function BrowseSectionPage({
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const page = parsePageParam(resolvedSearchParams.page);
+  const genre = parseGenreParam(resolvedSearchParams.genre);
 
-  const archive = await getSectionArchivePage(section, page);
+  const [archive, syncStatus] = await Promise.all([
+    getSectionArchivePage(section, page, genre),
+    getSyncStatusSummary(),
+  ]);
 
   return (
     <main className="editorial-shell flex-1 px-4 pb-10 pt-4 md:px-8">
       <div className="mx-auto max-w-[1760px] bg-[var(--color-paper)] px-2 md:px-4">
         <SiteHeader />
+        <FeedFreshness summary={syncStatus} className="mt-4" />
 
         <section className="border-t border-[var(--color-line)] py-10">
           <div className="flex flex-col gap-5 border-b border-[var(--color-soft-line)] pb-8 lg:flex-row lg:items-end lg:justify-between">
@@ -82,8 +89,15 @@ export default async function BrowseSectionPage({
 
             <div className="flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.18em] text-black/55">
               <span className="border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2">
-                {archive.total} total posts
+                {archive.selectedGenre
+                  ? `${archive.total} matching posts`
+                  : `${archive.total} total posts`}
               </span>
+              {archive.selectedGenre && archive.overallTotal !== archive.total ? (
+                <span className="border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2">
+                  {archive.overallTotal} overall
+                </span>
+              ) : null}
               <span className="border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2">
                 Page {archive.page} / {archive.pageCount}
               </span>
@@ -95,6 +109,39 @@ export default async function BrowseSectionPage({
               </Link>
             </div>
           </div>
+
+          {archive.genres.length > 0 ? (
+            <div className="mt-6 flex flex-wrap gap-2 border-b border-[var(--color-soft-line)] pb-6 text-[11px] uppercase tracking-[0.18em] text-black/55">
+              <Link
+                href={buildArchiveHref(section)}
+                prefetch
+                scroll={false}
+                className={
+                  archive.selectedGenre
+                    ? "inline-flex items-center border border-[var(--color-line)] px-3 py-2 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+                    : "inline-flex items-center border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-3 py-2 text-white"
+                }
+              >
+                All genres
+              </Link>
+
+              {archive.genres.map((genreOption) => (
+                <Link
+                  key={genreOption}
+                  href={buildArchiveHref(section, { genre: genreOption })}
+                  prefetch
+                  scroll={false}
+                  className={
+                    archive.selectedGenre === genreOption
+                      ? "inline-flex items-center border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-3 py-2 text-white"
+                      : "inline-flex items-center border border-[var(--color-line)] px-3 py-2 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+                  }
+                >
+                  {genreOption}
+                </Link>
+              ))}
+            </div>
+          ) : null}
 
           {archive.releases.length > 0 ? (
             <div className="mt-8 grid gap-8 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
@@ -118,6 +165,7 @@ export default async function BrowseSectionPage({
             section={section}
             page={archive.page}
             pageCount={archive.pageCount}
+            genre={archive.selectedGenre}
           />
         </section>
 
@@ -131,10 +179,12 @@ function ArchivePagination({
   section,
   page,
   pageCount,
+  genre,
 }: {
   section: string;
   page: number;
   pageCount: number;
+  genre: string | null;
 }) {
   if (pageCount <= 1) {
     return null;
@@ -146,7 +196,7 @@ function ArchivePagination({
     <nav className="mt-10 flex flex-wrap items-center gap-3 border-t border-[var(--color-soft-line)] pt-6 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)]">
       {page > 1 ? (
         <Link
-          href={`/browse/${section}?page=${page - 1}`}
+          href={buildArchiveHref(section, { page: page - 1, genre })}
           prefetch
           scroll={false}
           className="inline-flex items-center border border-[var(--color-line)] px-4 py-3 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
@@ -163,7 +213,7 @@ function ArchivePagination({
         ) : (
           <Link
             key={`${section}-${value}`}
-            href={`/browse/${section}?page=${value}`}
+            href={buildArchiveHref(section, { page: value, genre })}
             prefetch
             scroll={false}
             aria-current={value === page ? "page" : undefined}
@@ -180,7 +230,7 @@ function ArchivePagination({
 
       {page < pageCount ? (
         <Link
-          href={`/browse/${section}?page=${page + 1}`}
+          href={buildArchiveHref(section, { page: page + 1, genre })}
           prefetch
           scroll={false}
           className="inline-flex items-center border border-[var(--color-line)] px-4 py-3 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
@@ -215,6 +265,32 @@ function parsePageParam(value: string | string[] | undefined) {
   const raw = Array.isArray(value) ? value[0] : value;
   const parsed = Number(raw || "1");
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function parseGenreParam(value: string | string[] | undefined) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw?.trim() || "";
+}
+
+function buildArchiveHref(
+  section: string,
+  options?: {
+    page?: number;
+    genre?: string | null;
+  },
+) {
+  const params = new URLSearchParams();
+
+  if (options?.page && options.page > 1) {
+    params.set("page", String(options.page));
+  }
+
+  if (options?.genre) {
+    params.set("genre", options.genre);
+  }
+
+  const query = params.toString();
+  return query ? `/browse/${section}?${query}` : `/browse/${section}`;
 }
 
 function getReleaseCardContext(section: string) {

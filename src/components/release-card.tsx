@@ -64,6 +64,7 @@ export function ReleaseCard({
     <article className="group min-w-0 border-t border-[var(--color-line)] pt-6">
       <Link href={`/releases/${release.slug}`} className="block min-w-0 cursor-pointer">
         <ReleaseArtwork
+          releaseId={release.id}
           title={release.title}
           artistName={release.artistName}
           projectTitle={release.projectTitle}
@@ -72,6 +73,9 @@ export function ReleaseCard({
           sourceUrl={release.sourceUrl}
           youtubeUrl={release.youtubeUrl || null}
           youtubeMusicUrl={release.youtubeMusicUrl || null}
+          bandcampUrl={release.bandcampUrl || null}
+          officialWebsiteUrl={release.officialWebsiteUrl || null}
+          officialStoreUrl={release.officialStoreUrl || null}
           genreName={displayGenre}
           imageClassName="aspect-[4/3]"
           priority={priority}

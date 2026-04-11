@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { after } from "next/server";
 
+import { FeedFreshness } from "@/components/feed-freshness";
 import { ReleaseCard } from "@/components/release-card";
 import { ReleaseExplorer } from "@/components/release-explorer";
 import { SiteFooter } from "@/components/site-footer";
@@ -13,10 +15,9 @@ import {
   releaseSectionDefinitions,
 } from "@/lib/release-sections";
 import { getSiteUrl } from "@/lib/site";
-import { refreshHomepageData } from "@/lib/sync-releases";
+import { getSyncStatusSummary, refreshHomepageData } from "@/lib/sync-releases";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 export const metadata: Metadata = {
   title: "Music Radar",
@@ -46,17 +47,32 @@ export default async function Home({ searchParams }: HomePageProps) {
       getSearchParamValue(resolvedSearchParams.platform) ||
       getSearchParamValue(resolvedSearchParams.direct),
   );
-  await refreshHomepageData();
-  const [sections, searchReleases] = await Promise.all([
+  after(async () => {
+    await refreshHomepageData();
+  });
+
+  let [sections, searchReleases, syncStatus] = await Promise.all([
     getHomepageSectionsData(),
     hasSearchResults ? getSearchReleases() : Promise.resolve([] as ReleaseListingItem[]),
+    getSyncStatusSummary(),
   ]);
+
+  if (sections.latest.length === 0) {
+    await refreshHomepageData();
+
+    [sections, searchReleases, syncStatus] = await Promise.all([
+      getHomepageSectionsData(),
+      hasSearchResults ? getSearchReleases({ useCache: false, ttlMs: 0 }) : Promise.resolve([] as ReleaseListingItem[]),
+      getSyncStatusSummary(),
+    ]);
+  }
   const latestReleases = sections.latest;
 
   return (
     <main className="editorial-shell flex-1 px-4 pb-10 pt-4 md:px-8">
       <div className="mx-auto max-w-[1760px] bg-[var(--color-paper)] px-2 md:px-4">
         <SiteHeader />
+        <FeedFreshness summary={syncStatus} className="mt-4" />
 
         {hasSearchResults ? (
           <ReleaseExplorer

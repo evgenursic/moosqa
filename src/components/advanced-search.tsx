@@ -23,6 +23,9 @@ type SearchResultItem = {
   sourceUrl?: string | null;
   youtubeUrl?: string | null;
   youtubeMusicUrl?: string | null;
+  bandcampUrl?: string | null;
+  officialWebsiteUrl?: string | null;
+  officialStoreUrl?: string | null;
   genreName: string | null;
   summary: string | null;
   aiSummary: string | null;
@@ -566,6 +569,7 @@ function SearchLiveResults({
             className="group grid gap-4 border border-white/10 bg-white/[0.03] p-4 transition duration-300 hover:border-white/24 hover:bg-white/[0.045] md:grid-cols-[12rem_1fr]"
           >
             <ReleaseArtwork
+              releaseId={result.id}
               title={result.title}
               artistName={result.artistName}
               projectTitle={result.projectTitle}
@@ -574,6 +578,9 @@ function SearchLiveResults({
               sourceUrl={result.sourceUrl || null}
               youtubeUrl={result.youtubeUrl || null}
               youtubeMusicUrl={result.youtubeMusicUrl || null}
+              bandcampUrl={result.bandcampUrl || null}
+              officialWebsiteUrl={result.officialWebsiteUrl || null}
+              officialStoreUrl={result.officialStoreUrl || null}
               genreName={result.genreName}
               imageClassName="aspect-[4/3] md:aspect-[16/10]"
             />
