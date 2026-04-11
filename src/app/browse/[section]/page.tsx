@@ -12,8 +12,7 @@ import {
 } from "@/lib/release-sections";
 import { getSiteUrl } from "@/lib/site";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 300;
 
 type BrowseSectionPageProps = {
   params: Promise<{

@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { ArtworkStatus, GenreStatus, LinkStatus, ReleaseType } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
 import { ensureDatabase } from "@/lib/database";
@@ -79,6 +80,7 @@ const SYNC_STATUS_STALE_MS = 1000 * 60 * 12;
 const RECENT_FEED_PRUNE_MIN_POSTS = 50;
 const LIGHTWEIGHT_SOURCE_LOOKUP_LIMIT = 3;
 const QUALITY_AUDIT_LOOKBACK_DAYS = 14;
+const RELEASES_CACHE_REVALIDATE_SECONDS = 300;
 
 declare global {
   var __moosqaHomepageSyncPromise: Promise<SyncResult> | null | undefined;
@@ -248,10 +250,20 @@ export async function getHomepageData() {
 
 export async function getReleaseBySlug(slug: string) {
   await ensureDatabase();
-  return prisma.release.findUnique({
-    where: { slug },
-  });
+  return getCachedReleaseBySlug(slug);
 }
+
+const getCachedReleaseBySlug = unstable_cache(
+  async (slug: string) =>
+    prisma.release.findUnique({
+      where: { slug },
+    }),
+  ["release-by-slug"],
+  {
+    revalidate: RELEASES_CACHE_REVALIDATE_SECONDS,
+    tags: ["releases", "release-detail"],
+  },
+);
 
 async function purgeFilteredReleases() {
   const releases = await prisma.release.findMany({

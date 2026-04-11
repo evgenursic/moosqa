@@ -21,6 +21,7 @@ type HeroFeatureProps = {
     projectTitle: string | null;
     releaseType: ReleaseType;
     imageUrl: string | null;
+    thumbnailUrl?: string | null;
     summary: string | null;
     aiSummary: string | null;
     outletName: string | null;
@@ -56,6 +57,10 @@ export function HeroFeature({ release }: HeroFeatureProps) {
         artistName={release.artistName}
         projectTitle={release.projectTitle}
         imageUrl={release.imageUrl}
+        thumbnailUrl={release.thumbnailUrl || null}
+        sourceUrl={release.sourceUrl}
+        youtubeUrl={release.youtubeUrl || null}
+        youtubeMusicUrl={release.youtubeMusicUrl || null}
         genreName={displayGenre}
         imageClassName="aspect-[16/10]"
         className="min-h-[20rem]"

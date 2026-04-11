@@ -20,6 +20,7 @@ type ReleaseBriefProps = {
     projectTitle: string | null;
     releaseType: ReleaseType;
     imageUrl: string | null;
+    thumbnailUrl?: string | null;
     outletName: string | null;
     sourceUrl: string;
     youtubeUrl?: string | null;
@@ -59,6 +60,10 @@ export function ReleaseBrief({
         artistName={release.artistName}
         projectTitle={release.projectTitle}
         imageUrl={release.imageUrl}
+        thumbnailUrl={release.thumbnailUrl || null}
+        sourceUrl={release.sourceUrl}
+        youtubeUrl={release.youtubeUrl || null}
+        youtubeMusicUrl={release.youtubeMusicUrl || null}
         genreName={displayGenre}
         className="h-[6.5rem]"
         imageClassName="h-full"

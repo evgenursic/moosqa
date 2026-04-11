@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { GenreStatus, ReleaseType } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { ensureDatabase } from "@/lib/database";
@@ -71,6 +72,8 @@ const ARCHIVE_PAGE_SIZE = 24;
 const SECTION_CACHE_TTL_MS = 12_000;
 const SEARCH_INDEX_CACHE_TTL_MS = 15_000;
 const SEARCH_GENRE_FACET_LIMIT = 24;
+const RELEASES_CACHE_REVALIDATE_SECONDS = 300;
+const RELEASES_CACHE_TAG = "releases";
 let homepageSectionsCache:
   | {
       expiresAt: number;
@@ -439,7 +442,7 @@ async function getSectionReleases(section: ReleaseSectionKey) {
     return cachedSection.data;
   }
 
-  const releases = await getSectionReleasesUncached(section);
+  const releases = await getCachedSectionReleases(section);
   sectionArchiveCache.set(section, {
     expiresAt: Date.now() + SECTION_CACHE_TTL_MS,
     data: releases,
@@ -447,6 +450,15 @@ async function getSectionReleases(section: ReleaseSectionKey) {
 
   return releases;
 }
+
+const getCachedSectionReleases = unstable_cache(
+  async (section: ReleaseSectionKey) => getSectionReleasesUncached(section),
+  ["release-section-list"],
+  {
+    revalidate: RELEASES_CACHE_REVALIDATE_SECONDS,
+    tags: [RELEASES_CACHE_TAG, "release-sections"],
+  },
+);
 
 async function getSectionReleasesUncached(section: ReleaseSectionKey) {
   if (section === "latest") {

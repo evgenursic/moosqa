@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { cache } from "react";
 
 import { ListeningLinks } from "@/components/listening-links";
 import { RatingMeter } from "@/components/rating-meter";
@@ -19,9 +18,7 @@ import {
   getDisplaySummary,
 } from "@/lib/utils";
 
-export const dynamic = "force-dynamic";
-
-const getCachedReleaseBySlug = cache(async (slug: string) => getReleaseBySlug(slug));
+export const revalidate = 300;
 
 type ReleasePageProps = {
   params: Promise<{
@@ -31,7 +28,7 @@ type ReleasePageProps = {
 
 export async function generateMetadata({ params }: ReleasePageProps): Promise<Metadata> {
   const { slug } = await params;
-  const release = await getCachedReleaseBySlug(slug);
+  const release = await getReleaseBySlug(slug);
 
   if (!release) {
     return {
@@ -79,7 +76,7 @@ export async function generateMetadata({ params }: ReleasePageProps): Promise<Me
 
 export default async function ReleasePage({ params }: ReleasePageProps) {
   const { slug } = await params;
-  const release = await getCachedReleaseBySlug(slug);
+  const release = await getReleaseBySlug(slug);
 
   if (!release) {
     notFound();
@@ -167,7 +164,11 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
               title={release.title}
               artistName={release.artistName}
               projectTitle={release.projectTitle}
-              imageUrl={release.imageUrl || release.thumbnailUrl}
+              imageUrl={release.imageUrl || null}
+              thumbnailUrl={release.thumbnailUrl || null}
+              sourceUrl={release.sourceUrl}
+              youtubeUrl={release.youtubeUrl || null}
+              youtubeMusicUrl={release.youtubeMusicUrl || null}
               genreName={displayGenre}
               imageClassName="aspect-[4/3]"
             />

@@ -20,6 +20,9 @@ type SearchResultItem = {
   releaseType: ReleaseType;
   imageUrl: string | null;
   thumbnailUrl: string | null;
+  sourceUrl?: string | null;
+  youtubeUrl?: string | null;
+  youtubeMusicUrl?: string | null;
   genreName: string | null;
   summary: string | null;
   aiSummary: string | null;
@@ -566,7 +569,11 @@ function SearchLiveResults({
               title={result.title}
               artistName={result.artistName}
               projectTitle={result.projectTitle}
-              imageUrl={result.imageUrl || result.thumbnailUrl}
+              imageUrl={result.imageUrl}
+              thumbnailUrl={result.thumbnailUrl}
+              sourceUrl={result.sourceUrl || null}
+              youtubeUrl={result.youtubeUrl || null}
+              youtubeMusicUrl={result.youtubeMusicUrl || null}
               genreName={result.genreName}
               imageClassName="aspect-[4/3] md:aspect-[16/10]"
             />

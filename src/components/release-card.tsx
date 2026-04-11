@@ -67,7 +67,11 @@ export function ReleaseCard({
           title={release.title}
           artistName={release.artistName}
           projectTitle={release.projectTitle}
-          imageUrl={release.imageUrl || release.thumbnailUrl || null}
+          imageUrl={release.imageUrl || null}
+          thumbnailUrl={release.thumbnailUrl || null}
+          sourceUrl={release.sourceUrl}
+          youtubeUrl={release.youtubeUrl || null}
+          youtubeMusicUrl={release.youtubeMusicUrl || null}
           genreName={displayGenre}
           imageClassName="aspect-[4/3]"
           priority={priority}

@@ -1,4 +1,4 @@
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { runQualityEnrichmentCycle, syncIndieheadsReleases } from "@/lib/sync-releases";
@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     const limit = clampQualityLimit(searchParams.get("limit"));
     const result = await runQualityEnrichmentCycle(limit);
     revalidatePath("/");
+    revalidateTag("releases", "max");
 
     return NextResponse.json({
       ok: true,
@@ -41,6 +42,7 @@ export async function GET(request: Request) {
     lightweight: !wantsEnrichment,
   });
   revalidatePath("/");
+  revalidateTag("releases", "max");
 
   return NextResponse.json({
     ok: true,

@@ -1,4 +1,9 @@
 /* eslint-disable @next/next/no-img-element */
+"use client";
+
+import { useMemo, useState } from "react";
+
+import { getArtworkCandidateUrls } from "@/lib/artwork-fallback";
 import { cn } from "@/lib/utils";
 
 type ReleaseArtworkProps = {
@@ -6,6 +11,10 @@ type ReleaseArtworkProps = {
   artistName: string | null;
   projectTitle: string | null;
   imageUrl: string | null;
+  thumbnailUrl?: string | null;
+  sourceUrl?: string | null;
+  youtubeUrl?: string | null;
+  youtubeMusicUrl?: string | null;
   genreName?: string | null;
   className?: string;
   imageClassName?: string;
@@ -15,12 +24,37 @@ type ReleaseArtworkProps = {
 export function ReleaseArtwork({
   title,
   imageUrl,
+  thumbnailUrl,
+  sourceUrl,
+  youtubeUrl,
+  youtubeMusicUrl,
   genreName,
   className,
   imageClassName,
   priority = false,
 }: ReleaseArtworkProps) {
   const accent = getArtworkAccent(genreName);
+  const artworkCandidates = useMemo(
+    () =>
+      getArtworkCandidateUrls({
+        imageUrl,
+        thumbnailUrl,
+        sourceUrl,
+        youtubeUrl,
+        youtubeMusicUrl,
+      }),
+    [imageUrl, sourceUrl, thumbnailUrl, youtubeMusicUrl, youtubeUrl],
+  );
+  const [failedUrls, setFailedUrls] = useState<string[]>([]);
+  const activeImageUrl = artworkCandidates.find((url) => !failedUrls.includes(url)) || null;
+
+  function handleImageError() {
+    if (!activeImageUrl) {
+      return;
+    }
+
+    setFailedUrls((current) => (current.includes(activeImageUrl) ? current : [...current, activeImageUrl]));
+  }
 
   return (
     <div
@@ -29,10 +63,11 @@ export function ReleaseArtwork({
         className,
       )}
     >
-      {imageUrl ? (
+      {activeImageUrl ? (
         <img
-          src={imageUrl}
+          src={activeImageUrl}
           alt={title}
+          onError={handleImageError}
           className={cn(
             "h-full w-full object-cover transition duration-700 ease-out will-change-transform group-hover:scale-[1.035] group-hover:brightness-[1.03]",
             imageClassName,
