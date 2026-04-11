@@ -1,9 +1,9 @@
-import Link from "next/link";
-
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ListeningLinks } from "@/components/listening-links";
+import { MetadataStatusChip } from "@/components/metadata-status-chip";
 import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
+import { ReleaseLink } from "@/components/release-link";
 import {
   formatContextualReleaseDateLabel,
   formatRedditDateLabel,
@@ -29,6 +29,7 @@ type HeroFeatureProps = {
     genreName: string | null;
     releaseDate: Date | null;
     publishedAt: Date;
+    qualityScore: number;
     scoreAverage: number;
     scoreCount: number;
     redditPermalink: string;
@@ -39,9 +40,10 @@ type HeroFeatureProps = {
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
   };
+  fromHref?: string | null;
 };
 
-export function HeroFeature({ release }: HeroFeatureProps) {
+export function HeroFeature({ release, fromHref = null }: HeroFeatureProps) {
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
   const releaseDateLabel = formatContextualReleaseDateLabel(
     release.releaseType,
@@ -99,6 +101,8 @@ export function HeroFeature({ release }: HeroFeatureProps) {
             })}
           </p>
 
+          <MetadataStatusChip release={release} className="mt-4" />
+
           <div className="mt-6 flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.18em] text-black/55">
             <span>{displayGenre}</span>
             <span>{formatReleaseTypeLabel(release.releaseType)}</span>
@@ -110,12 +114,13 @@ export function HeroFeature({ release }: HeroFeatureProps) {
           <ListeningLinks release={release} />
 
           <div className="mt-6 flex flex-wrap gap-3">
-            <Link
-              href={`/releases/${release.slug}`}
+            <ReleaseLink
+              slug={release.slug}
+              fromHref={fromHref}
               className="inline-flex items-center border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-4 py-3 text-xs uppercase tracking-[0.18em] text-white transition hover:opacity-92"
             >
               Open story
-            </Link>
+            </ReleaseLink>
             <a
               href={release.sourceUrl}
               target="_blank"

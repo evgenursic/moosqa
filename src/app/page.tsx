@@ -118,19 +118,19 @@ async function HomeContent({ searchParams }: HomePageProps) {
           <div className="grid gap-8 lg:grid-cols-12">
             {latestReleases[0] ? (
               <div className="lg:col-span-6">
-                <ReleaseCard release={latestReleases[0]} priority />
+                <ReleaseCard release={latestReleases[0]} priority fromHref="/#latest" />
               </div>
             ) : null}
 
             {latestReleases[1] ? (
               <div className="lg:col-span-3">
-                <ReleaseCard release={latestReleases[1]} />
+                <ReleaseCard release={latestReleases[1]} fromHref="/#latest" />
               </div>
             ) : null}
 
             {latestReleases[2] ? (
               <div className="lg:col-span-3">
-                <ReleaseCard release={latestReleases[2]} />
+                <ReleaseCard release={latestReleases[2]} fromHref="/#latest" />
               </div>
             ) : null}
           </div>
@@ -139,7 +139,7 @@ async function HomeContent({ searchParams }: HomePageProps) {
         {latestReleases.length > 3 ? (
           <div className="mt-10 grid gap-8 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
             {latestReleases.slice(3).map((release) => (
-              <ReleaseCard key={release.id} release={release} />
+              <ReleaseCard key={release.id} release={release} fromHref="/#latest" />
             ))}
           </div>
         ) : null}
@@ -220,6 +220,7 @@ function ReleaseCardSection({ section, releases }: ReleaseCardSectionProps) {
               compact={index > 1}
               priority={index < 2}
               context={getReleaseCardContext(section)}
+              fromHref={`/#${definition.homeId}`}
             />
           ))}
         </div>

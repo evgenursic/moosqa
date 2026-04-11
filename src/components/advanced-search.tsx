@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { ReleaseArtwork } from "@/components/release-artwork";
+import { ReleaseLink } from "@/components/release-link";
 import { loadSearchIndex, readCachedSearchIndex } from "@/lib/client-search-index";
 import { type SearchOverlayIndexItem } from "@/lib/search-overlay";
 import { filterAndRankReleaseListings } from "@/lib/release-search";
@@ -492,17 +492,24 @@ function AdvancedSearchDialog({
             </div>
           ) : null}
 
-          <SearchLiveResults
-            query={queryValue.trim()}
-            shouldSearch={shouldSearch}
-            hasDraftCriteria={hasDraftCriteria}
-            results={activeResults}
-            total={activeResultTotal}
-            isSearching={isSearching}
-            hasLoadedResults={hasLoadedResults}
-            onResultSelect={onClose}
-          />
-        </div>
+        <SearchLiveResults
+          query={queryValue.trim()}
+          shouldSearch={shouldSearch}
+          hasDraftCriteria={hasDraftCriteria}
+          results={activeResults}
+          total={activeResultTotal}
+          isSearching={isSearching}
+          hasLoadedResults={hasLoadedResults}
+          fromHref={buildOverlayResultsHref({
+            query: queryValue.trim(),
+            type: typeValue,
+            genre: genreValue,
+            platform: platformValue,
+            directOnly: directOnlyValue,
+          })}
+          onResultSelect={onClose}
+        />
+      </div>
       </div>
     </div>
   );
@@ -516,6 +523,7 @@ function SearchLiveResults({
   total,
   isSearching,
   hasLoadedResults,
+  fromHref,
   onResultSelect,
 }: {
   query: string;
@@ -525,6 +533,7 @@ function SearchLiveResults({
   total: number;
   isSearching: boolean;
   hasLoadedResults: boolean;
+  fromHref: string;
   onResultSelect: () => void;
 }) {
   if (isSearching && !hasLoadedResults) {
@@ -580,10 +589,10 @@ function SearchLiveResults({
 
       <div className="grid gap-3">
         {results.map((result) => (
-          <Link
+          <ReleaseLink
             key={result.id}
-            href={`/releases/${result.slug}`}
-            prefetch={false}
+            slug={result.slug}
+            fromHref={fromHref}
             onClick={onResultSelect}
             className="group grid gap-4 border border-white/10 bg-white/[0.03] p-4 transition duration-300 hover:border-white/24 hover:bg-white/[0.045] md:grid-cols-[12rem_1fr]"
           >
@@ -633,7 +642,7 @@ function SearchLiveResults({
                 })}
               </p>
             </div>
-          </Link>
+          </ReleaseLink>
         ))}
       </div>
     </div>
@@ -647,4 +656,21 @@ function setParam(params: URLSearchParams, key: string, value: string) {
   }
 
   params.delete(key);
+}
+
+function buildOverlayResultsHref(input: {
+  query: string;
+  type: string;
+  genre: string;
+  platform: string;
+  directOnly: boolean;
+}) {
+  const params = new URLSearchParams();
+  setParam(params, "q", input.query);
+  setParam(params, "type", input.type);
+  setParam(params, "genre", input.genre);
+  setParam(params, "platform", input.platform);
+  setParam(params, "direct", input.directOnly ? "1" : "");
+  const query = params.toString();
+  return query ? `/?${query}#explore` : "/#explore";
 }

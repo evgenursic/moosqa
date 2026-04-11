@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+
+import { getPrefetchTarget, sanitizeInternalHref } from "@/components/release-link";
 
 type MobileReleaseNavProps = {
   title: string;
@@ -11,9 +13,16 @@ type MobileReleaseNavProps = {
 
 export function MobileReleaseNav({ title }: MobileReleaseNavProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [visible, setVisible] = useState(false);
   const lastScrollY = useRef(0);
   const ticking = useRef(false);
+  const fallbackHref = sanitizeInternalHref(searchParams.get("from"));
+  const prefetchTarget = getPrefetchTarget(fallbackHref);
+
+  useEffect(() => {
+    router.prefetch(prefetchTarget);
+  }, [prefetchTarget, router]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -50,6 +59,11 @@ export function MobileReleaseNav({ title }: MobileReleaseNavProps) {
   }, []);
 
   function handleBack() {
+    if (fallbackHref) {
+      router.push(fallbackHref);
+      return;
+    }
+
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
       return;
@@ -79,7 +93,7 @@ export function MobileReleaseNav({ title }: MobileReleaseNavProps) {
         </div>
 
         <Link
-          href="/"
+          href={fallbackHref || "/"}
           className="section-kicker inline-flex items-center text-[var(--color-accent-strong)]"
         >
           MooSQA

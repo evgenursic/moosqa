@@ -1,8 +1,8 @@
-import Link from "next/link";
-
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ListeningLinks } from "@/components/listening-links";
+import { MetadataStatusChip } from "@/components/metadata-status-chip";
 import { ReleaseArtwork } from "@/components/release-artwork";
+import { ReleaseLink } from "@/components/release-link";
 import { TopEngagedVisual } from "@/components/top-engaged-visual";
 import { TopRatedVisual } from "@/components/top-rated-visual";
 import {
@@ -37,6 +37,7 @@ type ReleaseCardProps = {
     aiSummary?: string | null;
     releaseDate?: Date | null;
     publishedAt: Date;
+    qualityScore: number;
     scoreAverage: number;
     scoreCount: number;
     score?: number | null;
@@ -48,6 +49,7 @@ type ReleaseCardProps = {
   compact?: boolean;
   priority?: boolean;
   context?: "default" | "top-rated" | "top-engaged";
+  fromHref?: string | null;
 };
 
 export function ReleaseCard({
@@ -55,6 +57,7 @@ export function ReleaseCard({
   compact = false,
   priority = false,
   context = "default",
+  fromHref = null,
 }: ReleaseCardProps) {
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
   const metaItems = getMetaItems(release, context);
@@ -62,7 +65,7 @@ export function ReleaseCard({
 
   return (
     <article className="group min-w-0 border-t border-[var(--color-line)] pt-6">
-      <Link href={`/releases/${release.slug}`} className="block min-w-0 cursor-pointer">
+      <ReleaseLink slug={release.slug} fromHref={fromHref} className="block min-w-0 cursor-pointer">
         <ReleaseArtwork
           releaseId={release.id}
           title={release.title}
@@ -80,7 +83,7 @@ export function ReleaseCard({
           imageClassName="aspect-[4/3]"
           priority={priority}
         />
-      </Link>
+      </ReleaseLink>
 
       <div className="pt-4">
         <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-black/55">
@@ -96,7 +99,7 @@ export function ReleaseCard({
         <p className="section-kicker text-black/43">
           {formatReleaseTypeLabel(release.releaseType)}
         </p>
-        <Link href={`/releases/${release.slug}`} className="block cursor-pointer">
+        <ReleaseLink slug={release.slug} fromHref={fromHref} className="block cursor-pointer">
           <h3
             className={
               compact
@@ -111,13 +114,15 @@ export function ReleaseCard({
           <p className="mt-3 break-words text-lg leading-7 text-black/68 serif-display">
             {release.artistName && release.projectTitle ? release.projectTitle : release.title}
           </p>
-        </Link>
+        </ReleaseLink>
 
         <div className="mt-4 flex flex-wrap gap-3 break-words text-[11px] uppercase tracking-[0.18em] text-black/55">
           {metaItems.map((item) => (
             <span key={item}>{item}</span>
           ))}
         </div>
+
+        <MetadataStatusChip release={release} className="mt-3" />
 
         {context === "top-rated" ? (
           <TopRatedVisual average={release.scoreAverage} count={release.scoreCount} />
@@ -146,12 +151,13 @@ export function ReleaseCard({
         <ListeningLinks release={release} compact />
 
         <div className="mt-4">
-          <Link
-            href={`/releases/${release.slug}`}
+          <ReleaseLink
+            slug={release.slug}
+            fromHref={fromHref}
             className="inline-flex items-center border border-[var(--color-line)] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:border-[var(--color-ink)]"
           >
             Open and rate
-          </Link>
+          </ReleaseLink>
         </div>
       </div>
     </article>

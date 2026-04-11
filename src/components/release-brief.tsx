@@ -1,8 +1,7 @@
-import Link from "next/link";
-
 import { ReleaseType } from "@/generated/prisma/enums";
 import { getListeningLinks } from "@/lib/listening-links";
 import { ReleaseArtwork } from "@/components/release-artwork";
+import { ReleaseLink } from "@/components/release-link";
 import {
   cn,
   formatContextualReleaseDateLabel,
@@ -36,20 +35,22 @@ type ReleaseBriefProps = {
   };
   emphasis?: "score" | "time" | "listen";
   className?: string;
+  fromHref?: string | null;
 };
 
 export function ReleaseBrief({
   release,
   emphasis = "time",
   className,
+  fromHref = null,
 }: ReleaseBriefProps) {
   const directLinks = getListeningLinks(release).filter((link) => link.isDirect);
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
 
   return (
-    <Link
-      href={`/releases/${release.slug}`}
-      prefetch={false}
+    <ReleaseLink
+      slug={release.slug}
+      fromHref={fromHref}
       className={cn(
         "grid grid-cols-[6.5rem_1fr] gap-4 border-t border-[var(--color-line)] pt-4 first:border-t-0 first:pt-0",
         className,
@@ -88,7 +89,7 @@ export function ReleaseBrief({
           {renderEmphasis(emphasis, release, directLinks.length)}
         </p>
       </div>
-    </Link>
+    </ReleaseLink>
   );
 }
 

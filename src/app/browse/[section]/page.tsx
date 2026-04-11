@@ -66,6 +66,7 @@ export default async function BrowseSectionPage({
     getSectionArchivePage(section, page, genre),
     getSyncStatusSummary(),
   ]);
+  const archiveHref = `${buildArchiveHref(section, { page: archive.page, genre: archive.selectedGenre })}#archive`;
 
   return (
     <main className="editorial-shell flex-1 px-4 pb-10 pt-4 md:px-8">
@@ -73,7 +74,7 @@ export default async function BrowseSectionPage({
         <SiteHeader />
         <FeedFreshness summary={syncStatus} className="mt-4" />
 
-        <section className="border-t border-[var(--color-line)] py-10">
+        <section id="archive" className="border-t border-[var(--color-line)] py-10">
           <div className="flex flex-col gap-5 border-b border-[var(--color-soft-line)] pb-8 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="section-kicker text-black/43">{archive.title}</p>
@@ -150,6 +151,7 @@ export default async function BrowseSectionPage({
                   compact={index > 3}
                   priority={index < 2}
                   context={getReleaseCardContext(section)}
+                  fromHref={archiveHref}
                 />
               ))}
             </div>

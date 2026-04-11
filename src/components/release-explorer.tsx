@@ -26,6 +26,7 @@ type ReleaseExplorerProps = {
     officialStoreUrl?: string | null;
     labelName?: string | null;
     genreName?: string | null;
+    qualityScore: number;
     summary?: string | null;
     aiSummary?: string | null;
     publishedAt: string;
@@ -48,6 +49,13 @@ export function ReleaseExplorer({ releases }: ReleaseExplorerProps) {
   const deferredQuery = useDeferredValue(queryFromUrl);
   const [isPending, startTransition] = useTransition();
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const explorerHref = buildExplorerHref({
+    query: queryFromUrl,
+    type: typeFromUrl,
+    genre: genreFromUrl,
+    platform: platformFromUrl,
+    directOnly,
+  });
 
   const filteredReleases = filterAndRankReleaseListings(releases, {
     query: deferredQuery,
@@ -123,6 +131,7 @@ export function ReleaseExplorer({ releases }: ReleaseExplorerProps) {
               }}
               compact={index > 5}
               priority={index < 2}
+              fromHref={explorerHref}
             />
           ))}
         </div>
@@ -135,4 +144,37 @@ export function ReleaseExplorer({ releases }: ReleaseExplorerProps) {
       <div ref={sentinelRef} className="h-6 w-full" />
     </section>
   );
+}
+
+function buildExplorerHref(input: {
+  query: string;
+  type: string;
+  genre: string;
+  platform: string;
+  directOnly: boolean;
+}) {
+  const params = new URLSearchParams();
+
+  if (input.query) {
+    params.set("q", input.query);
+  }
+
+  if (input.type) {
+    params.set("type", input.type);
+  }
+
+  if (input.genre) {
+    params.set("genre", input.genre);
+  }
+
+  if (input.platform) {
+    params.set("platform", input.platform);
+  }
+
+  if (input.directOnly) {
+    params.set("direct", "1");
+  }
+
+  const query = params.toString();
+  return query ? `/?${query}#explore` : "/#explore";
 }

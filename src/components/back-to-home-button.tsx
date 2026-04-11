@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+
+import { getPrefetchTarget, sanitizeInternalHref } from "@/components/release-link";
 
 type BackToHomeButtonProps = {
   className?: string;
@@ -13,12 +15,20 @@ export function BackToHomeButton({
   label = "Back to front page",
 }: BackToHomeButtonProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fallbackHref = sanitizeInternalHref(searchParams.get("from"));
+  const prefetchTarget = getPrefetchTarget(fallbackHref);
 
   useEffect(() => {
-    router.prefetch("/");
-  }, [router]);
+    router.prefetch(prefetchTarget);
+  }, [prefetchTarget, router]);
 
   function handleNavigateHome() {
+    if (fallbackHref) {
+      router.push(fallbackHref);
+      return;
+    }
+
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
       return;
@@ -28,7 +38,7 @@ export function BackToHomeButton({
   }
 
   function prefetchHome() {
-    router.prefetch("/");
+    router.prefetch(prefetchTarget);
   }
 
   return (

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense, type ReactNode } from "react";
 
+import { DebugReprocessControls } from "@/components/debug-reprocess-controls";
 import { getQualityDashboardData } from "@/lib/quality-dashboard";
 import { formatPubDate } from "@/lib/utils";
 
@@ -40,6 +41,8 @@ async function DebugContent({ searchParams }: DebugPageProps) {
 
   return (
     <DebugShell>
+      <DebugReprocessControls secret={allowedSecret} />
+
       <section className="grid gap-4 border-t border-[var(--color-line)] py-8 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total releases" value={String(dashboard.totals.releases)} />
         <StatCard label="Retry queue" value={String(dashboard.totals.retryQueue)} />

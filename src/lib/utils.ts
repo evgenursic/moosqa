@@ -215,20 +215,47 @@ function buildStaticSummaryFallback(input: {
   const genre = getSummaryGenreLabel(input.genreName, input.releaseType || ReleaseType.OTHER).toLowerCase();
   const texture = inferFallbackTexture(genre, input.releaseType || ReleaseType.OTHER);
   const mood = inferFallbackMood(genre, input.releaseType || ReleaseType.OTHER);
+  const seed = hashSummaryValue(
+    [
+      input.artistName || "",
+      input.projectTitle || "",
+      input.title || "",
+      input.releaseType || "",
+      genre,
+      texture,
+      mood,
+    ].join("|"),
+  );
 
   if (input.releaseType === ReleaseType.PERFORMANCE || input.releaseType === ReleaseType.LIVE_SESSION) {
-    return `The live take keeps ${texture} close to the room, with ${mood} detail replacing studio polish.`;
+    return chooseSummaryVariant(seed, [
+      `The live setting puts ${texture} close enough to the room for its ${mood} edge to come through plainly.`,
+      `${texture} does most of the talking here, while the live frame leaves the ${mood} character unvarnished.`,
+      `What carries this performance is how ${texture} and its ${mood} pull stay exposed without studio smoothing.`,
+    ]);
   }
 
   if (input.releaseType === ReleaseType.ALBUM) {
-    return `This album leans into ${genre}, with ${texture} and ${mood} doing most of the scene-setting.`;
+    return chooseSummaryVariant(seed, [
+      `This album works inside a ${genre} frame, with ${texture} giving the broader ${mood} atmosphere real shape.`,
+      `${texture} keeps the album coherent, while its ${mood} tone stops the larger set from blurring together.`,
+      `The strongest thread here is how ${texture} carries a ${mood} ${genre} identity across the full set.`,
+    ]);
   }
 
   if (input.releaseType === ReleaseType.EP) {
-    return `This EP sketches a compact ${genre} frame, letting ${texture} carry the weight.`;
+    return chooseSummaryVariant(seed, [
+      `This EP keeps its footprint compact, letting ${texture} define the release's ${mood} ${genre} center.`,
+      `${texture} gives the EP a clear spine, while the ${mood} tone keeps the shorter runtime purposeful.`,
+      `The EP moves quickly, but ${texture} still gives its ${mood} ${genre} outline enough weight to hold.`,
+    ]);
   }
 
-  return `The single leans on ${texture}, with ${mood} giving its ${genre} shape a more defined contour.`;
+  return chooseSummaryVariant(seed, [
+    `${texture} gives the single its clearest profile, while the ${mood} tone shapes how that ${genre} frame lands.`,
+    `What defines the single is the balance between ${texture} and a ${mood} ${genre} atmosphere.`,
+    `${texture} keeps the release grounded, and the ${mood} ${genre} pull does the rest of the scene-setting.`,
+  ]);
 }
 
 function mentionsReleaseIdentity(
@@ -321,4 +348,18 @@ function getSummaryGenreLabel(
   }
 
   return getFallbackReleaseLabel(releaseType);
+}
+
+function chooseSummaryVariant(seed: number, variants: string[]) {
+  return variants[Math.abs(seed) % variants.length];
+}
+
+function hashSummaryValue(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0;
+  }
+
+  return hash;
 }

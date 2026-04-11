@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ListeningLinks } from "@/components/listening-links";
 import { RatingMeter } from "@/components/rating-meter";
 import { BackToHomeButton } from "@/components/back-to-home-button";
+import { MetadataStatusChip } from "@/components/metadata-status-chip";
 import { MobileReleaseNav } from "@/components/mobile-release-nav";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { TopEngagedVisual } from "@/components/top-engaged-visual";
@@ -114,6 +115,8 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
               <span>{displayGenre}</span>
               {release.labelName ? <span>{release.labelName}</span> : null}
             </div>
+
+            <MetadataStatusChip release={release} />
 
             <div className="max-w-4xl border border-[var(--color-line)] bg-[var(--color-panel)] p-6 text-sm leading-7 text-black/66">
               <p className="mb-3 text-[11px] uppercase tracking-[0.18em] text-black/45">Summary</p>

@@ -7,7 +7,7 @@ import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
 import { searchBandcampRelease } from "@/lib/bandcamp-search";
 import { buildGenreProfile, isSpecificGenreProfile, pickPreferredGenreProfile } from "@/lib/genre-profile";
 import { getGenreOverride } from "@/lib/genre-overrides";
-import { assessReleaseQuality } from "@/lib/release-quality";
+import { assessReleaseQuality, isWeakQualityRelease } from "@/lib/release-quality";
 import { fetchRedditPosts, normalizeRedditPost, shouldKeepReleaseRecord } from "@/lib/reddit";
 import { buildReleaseEnrichment, enrichRecentReleases } from "@/lib/release-enrichment";
 import { clearReleaseDataCaches } from "@/lib/release-sections";
@@ -159,6 +159,29 @@ export async function runQualityEnrichmentCycle(limit = 6): Promise<QualityEnric
 
   return {
     queued,
+    checked: quality.checked,
+    improved: quality.improved,
+  };
+}
+
+export async function runWeakCardReprocess(limit = 12): Promise<QualityEnrichmentResult> {
+  await ensureDatabase();
+
+  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 24);
+  const candidates = await collectQualityRetryCandidates(Math.max(safeLimit * 3, 24), {
+    forceRetry: true,
+  });
+  const candidateIds = candidates.slice(0, safeLimit).map((candidate) => candidate.release.id);
+  await writeQualityRetryQueue(candidateIds);
+  const quality = await runRecentReleaseQualityPass(safeLimit, {
+    forceRetry: true,
+    pinnedReleaseIds: candidateIds,
+  });
+  await refreshQualityRetryQueue(Math.max(safeLimit * 2, 18));
+  clearReleaseDataCaches();
+
+  return {
+    queued: candidateIds.length,
     checked: quality.checked,
     improved: quality.improved,
   };
@@ -693,17 +716,25 @@ function buildSyncStatusMessage(input: {
   return "The first successful sync will appear here once the feed is populated.";
 }
 
-async function runRecentReleaseQualityPass(limit = 6) {
+async function runRecentReleaseQualityPass(
+  limit = 6,
+  options: {
+    forceRetry?: boolean;
+    pinnedReleaseIds?: string[];
+  } = {},
+) {
   if (limit <= 0) {
     return { checked: 0, improved: 0 };
   }
 
   const queuedIds = await readQualityRetryQueue();
-  const queuedReleases = queuedIds.length
+  const pinnedIds = options.pinnedReleaseIds || [];
+  const targetQueuedIds = [...new Set([...queuedIds, ...pinnedIds])];
+  const queuedReleases = targetQueuedIds.length
     ? await prisma.release.findMany({
         where: {
           id: {
-            in: queuedIds,
+            in: targetQueuedIds,
           },
         },
       })
@@ -735,7 +766,9 @@ async function runRecentReleaseQualityPass(limit = 6) {
       release,
       snapshot: assessReleaseQuality(release),
     }))
-    .filter((entry) => entry.snapshot.needsRetry)
+    .filter((entry) =>
+      options.forceRetry ? isWeakQualityRelease(entry.release) : entry.snapshot.needsRetry,
+    )
     .sort((left, right) => {
       const priorityDelta = right.snapshot.priorityScore - left.snapshot.priorityScore;
       if (priorityDelta !== 0) {
@@ -798,7 +831,12 @@ async function refreshQualityRetryQueue(limit = 24) {
   return candidates.length;
 }
 
-async function collectQualityRetryCandidates(limit = 24) {
+async function collectQualityRetryCandidates(
+  limit = 24,
+  options: {
+    forceRetry?: boolean;
+  } = {},
+) {
   const recentReleases = await prisma.release.findMany({
     where: {
       publishedAt: {
@@ -814,7 +852,9 @@ async function collectQualityRetryCandidates(limit = 24) {
       release,
       snapshot: assessReleaseQuality(release),
     }))
-    .filter((entry) => entry.snapshot.needsRetry)
+    .filter((entry) =>
+      options.forceRetry ? isWeakQualityRelease(entry.release) : entry.snapshot.needsRetry,
+    )
     .sort((left, right) => {
       const priorityDelta = right.snapshot.priorityScore - left.snapshot.priorityScore;
       if (priorityDelta !== 0) {

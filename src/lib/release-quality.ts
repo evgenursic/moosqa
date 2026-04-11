@@ -26,6 +26,11 @@ export type ReleaseQualitySnapshot = {
   priorityScore: number;
 };
 
+export type PublicMetadataStatus = {
+  label: string;
+  tone: "complete" | "strong" | "building";
+};
+
 export function assessReleaseQuality(input: ReleaseQualityInput): ReleaseQualitySnapshot {
   const artworkStatus = getArtworkStatus(input);
   const genreStatus = getGenreStatus(input);
@@ -53,6 +58,53 @@ export function assessReleaseQuality(input: ReleaseQualityInput): ReleaseQuality
       linkStatus,
       qualityScore,
     }),
+  };
+}
+
+export function isWeakQualityRelease(input: ReleaseQualityInput) {
+  const artworkStatus = getArtworkStatus(input);
+  const genreStatus = getGenreStatus(input);
+  const linkStatus = getLinkStatus(input);
+
+  return (
+    artworkStatus !== ArtworkStatus.STRONG ||
+    genreStatus !== GenreStatus.STRONG ||
+    linkStatus !== LinkStatus.STRONG ||
+    !input.releaseDate
+  );
+}
+
+export function getPublicMetadataStatus(input: ReleaseQualityInput): PublicMetadataStatus {
+  const snapshot = assessReleaseQuality(input);
+  const hasReleaseDate = Boolean(input.releaseDate);
+
+  if (
+    hasReleaseDate &&
+    snapshot.artworkStatus === ArtworkStatus.STRONG &&
+    snapshot.genreStatus === GenreStatus.STRONG &&
+    snapshot.linkStatus === LinkStatus.STRONG &&
+    snapshot.qualityScore >= 90
+  ) {
+    return {
+      label: "Metadata complete",
+      tone: "complete",
+    };
+  }
+
+  if (
+    snapshot.qualityScore >= 72 &&
+    snapshot.genreStatus !== GenreStatus.MISSING &&
+    (snapshot.linkStatus !== LinkStatus.MISSING || hasReleaseDate)
+  ) {
+    return {
+      label: "Metadata strong",
+      tone: "strong",
+    };
+  }
+
+  return {
+    label: "Metadata improving",
+    tone: "building",
   };
 }
 
@@ -164,11 +216,7 @@ function shouldRetryForQuality(
     qualityScore: number;
   },
 ) {
-  const weakCard =
-    snapshot.artworkStatus !== ArtworkStatus.STRONG ||
-    snapshot.genreStatus !== GenreStatus.STRONG ||
-    snapshot.linkStatus !== LinkStatus.STRONG ||
-    !input.releaseDate;
+  const weakCard = isWeakQualityRelease(input);
 
   if (!weakCard) {
     return false;

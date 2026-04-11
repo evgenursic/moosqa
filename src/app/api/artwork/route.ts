@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 
 import { buildArtworkProxyUrl } from "@/lib/artwork-fallback";
 import { ensureDatabase } from "@/lib/database";
+import { buildGenreProfile, isSpecificGenreProfile, pickPreferredGenreProfile } from "@/lib/genre-profile";
+import { getGenreOverride } from "@/lib/genre-overrides";
 import { clearReleaseDataCaches } from "@/lib/release-sections";
 import { assessReleaseQuality } from "@/lib/release-quality";
 import { prisma } from "@/lib/prisma";
@@ -70,6 +72,9 @@ const getCachedArtworkPayload = unstable_cache(
         officialWebsiteUrl: true,
         officialStoreUrl: true,
         genreName: true,
+        labelName: true,
+        summary: true,
+        aiSummary: true,
         releaseDate: true,
         publishedAt: true,
         metadataEnrichedAt: true,
@@ -95,8 +100,15 @@ const getCachedArtworkPayload = unstable_cache(
       .filter((value): value is string => Boolean(value));
     const visitedSources = new Set<string>();
     let discoveredBandcampUrl = release.bandcampUrl || null;
+    let discoveredYoutubeUrl = release.youtubeUrl || null;
+    let discoveredYoutubeMusicUrl = release.youtubeMusicUrl || null;
     let discoveredOfficialWebsiteUrl = release.officialWebsiteUrl || null;
     let discoveredOfficialStoreUrl = release.officialStoreUrl || null;
+    let discoveredReleaseDate = release.releaseDate || null;
+    let discoveredLabelName = release.labelName || null;
+    const discoveredGenreCandidates = new Set<string>();
+    const discoveredSourceTitles = new Set<string>();
+    const discoveredSourceExcerpts = new Set<string>();
 
     while (lookupQueue.length > 0 && visitedSources.size < MAX_ARTWORK_SOURCE_LOOKUPS) {
       const sourceUrl = lookupQueue.shift();
@@ -113,11 +125,19 @@ const getCachedArtworkPayload = unstable_cache(
       }).catch(() => null);
 
       pushCandidate(candidates, metadata?.sourceImageUrl || null);
+      pushTextCandidate(discoveredSourceTitles, metadata?.sourceTitle || null);
+      pushTextCandidate(discoveredSourceExcerpts, metadata?.sourceExcerpt || null);
+      pushTextCandidate(discoveredGenreCandidates, metadata?.genreName || null);
       discoveredBandcampUrl = discoveredBandcampUrl || normalizeUrl(metadata?.bandcampUrl || null);
+      discoveredYoutubeUrl = discoveredYoutubeUrl || normalizeUrl(metadata?.youtubeUrl || null);
+      discoveredYoutubeMusicUrl =
+        discoveredYoutubeMusicUrl || normalizeUrl(metadata?.youtubeMusicUrl || null);
       discoveredOfficialWebsiteUrl =
         discoveredOfficialWebsiteUrl || normalizeUrl(metadata?.officialWebsiteUrl || null);
       discoveredOfficialStoreUrl =
         discoveredOfficialStoreUrl || normalizeUrl(metadata?.officialStoreUrl || null);
+      discoveredReleaseDate = discoveredReleaseDate || metadata?.releaseDate || null;
+      discoveredLabelName = discoveredLabelName || normalizeLabel(metadata?.labelName || null);
       enqueueSourceCandidate(lookupQueue, visitedSources, metadata?.bandcampUrl || null);
       enqueueSourceCandidate(lookupQueue, visitedSources, metadata?.officialStoreUrl || null);
       enqueueSourceCandidate(lookupQueue, visitedSources, metadata?.officialWebsiteUrl || null);
@@ -127,8 +147,15 @@ const getCachedArtworkPayload = unstable_cache(
       release,
       candidates: [...candidates],
       discoveredBandcampUrl,
+      discoveredYoutubeUrl,
+      discoveredYoutubeMusicUrl,
       discoveredOfficialWebsiteUrl,
       discoveredOfficialStoreUrl,
+      discoveredReleaseDate,
+      discoveredLabelName,
+      discoveredGenreCandidates: [...discoveredGenreCandidates],
+      discoveredSourceTitles: [...discoveredSourceTitles],
+      discoveredSourceExcerpts: [...discoveredSourceExcerpts],
     };
   },
   ["release-artwork-proxy"],
@@ -183,15 +210,28 @@ async function persistResolvedArtworkCandidate(
 
   const nextImageUrl = proxyUrl;
   const nextThumbnailUrl = normalizedCandidateUrl;
+  const nextGenreName = buildPersistedGenre(artworkPayload);
+  const nextReleaseDate = artworkPayload.discoveredReleaseDate || artworkPayload.release.releaseDate;
+  const nextLabelName = artworkPayload.discoveredLabelName || artworkPayload.release.labelName;
+  const nextYoutubeUrl = artworkPayload.discoveredYoutubeUrl || artworkPayload.release.youtubeUrl;
+  const nextYoutubeMusicUrl =
+    artworkPayload.discoveredYoutubeMusicUrl || artworkPayload.release.youtubeMusicUrl;
+  const nextBandcampUrl = artworkPayload.discoveredBandcampUrl || artworkPayload.release.bandcampUrl;
+  const nextOfficialWebsiteUrl =
+    artworkPayload.discoveredOfficialWebsiteUrl || artworkPayload.release.officialWebsiteUrl;
+  const nextOfficialStoreUrl =
+    artworkPayload.discoveredOfficialStoreUrl || artworkPayload.release.officialStoreUrl;
   const hasChanges =
     artworkPayload.release.imageUrl !== nextImageUrl ||
     artworkPayload.release.thumbnailUrl !== nextThumbnailUrl ||
-    (artworkPayload.discoveredBandcampUrl &&
-      artworkPayload.discoveredBandcampUrl !== artworkPayload.release.bandcampUrl) ||
-    (artworkPayload.discoveredOfficialWebsiteUrl &&
-      artworkPayload.discoveredOfficialWebsiteUrl !== artworkPayload.release.officialWebsiteUrl) ||
-    (artworkPayload.discoveredOfficialStoreUrl &&
-      artworkPayload.discoveredOfficialStoreUrl !== artworkPayload.release.officialStoreUrl);
+    nextGenreName !== artworkPayload.release.genreName ||
+    !datesEqual(nextReleaseDate, artworkPayload.release.releaseDate) ||
+    nextLabelName !== artworkPayload.release.labelName ||
+    nextYoutubeUrl !== artworkPayload.release.youtubeUrl ||
+    nextYoutubeMusicUrl !== artworkPayload.release.youtubeMusicUrl ||
+    nextBandcampUrl !== artworkPayload.release.bandcampUrl ||
+    nextOfficialWebsiteUrl !== artworkPayload.release.officialWebsiteUrl ||
+    nextOfficialStoreUrl !== artworkPayload.release.officialStoreUrl;
 
   if (!hasChanges) {
     return;
@@ -200,19 +240,17 @@ async function persistResolvedArtworkCandidate(
   const checkedAt = new Date();
   const qualitySnapshot = assessReleaseQuality({
     releaseType: artworkPayload.release.releaseType,
-    genreName: artworkPayload.release.genreName,
+    genreName: nextGenreName,
     imageUrl: nextImageUrl,
     thumbnailUrl: nextThumbnailUrl,
-    youtubeUrl: artworkPayload.release.youtubeUrl,
-    youtubeMusicUrl: artworkPayload.release.youtubeMusicUrl,
-    bandcampUrl: artworkPayload.discoveredBandcampUrl || artworkPayload.release.bandcampUrl,
-    officialWebsiteUrl:
-      artworkPayload.discoveredOfficialWebsiteUrl || artworkPayload.release.officialWebsiteUrl,
-    officialStoreUrl:
-      artworkPayload.discoveredOfficialStoreUrl || artworkPayload.release.officialStoreUrl,
-    releaseDate: artworkPayload.release.releaseDate,
+    youtubeUrl: nextYoutubeUrl,
+    youtubeMusicUrl: nextYoutubeMusicUrl,
+    bandcampUrl: nextBandcampUrl,
+    officialWebsiteUrl: nextOfficialWebsiteUrl,
+    officialStoreUrl: nextOfficialStoreUrl,
+    releaseDate: nextReleaseDate,
     publishedAt: artworkPayload.release.publishedAt,
-    metadataEnrichedAt: artworkPayload.release.metadataEnrichedAt,
+    metadataEnrichedAt: checkedAt,
     qualityCheckedAt: checkedAt,
   });
 
@@ -221,14 +259,19 @@ async function persistResolvedArtworkCandidate(
     data: {
       imageUrl: nextImageUrl,
       thumbnailUrl: nextThumbnailUrl,
-      bandcampUrl: artworkPayload.discoveredBandcampUrl || artworkPayload.release.bandcampUrl,
-      officialWebsiteUrl:
-        artworkPayload.discoveredOfficialWebsiteUrl || artworkPayload.release.officialWebsiteUrl,
-      officialStoreUrl:
-        artworkPayload.discoveredOfficialStoreUrl || artworkPayload.release.officialStoreUrl,
+      genreName: nextGenreName,
+      labelName: nextLabelName,
+      releaseDate: nextReleaseDate,
+      youtubeUrl: nextYoutubeUrl,
+      youtubeMusicUrl: nextYoutubeMusicUrl,
+      bandcampUrl: nextBandcampUrl,
+      officialWebsiteUrl: nextOfficialWebsiteUrl,
+      officialStoreUrl: nextOfficialStoreUrl,
       artworkStatus: qualitySnapshot.artworkStatus,
+      genreStatus: qualitySnapshot.genreStatus,
       linkStatus: qualitySnapshot.linkStatus,
       qualityScore: qualitySnapshot.qualityScore,
+      metadataEnrichedAt: checkedAt,
       qualityCheckedAt: checkedAt,
     },
   });
@@ -239,6 +282,15 @@ async function persistResolvedArtworkCandidate(
 
 function pushCandidate(candidates: Set<string>, value: string | null | undefined) {
   const normalizedValue = normalizeUrl(value);
+  if (!normalizedValue) {
+    return;
+  }
+
+  candidates.add(normalizedValue);
+}
+
+function pushTextCandidate(candidates: Set<string>, value: string | null | undefined) {
+  const normalizedValue = value?.trim() || "";
   if (!normalizedValue) {
     return;
   }
@@ -279,6 +331,83 @@ function normalizeUrl(value: string | null | undefined) {
   } catch {
     return null;
   }
+}
+
+function normalizeLabel(value: string | null | undefined) {
+  const normalized = value?.replace(/\s+/g, " ").trim() || "";
+  if (!normalized) {
+    return null;
+  }
+
+  const lowered = normalized.toLowerCase();
+  if (
+    lowered.startsWith("http") ||
+    lowered.includes("schema.org") ||
+    lowered.includes("schema.googleapis.com")
+  ) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function buildPersistedGenre(
+  artworkPayload: NonNullable<Awaited<ReturnType<typeof getCachedArtworkPayload>>>,
+) {
+  const overrideGenre = getGenreOverride(artworkPayload.release);
+  if (overrideGenre) {
+    return overrideGenre;
+  }
+
+  const specificStoredGenre =
+    artworkPayload.release.genreName && isSpecificGenreProfile(artworkPayload.release.genreName)
+      ? artworkPayload.release.genreName
+      : null;
+  const specificDiscoveredGenre =
+    artworkPayload.discoveredGenreCandidates.find((candidate) => isSpecificGenreProfile(candidate)) || null;
+  const profiledGenre = buildGenreProfile({
+    explicitGenres: [
+      artworkPayload.release.genreName,
+      ...artworkPayload.discoveredGenreCandidates,
+    ],
+    text: [
+      artworkPayload.release.title,
+      artworkPayload.release.projectTitle,
+      artworkPayload.release.summary,
+      artworkPayload.release.aiSummary,
+      ...artworkPayload.discoveredSourceTitles,
+      ...artworkPayload.discoveredSourceExcerpts,
+    ]
+      .filter(Boolean)
+      .join(". "),
+    artistName: artworkPayload.release.artistName,
+    projectTitle: artworkPayload.release.projectTitle,
+    title: artworkPayload.release.title,
+    labelName: artworkPayload.discoveredLabelName || artworkPayload.release.labelName || null,
+    limit: 3,
+  });
+
+  return (
+    pickPreferredGenreProfile(
+      profiledGenre && isSpecificGenreProfile(profiledGenre) ? profiledGenre : null,
+      specificDiscoveredGenre,
+      specificStoredGenre,
+    ) ||
+    artworkPayload.release.genreName ||
+    null
+  );
+}
+
+function datesEqual(left: Date | null | undefined, right: Date | null | undefined) {
+  if (left === null && right === null) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return left.getTime() === right.getTime();
 }
 
 function buildPersistentArtworkProxyUrl(releaseId: string) {
