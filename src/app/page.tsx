@@ -25,45 +25,54 @@ type HomePageProps = {
 };
 
 export async function generateMetadata({ searchParams }: HomePageProps): Promise<Metadata> {
-  const resolvedSearchParams = searchParams ? await searchParams : {};
-  const genre = getSearchParamValue(resolvedSearchParams.genre);
-  const query = getSearchParamValue(resolvedSearchParams.q);
-  const titleParts = ["MooSQA", "Music Radar"];
-  const descriptionBase =
-    "Track fresh indie singles, albums, EPs and live sessions with a fast editorial feed built around r/indieheads discoveries.";
+  try {
+    const resolvedSearchParams = searchParams ? await searchParams : {};
+    const genre = getSearchParamValue(resolvedSearchParams.genre);
+    const query = getSearchParamValue(resolvedSearchParams.q);
+    const titleParts = ["MooSQA", "Music Radar"];
+    const descriptionBase =
+      "Track fresh indie singles, albums, EPs and live sessions with a fast editorial feed built around r/indieheads discoveries.";
 
-  if (genre) {
-    titleParts.unshift(genre);
-  }
+    if (genre) {
+      titleParts.unshift(genre);
+    }
 
-  if (query) {
-    titleParts.unshift(`Search: ${query}`);
-  }
+    if (query) {
+      titleParts.unshift(`Search: ${query}`);
+    }
 
-  const title = titleParts.join(" | ");
-  const description = genre
-    ? `${descriptionBase} Current homepage filter: ${genre}.`
-    : query
-      ? `${descriptionBase} Current search query: ${query}.`
-      : descriptionBase;
+    const title = titleParts.join(" | ");
+    const description = genre
+      ? `${descriptionBase} Current homepage filter: ${genre}.`
+      : query
+        ? `${descriptionBase} Current search query: ${query}.`
+        : descriptionBase;
 
-  return {
-    title,
-    description,
-    alternates: {
-      canonical: getSiteUrl(),
-    },
-    openGraph: {
+    return {
       title,
       description,
-      url: getSiteUrl(),
-    },
-    twitter: {
-      card: "summary",
-      title,
-      description,
-    },
-  };
+      alternates: {
+        canonical: getSiteUrl(),
+      },
+      openGraph: {
+        title,
+        description,
+        url: getSiteUrl(),
+      },
+      twitter: {
+        card: "summary",
+        title,
+        description,
+      },
+    };
+  } catch (error) {
+    console.error("Homepage metadata generation failed.", error);
+    return {
+      title: "MooSQA | Music Radar",
+      description:
+        "Track fresh indie singles, albums, EPs and live sessions with a fast editorial feed built around r/indieheads discoveries.",
+    };
+  }
 }
 
 export default function Home({ searchParams }: HomePageProps) {
@@ -105,7 +114,11 @@ async function HomeContent({ searchParams }: HomePageProps) {
     }
 
     after(async () => {
-      await refreshHomepageData();
+      try {
+        await refreshHomepageData();
+      } catch (error) {
+        console.error("Deferred homepage refresh failed.", error);
+      }
     });
 
     [sections, searchReleases, homepageGenres] = await Promise.all([

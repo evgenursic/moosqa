@@ -1,5 +1,13 @@
 "use client";
 
+import {
+  safeLocalStorageGet,
+  safeLocalStorageSet,
+  safeSessionStorageGet,
+  safeSessionStorageRemove,
+  safeSessionStorageSet,
+} from "@/lib/browser-storage";
+
 type TrackableAction =
   | "OPEN"
   | "LISTEN_CLICK"
@@ -24,7 +32,7 @@ export function getClientDeviceKey() {
     return "";
   }
 
-  const existing = window.localStorage.getItem(DEVICE_STORAGE_KEY);
+  const existing = safeLocalStorageGet(DEVICE_STORAGE_KEY);
   if (existing) {
     return existing;
   }
@@ -32,7 +40,7 @@ export function getClientDeviceKey() {
   const nextValue = typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  window.localStorage.setItem(DEVICE_STORAGE_KEY, nextValue);
+  safeLocalStorageSet(DEVICE_STORAGE_KEY, nextValue);
   return nextValue;
 }
 
@@ -69,7 +77,7 @@ export function rememberScrollPosition(targetHref?: string | null) {
   }
 
   const key = buildScrollStorageKey(targetHref);
-  window.sessionStorage.setItem(key, String(window.scrollY));
+  safeSessionStorageSet(key, String(window.scrollY));
 }
 
 export function restoreScrollPositionForCurrentPage() {
@@ -78,14 +86,14 @@ export function restoreScrollPositionForCurrentPage() {
   }
 
   const key = buildScrollStorageKey(`${window.location.pathname}${window.location.search}${window.location.hash}`);
-  const rawValue = window.sessionStorage.getItem(key);
+  const rawValue = safeSessionStorageGet(key);
   if (!rawValue) {
     return false;
   }
 
   const parsed = Number.parseInt(rawValue, 10);
   if (!Number.isFinite(parsed) || parsed < 0) {
-    window.sessionStorage.removeItem(key);
+    safeSessionStorageRemove(key);
     return false;
   }
 
@@ -95,7 +103,7 @@ export function restoreScrollPositionForCurrentPage() {
       window.scrollTo({ top: parsed, behavior: "auto" });
     });
   });
-  window.sessionStorage.removeItem(key);
+  safeSessionStorageRemove(key);
   return true;
 }
 

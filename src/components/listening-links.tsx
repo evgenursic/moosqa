@@ -1,3 +1,5 @@
+"use client";
+
 import { ShoppingBag, Zap } from "lucide-react";
 
 import { trackClientAnalyticsEvent } from "@/lib/client-analytics";

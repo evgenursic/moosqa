@@ -3,6 +3,7 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { Share2, ThumbsDown, ThumbsUp } from "lucide-react";
 
+import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/browser-storage";
 import { trackClientAnalyticsEvent } from "@/lib/client-analytics";
 import { cn } from "@/lib/utils";
 
@@ -28,7 +29,7 @@ export function ReleaseCardActions({
       return null;
     }
 
-    const storedReaction = window.localStorage.getItem(getReactionStorageKey(releaseId));
+    const storedReaction = safeLocalStorageGet(getReactionStorageKey(releaseId));
     return storedReaction === "positive" || storedReaction === "negative" ? storedReaction : null;
   });
   const shareHref = useMemo(() => `/releases/${slug}`, [slug]);
@@ -40,9 +41,7 @@ export function ReleaseCardActions({
     const normalized = nextValue;
     setReaction(normalized);
 
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(getReactionStorageKey(releaseId), normalized);
-    }
+    safeLocalStorageSet(getReactionStorageKey(releaseId), normalized);
 
     trackClientAnalyticsEvent({
       releaseId,
