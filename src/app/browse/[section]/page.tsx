@@ -29,50 +29,58 @@ export async function generateMetadata({
   params,
   searchParams,
 }: BrowseSectionPageProps): Promise<Metadata> {
-  const { section } = await params;
-  const resolvedSearchParams = searchParams ? await searchParams : {};
+  try {
+    const { section } = await params;
+    const resolvedSearchParams = searchParams ? await searchParams : {};
 
-  if (!isReleaseSectionKey(section)) {
+    if (!isReleaseSectionKey(section)) {
+      return {
+        title: "Browse | MooSQA",
+      };
+    }
+
+    const definition = releaseSectionDefinitions[section];
+    const page = parsePageParam(resolvedSearchParams.page);
+    const genre = parseGenreParam(resolvedSearchParams.genre);
+    const url = new URL(buildArchiveHref(section, { page, genre }), getSiteUrl()).toString();
+    const titleParts = [definition.title];
+    if (genre) {
+      titleParts.push(genre);
+    }
+    if (page > 1) {
+      titleParts.push(`Page ${page}`);
+    }
+    const title = `${titleParts.join(" | ")} | MooSQA`;
+    const description = genre
+      ? `${definition.description} Filtered to ${genre}${page > 1 ? `, page ${page}` : ""}.`
+      : page > 1
+        ? `${definition.description} Archive page ${page}.`
+        : definition.description;
+
+    return {
+      title,
+      description,
+      alternates: {
+        canonical: url,
+      },
+      openGraph: {
+        title,
+        description,
+        url,
+      },
+      twitter: {
+        card: "summary",
+        title,
+        description,
+      },
+    };
+  } catch (error) {
+    console.error("Browse metadata generation failed.", error);
     return {
       title: "Browse | MooSQA",
+      description: "Explore the MooSQA archive.",
     };
   }
-
-  const definition = releaseSectionDefinitions[section];
-  const page = parsePageParam(resolvedSearchParams.page);
-  const genre = parseGenreParam(resolvedSearchParams.genre);
-  const url = new URL(buildArchiveHref(section, { page, genre }), getSiteUrl()).toString();
-  const titleParts = [definition.title];
-  if (genre) {
-    titleParts.push(genre);
-  }
-  if (page > 1) {
-    titleParts.push(`Page ${page}`);
-  }
-  const title = `${titleParts.join(" | ")} | MooSQA`;
-  const description = genre
-    ? `${definition.description} Filtered to ${genre}${page > 1 ? `, page ${page}` : ""}.`
-    : page > 1
-      ? `${definition.description} Archive page ${page}.`
-      : definition.description;
-
-  return {
-    title,
-    description,
-    alternates: {
-      canonical: url,
-    },
-    openGraph: {
-      title,
-      description,
-      url,
-    },
-    twitter: {
-      card: "summary",
-      title,
-      description,
-    },
-  };
 }
 
 export default async function BrowseSectionPage({
@@ -87,13 +95,41 @@ export default async function BrowseSectionPage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const page = parsePageParam(resolvedSearchParams.page);
   const genre = parseGenreParam(resolvedSearchParams.genre);
-  const shouldWaitForRefresh = await shouldBlockForHomepageRefresh();
+  let archive: Awaited<ReturnType<typeof getSectionArchivePage>> | null = null;
+  let archiveLoadError = false;
 
-  if (shouldWaitForRefresh) {
-    await refreshHomepageData();
+  try {
+    const shouldWaitForRefresh = await shouldBlockForHomepageRefresh();
+
+    if (shouldWaitForRefresh) {
+      await refreshHomepageData();
+    }
+
+    archive = await getSectionArchivePage(section, page, genre);
+  } catch (error) {
+    archiveLoadError = true;
+    console.error(`Archive page failed to load for section ${section}.`, error);
   }
 
-  const archive = await getSectionArchivePage(section, page, genre);
+  if (!archive) {
+    return (
+      <main className="editorial-shell flex-1 px-4 pb-10 pt-4 md:px-8">
+        <div className="mx-auto max-w-[1760px] bg-[var(--color-paper)] px-2 md:px-4">
+          <SiteHeader />
+          <PageScrollRestorer />
+          <section className="border-t border-[var(--color-line)] py-10">
+            <div className="border border-[var(--color-line)] bg-[var(--color-panel)] p-6 text-sm leading-7 text-black/63">
+              {archiveLoadError
+                ? "This archive is temporarily unavailable. Reload in a moment."
+                : "Archive unavailable."}
+            </div>
+          </section>
+          <SiteFooter />
+        </div>
+      </main>
+    );
+  }
+
   const archiveHref = `${buildArchiveHref(section, { page: archive.page, genre: archive.selectedGenre })}#archive`;
   const canonicalArchiveHref = buildArchiveHref(section, {
     page: archive.page,

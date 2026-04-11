@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ListeningLinks } from "@/components/listening-links";
@@ -28,59 +27,84 @@ type ReleasePageProps = {
 export const unstable_instant = false;
 
 export async function generateMetadata({ params }: ReleasePageProps): Promise<Metadata> {
-  const { slug } = await params;
-  const release = await getReleaseBySlug(slug);
+  try {
+    const { slug } = await params;
+    const release = await getReleaseBySlug(slug);
 
-  if (!release) {
+    if (!release) {
+      return {
+        title: "Release not found | MooSQA",
+      };
+    }
+
+    const summary = getDisplaySummary({
+      aiSummary: release.aiSummary,
+      summary: release.summary,
+      artistName: release.artistName,
+      projectTitle: release.projectTitle,
+      title: release.title,
+      releaseType: release.releaseType,
+      genreName: release.genreName,
+    });
+    const title = release.artistName && release.projectTitle
+      ? `${release.artistName} - ${release.projectTitle} | MooSQA`
+      : `${release.title} | MooSQA`;
+    const url = new URL(`/releases/${release.slug}`, getSiteUrl()).toString();
+    const image = release.imageUrl || release.thumbnailUrl || undefined;
+
     return {
-      title: "Release not found | MooSQA",
+      title,
+      description: summary,
+      alternates: {
+        canonical: url,
+      },
+      openGraph: {
+        title,
+        description: summary,
+        url,
+        siteName: "MooSQA",
+        type: "article",
+        images: image ? [{ url: image, alt: release.title }] : undefined,
+      },
+      twitter: {
+        card: image ? "summary_large_image" : "summary",
+        title,
+        description: summary,
+        images: image ? [image] : undefined,
+      },
+    };
+  } catch (error) {
+    console.error("Release metadata generation failed.", error);
+    return {
+      title: "Release | MooSQA",
+      description: "A MooSQA release page.",
     };
   }
-
-  const summary = getDisplaySummary({
-    aiSummary: release.aiSummary,
-    summary: release.summary,
-    artistName: release.artistName,
-    projectTitle: release.projectTitle,
-    title: release.title,
-    releaseType: release.releaseType,
-    genreName: release.genreName,
-  });
-  const title = release.artistName && release.projectTitle
-    ? `${release.artistName} - ${release.projectTitle} | MooSQA`
-    : `${release.title} | MooSQA`;
-  const url = new URL(`/releases/${release.slug}`, getSiteUrl()).toString();
-  const image = release.imageUrl || release.thumbnailUrl || undefined;
-
-  return {
-    title,
-    description: summary,
-    alternates: {
-      canonical: url,
-    },
-    openGraph: {
-      title,
-      description: summary,
-      url,
-      siteName: "MooSQA",
-      type: "article",
-      images: image ? [{ url: image, alt: release.title }] : undefined,
-    },
-    twitter: {
-      card: image ? "summary_large_image" : "summary",
-      title,
-      description: summary,
-      images: image ? [image] : undefined,
-    },
-  };
 }
 
 export default async function ReleasePage({ params }: ReleasePageProps) {
   const { slug } = await params;
-  const release = await getReleaseBySlug(slug);
+  let release: Awaited<ReturnType<typeof getReleaseBySlug>> | null = null;
+
+  try {
+    release = await getReleaseBySlug(slug);
+  } catch (error) {
+    console.error(`Release page failed to load for slug ${slug}.`, error);
+  }
 
   if (!release) {
-    notFound();
+    return (
+      <main className="min-h-screen px-4 py-6 md:px-8">
+        <div className="mx-auto max-w-[1500px] bg-[var(--color-paper)] px-2 md:px-4">
+          <div className="border-b border-[var(--color-line)] py-10">
+            <BackToHomeButton className="section-kicker inline-flex cursor-pointer text-black/43 transition hover:text-[var(--color-accent-strong)]" />
+            <div className="mt-6 border border-[var(--color-line)] bg-[var(--color-panel)] p-6 text-sm leading-7 text-black/63">
+              This release page is temporarily unavailable. Reload in a moment.
+            </div>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   const releaseDateValue = release.releaseDate ? new Date(release.releaseDate) : null;

@@ -92,38 +92,53 @@ async function HomeContent({ searchParams }: HomePageProps) {
       getSearchParamValue(resolvedSearchParams.direct),
   );
   const selectedGenre = getSearchParamValue(resolvedSearchParams.genre);
-  const shouldWaitForRefresh = await shouldBlockForHomepageRefresh();
+  let sections = createEmptyHomepageSections();
+  let searchReleases: ReleaseListingItem[] = [];
+  let homepageGenres: string[] = [];
+  let loadError = false;
 
-  if (shouldWaitForRefresh) {
-    await refreshHomepageData();
-  }
+  try {
+    const shouldWaitForRefresh = await shouldBlockForHomepageRefresh();
 
-  after(async () => {
-    await refreshHomepageData();
-  });
+    if (shouldWaitForRefresh) {
+      await refreshHomepageData();
+    }
 
-  let [sections, searchReleases, homepageGenres] = await Promise.all([
-    getHomepageSectionsData(),
-    hasSearchResults ? getSearchReleases() : Promise.resolve([] as ReleaseListingItem[]),
-    getHomepageGenreFilters(),
-  ]);
-
-  if (sections.latest.length === 0) {
-    await refreshHomepageData();
+    after(async () => {
+      await refreshHomepageData();
+    });
 
     [sections, searchReleases, homepageGenres] = await Promise.all([
       getHomepageSectionsData(),
-      hasSearchResults
-        ? getSearchReleases({ useCache: false, ttlMs: 0 })
-        : Promise.resolve([] as ReleaseListingItem[]),
+      hasSearchResults ? getSearchReleases() : Promise.resolve([] as ReleaseListingItem[]),
       getHomepageGenreFilters(),
     ]);
+
+    if (sections.latest.length === 0) {
+      await refreshHomepageData();
+
+      [sections, searchReleases, homepageGenres] = await Promise.all([
+        getHomepageSectionsData(),
+        hasSearchResults
+          ? getSearchReleases({ useCache: false, ttlMs: 0 })
+          : Promise.resolve([] as ReleaseListingItem[]),
+        getHomepageGenreFilters(),
+      ]);
+    }
+  } catch (error) {
+    loadError = true;
+    console.error("Homepage content failed to load.", error);
   }
 
   const latestReleases = sections.latest;
 
   return (
     <>
+      {loadError ? (
+        <div className="mt-6 border border-[var(--color-line)] bg-[var(--color-panel)] p-5 text-sm leading-7 text-black/63">
+          Fresh data is temporarily unavailable. Reload in a moment and the feed should recover.
+        </div>
+      ) : null}
       <HomepageGenreFilter genres={homepageGenres} selectedGenre={selectedGenre} />
 
       {hasSearchResults ? (
@@ -184,6 +199,17 @@ async function HomeContent({ searchParams }: HomePageProps) {
       <ReleaseCardSection section="live" releases={sections.live} />
     </>
   );
+}
+
+function createEmptyHomepageSections() {
+  return {
+    latest: [] as ReleaseListingItem[],
+    topRated: [] as ReleaseListingItem[],
+    topEngaged: [] as ReleaseListingItem[],
+    albums: [] as ReleaseListingItem[],
+    eps: [] as ReleaseListingItem[],
+    live: [] as ReleaseListingItem[],
+  };
 }
 
 function HomePageSkeleton() {
