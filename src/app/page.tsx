@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { after } from "next/server";
+import { after, connection } from "next/server";
+import { Suspense } from "react";
 
 import { FeedFreshness } from "@/components/feed-freshness";
+import { HomepageGenreFilter } from "@/components/homepage-genre-filter";
 import { ReleaseCard } from "@/components/release-card";
 import { ReleaseExplorer } from "@/components/release-explorer";
 import { SiteFooter } from "@/components/site-footer";
@@ -14,10 +16,9 @@ import {
   type ReleaseSectionKey,
   releaseSectionDefinitions,
 } from "@/lib/release-sections";
+import { getHomepageGenreFilters } from "@/lib/search-overlay";
 import { getSiteUrl } from "@/lib/site";
 import { getSyncStatusSummary, refreshHomepageData } from "@/lib/sync-releases";
-
-export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Music Radar",
@@ -38,7 +39,22 @@ type HomePageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function Home({ searchParams }: HomePageProps) {
+export default function Home({ searchParams }: HomePageProps) {
+  return (
+    <main className="editorial-shell flex-1 px-4 pb-10 pt-4 md:px-8">
+      <div className="mx-auto max-w-[1760px] bg-[var(--color-paper)] px-2 md:px-4">
+        <SiteHeader />
+        <Suspense fallback={<HomePageSkeleton />}>
+          <HomeContent searchParams={searchParams} />
+        </Suspense>
+        <SiteFooter />
+      </div>
+    </main>
+  );
+}
+
+async function HomeContent({ searchParams }: HomePageProps) {
+  await connection();
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const hasSearchResults = Boolean(
     getSearchParamValue(resolvedSearchParams.q) ||
@@ -47,112 +63,126 @@ export default async function Home({ searchParams }: HomePageProps) {
       getSearchParamValue(resolvedSearchParams.platform) ||
       getSearchParamValue(resolvedSearchParams.direct),
   );
+  const selectedGenre = getSearchParamValue(resolvedSearchParams.genre);
+
   after(async () => {
     await refreshHomepageData();
   });
 
-  let [sections, searchReleases, syncStatus] = await Promise.all([
+  let [sections, searchReleases, syncStatus, homepageGenres] = await Promise.all([
     getHomepageSectionsData(),
     hasSearchResults ? getSearchReleases() : Promise.resolve([] as ReleaseListingItem[]),
     getSyncStatusSummary(),
+    getHomepageGenreFilters(),
   ]);
 
   if (sections.latest.length === 0) {
     await refreshHomepageData();
 
-    [sections, searchReleases, syncStatus] = await Promise.all([
+    [sections, searchReleases, syncStatus, homepageGenres] = await Promise.all([
       getHomepageSectionsData(),
-      hasSearchResults ? getSearchReleases({ useCache: false, ttlMs: 0 }) : Promise.resolve([] as ReleaseListingItem[]),
+      hasSearchResults
+        ? getSearchReleases({ useCache: false, ttlMs: 0 })
+        : Promise.resolve([] as ReleaseListingItem[]),
       getSyncStatusSummary(),
+      getHomepageGenreFilters(),
     ]);
   }
+
   const latestReleases = sections.latest;
 
   return (
-    <main className="editorial-shell flex-1 px-4 pb-10 pt-4 md:px-8">
-      <div className="mx-auto max-w-[1760px] bg-[var(--color-paper)] px-2 md:px-4">
-        <SiteHeader />
-        <FeedFreshness summary={syncStatus} className="mt-4" />
+    <>
+      <FeedFreshness summary={syncStatus} className="mt-4" />
+      <HomepageGenreFilter genres={homepageGenres} selectedGenre={selectedGenre} />
 
-        {hasSearchResults ? (
-          <ReleaseExplorer
-            releases={searchReleases.map((release) => ({
-              ...release,
-              summary: release.summary,
-              publishedAt: release.publishedAt.toISOString(),
-            }))}
-          />
+      {hasSearchResults ? (
+        <ReleaseExplorer
+          releases={searchReleases.map((release) => ({
+            ...release,
+            summary: release.summary,
+            publishedAt: release.publishedAt.toISOString(),
+          }))}
+        />
+      ) : null}
+
+      <section id="latest" className="scroll-mt-32 py-10 md:scroll-mt-40 lg:scroll-mt-52">
+        <div className="mb-8">
+          <p className="section-kicker text-black/43">Recent posts</p>
+          <h1 className="mt-3 text-6xl leading-none text-[var(--color-ink)] serif-display">
+            New releases first.
+          </h1>
+        </div>
+
+        {latestReleases.length > 0 ? (
+          <div className="grid gap-8 lg:grid-cols-12">
+            {latestReleases[0] ? (
+              <div className="lg:col-span-6">
+                <ReleaseCard release={latestReleases[0]} priority />
+              </div>
+            ) : null}
+
+            {latestReleases[1] ? (
+              <div className="lg:col-span-3">
+                <ReleaseCard release={latestReleases[1]} />
+              </div>
+            ) : null}
+
+            {latestReleases[2] ? (
+              <div className="lg:col-span-3">
+                <ReleaseCard release={latestReleases[2]} />
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
-        <section id="latest" className="scroll-mt-32 py-10 md:scroll-mt-40 lg:scroll-mt-52">
-          <div className="mb-8">
-            <p className="section-kicker text-black/43">Recent posts</p>
-            <h1 className="mt-3 text-6xl leading-none text-[var(--color-ink)] serif-display">
-              New releases first.
-            </h1>
+        {latestReleases.length > 3 ? (
+          <div className="mt-10 grid gap-8 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+            {latestReleases.slice(3).map((release) => (
+              <ReleaseCard key={release.id} release={release} />
+            ))}
           </div>
+        ) : null}
 
-          {latestReleases.length > 0 ? (
-            <div className="grid gap-8 lg:grid-cols-12">
-              {latestReleases[0] ? (
-            <div className="lg:col-span-6">
-                  <ReleaseCard release={latestReleases[0]} priority />
-                </div>
-              ) : null}
+        <SectionReadMore section="latest" className="mt-8" />
+      </section>
 
-              {latestReleases[1] ? (
-                <div className="lg:col-span-3">
-                  <ReleaseCard release={latestReleases[1]} />
-                </div>
-              ) : null}
+      <ReleaseCardSection section="top-rated" releases={sections.topRated} />
+      <ReleaseCardSection section="top-engaged" releases={sections.topEngaged} />
+      <ReleaseCardSection section="albums" releases={sections.albums} />
+      <ReleaseCardSection section="eps" releases={sections.eps} />
+      <ReleaseCardSection section="live" releases={sections.live} />
+    </>
+  );
+}
 
-              {latestReleases[2] ? (
-                <div className="lg:col-span-3">
-                  <ReleaseCard release={latestReleases[2]} />
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+function HomePageSkeleton() {
+  return (
+    <>
+      <div className="mt-4 h-5 w-40 animate-pulse bg-[var(--color-panel)]" />
+      <div className="mt-5 h-24 animate-pulse border-t border-[var(--color-line)] bg-[var(--color-panel)]" />
 
-          {latestReleases.length > 3 ? (
-            <div className="mt-10 grid gap-8 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-              {latestReleases.slice(3).map((release) => (
-                <ReleaseCard key={release.id} release={release} />
-              ))}
-            </div>
-          ) : null}
+      <section className="scroll-mt-32 py-10 md:scroll-mt-40 lg:scroll-mt-52">
+        <div className="mb-8">
+          <p className="section-kicker text-black/43">Recent posts</p>
+          <h1 className="mt-3 text-6xl leading-none text-[var(--color-ink)] serif-display">
+            New releases first.
+          </h1>
+        </div>
 
-          <SectionReadMore section="latest" className="mt-8" />
-        </section>
-
-        <ReleaseCardSection
-          section="top-rated"
-          releases={sections.topRated}
-        />
-
-        <ReleaseCardSection
-          section="top-engaged"
-          releases={sections.topEngaged}
-        />
-
-        <ReleaseCardSection
-          section="albums"
-          releases={sections.albums}
-        />
-
-        <ReleaseCardSection
-          section="eps"
-          releases={sections.eps}
-        />
-
-        <ReleaseCardSection
-          section="live"
-          releases={sections.live}
-        />
-
-        <SiteFooter />
-      </div>
-    </main>
+        <div className="grid gap-8 lg:grid-cols-12">
+          <div className="border-t border-[var(--color-line)] pt-6 lg:col-span-6">
+            <div className="aspect-[4/3] animate-pulse border border-[var(--color-line)] bg-[var(--color-panel)]" />
+          </div>
+          <div className="border-t border-[var(--color-line)] pt-6 lg:col-span-3">
+            <div className="aspect-[4/3] animate-pulse border border-[var(--color-line)] bg-[var(--color-panel)]" />
+          </div>
+          <div className="border-t border-[var(--color-line)] pt-6 lg:col-span-3">
+            <div className="aspect-[4/3] animate-pulse border border-[var(--color-line)] bg-[var(--color-panel)]" />
+          </div>
+        </div>
+      </section>
+    </>
   );
 }
 

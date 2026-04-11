@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
+import { Suspense, type ReactNode } from "react";
 
 import { getQualityDashboardData } from "@/lib/quality-dashboard";
 import { formatPubDate } from "@/lib/utils";
-
-export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Quality Debug | MooSQA",
@@ -19,6 +19,15 @@ type DebugPageProps = {
 };
 
 export default async function DebugPage({ searchParams }: DebugPageProps) {
+  return (
+    <Suspense fallback={<DebugShell />}>
+      <DebugContent searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function DebugContent({ searchParams }: DebugPageProps) {
+  await connection();
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const secret = getSearchParamValue(resolvedSearchParams.secret);
   const allowedSecret = process.env.DEBUG_SECRET || process.env.CRON_SECRET || "";
@@ -29,6 +38,58 @@ export default async function DebugPage({ searchParams }: DebugPageProps) {
 
   const dashboard = await getQualityDashboardData();
 
+  return (
+    <DebugShell>
+      <section className="grid gap-4 border-t border-[var(--color-line)] py-8 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Total releases" value={String(dashboard.totals.releases)} />
+        <StatCard label="Retry queue" value={String(dashboard.totals.retryQueue)} />
+        <StatCard label="Missing release date" value={String(dashboard.totals.missingReleaseDate)} />
+        <StatCard label="Low quality under 70" value={String(dashboard.totals.lowQuality)} />
+      </section>
+
+      <section className="grid gap-4 border-t border-[var(--color-line)] py-8 lg:grid-cols-3">
+        <StatusCard title="Artwork coverage" rows={dashboard.artwork} />
+        <StatusCard title="Genre coverage" rows={dashboard.genre} />
+        <StatusCard title="Link coverage" rows={dashboard.links} />
+      </section>
+
+      <section className="border-t border-[var(--color-line)] py-8">
+        <div className="mb-5">
+          <p className="section-kicker text-black/43">Weak cards</p>
+          <h2 className="mt-3 text-4xl leading-none text-[var(--color-ink)] serif-display">
+            Most urgent fixes.
+          </h2>
+        </div>
+
+        <div className="grid gap-4">
+          {dashboard.recentWeakCards.map((release) => (
+            <article
+              key={release.id}
+              className="border border-[var(--color-line)] bg-[var(--color-panel)] p-4"
+            >
+              <div className="flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-[0.18em] text-black/50">
+                <span>{release.qualityScore}/100</span>
+                <span>{release.artworkStatus}</span>
+                <span>{release.genreStatus}</span>
+                <span>{release.linkStatus}</span>
+                <span>{formatPubDate(release.publishedAt)}</span>
+                {release.releaseDate ? <span>Release {formatPubDate(release.releaseDate)}</span> : null}
+              </div>
+              <h3 className="mt-3 text-3xl leading-[0.94] text-[var(--color-ink)] serif-display">
+                {release.artistName || release.projectTitle || release.title}
+              </h3>
+              <p className="mt-2 text-base text-black/66 serif-display">
+                {release.artistName && release.projectTitle ? release.projectTitle : release.title}
+              </p>
+            </article>
+          ))}
+        </div>
+      </section>
+    </DebugShell>
+  );
+}
+
+function DebugShell({ children }: { children?: ReactNode }) {
   return (
     <main className="min-h-screen bg-[var(--color-background)] px-4 py-6 md:px-8">
       <div className="mx-auto max-w-[1480px] bg-[var(--color-paper)] p-4 md:p-6">
@@ -41,52 +102,7 @@ export default async function DebugPage({ searchParams }: DebugPageProps) {
             Internal overview of weak cards, retry queue pressure, and metadata coverage.
           </p>
         </section>
-
-        <section className="grid gap-4 border-t border-[var(--color-line)] py-8 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Total releases" value={String(dashboard.totals.releases)} />
-          <StatCard label="Retry queue" value={String(dashboard.totals.retryQueue)} />
-          <StatCard label="Missing release date" value={String(dashboard.totals.missingReleaseDate)} />
-          <StatCard label="Low quality under 70" value={String(dashboard.totals.lowQuality)} />
-        </section>
-
-        <section className="grid gap-4 border-t border-[var(--color-line)] py-8 lg:grid-cols-3">
-          <StatusCard title="Artwork coverage" rows={dashboard.artwork} />
-          <StatusCard title="Genre coverage" rows={dashboard.genre} />
-          <StatusCard title="Link coverage" rows={dashboard.links} />
-        </section>
-
-        <section className="border-t border-[var(--color-line)] py-8">
-          <div className="mb-5">
-            <p className="section-kicker text-black/43">Weak cards</p>
-            <h2 className="mt-3 text-4xl leading-none text-[var(--color-ink)] serif-display">
-              Most urgent fixes.
-            </h2>
-          </div>
-
-          <div className="grid gap-4">
-            {dashboard.recentWeakCards.map((release) => (
-              <article
-                key={release.id}
-                className="border border-[var(--color-line)] bg-[var(--color-panel)] p-4"
-              >
-                <div className="flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-[0.18em] text-black/50">
-                  <span>{release.qualityScore}/100</span>
-                  <span>{release.artworkStatus}</span>
-                  <span>{release.genreStatus}</span>
-                  <span>{release.linkStatus}</span>
-                  <span>{formatPubDate(release.publishedAt)}</span>
-                  {release.releaseDate ? <span>Release {formatPubDate(release.releaseDate)}</span> : null}
-                </div>
-                <h3 className="mt-3 text-3xl leading-[0.94] text-[var(--color-ink)] serif-display">
-                  {release.artistName || release.projectTitle || release.title}
-                </h3>
-                <p className="mt-2 text-base text-black/66 serif-display">
-                  {release.artistName && release.projectTitle ? release.projectTitle : release.title}
-                </p>
-              </article>
-            ))}
-          </div>
-        </section>
+        {children}
       </div>
     </main>
   );

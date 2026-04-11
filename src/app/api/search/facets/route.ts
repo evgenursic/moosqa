@@ -1,11 +1,9 @@
-import { getSearchGenreFacets } from "@/lib/release-sections";
-
-export const dynamic = "force-dynamic";
+import { getSearchOverlayPayload } from "@/lib/search-overlay";
 
 export async function GET() {
-  const genres = await getSearchGenreFacets();
+  const payload = await getSearchOverlayPayload();
 
   return Response.json({
-    genres,
+    genres: payload.genres,
   });
 }

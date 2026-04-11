@@ -79,5 +79,26 @@ function extractYouTubeId(url: string) {
 
 function normalizeUrl(value: string | null | undefined) {
   const normalized = value?.trim() || "";
-  return normalized || null;
+  if (!normalized) {
+    return null;
+  }
+
+  try {
+    const parsed = normalized.startsWith("/")
+      ? new URL(normalized, "https://moosqa.local")
+      : new URL(normalized);
+
+    if (parsed.pathname === "/api/artwork") {
+      const releaseId = parsed.searchParams.get("releaseId")?.trim() || "";
+      return releaseId ? `/api/artwork?releaseId=${encodeURIComponent(releaseId)}` : null;
+    }
+
+    if (normalized.startsWith("/")) {
+      return `${parsed.pathname}${parsed.search}`;
+    }
+
+    return parsed.toString();
+  } catch {
+    return normalized.startsWith("/") ? normalized : null;
+  }
 }

@@ -18,8 +18,6 @@ import {
   getDisplaySummary,
 } from "@/lib/utils";
 
-export const revalidate = 300;
-
 type ReleasePageProps = {
   params: Promise<{
     slug: string;

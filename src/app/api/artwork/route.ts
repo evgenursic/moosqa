@@ -1,11 +1,13 @@
-import { unstable_cache } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { NextResponse } from "next/server";
 
+import { buildArtworkProxyUrl } from "@/lib/artwork-fallback";
 import { ensureDatabase } from "@/lib/database";
+import { clearReleaseDataCaches } from "@/lib/release-sections";
+import { assessReleaseQuality } from "@/lib/release-quality";
 import { prisma } from "@/lib/prisma";
+import { getSiteUrl } from "@/lib/site";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
-
-export const dynamic = "force-dynamic";
 
 const ARTWORK_PROXY_REVALIDATE_SECONDS = 60 * 60;
 const ARTWORK_PROXY_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=86400";
@@ -35,6 +37,8 @@ export async function GET(request: Request) {
       continue;
     }
 
+    await persistResolvedArtworkCandidate(artworkPayload, candidateUrl);
+
     return new Response(imageResponse.body, {
       headers: {
         "Cache-Control": ARTWORK_PROXY_CACHE_CONTROL,
@@ -56,12 +60,20 @@ const getCachedArtworkPayload = unstable_cache(
         title: true,
         artistName: true,
         projectTitle: true,
+        releaseType: true,
         imageUrl: true,
         thumbnailUrl: true,
         sourceUrl: true,
+        youtubeUrl: true,
+        youtubeMusicUrl: true,
         bandcampUrl: true,
         officialWebsiteUrl: true,
         officialStoreUrl: true,
+        genreName: true,
+        releaseDate: true,
+        publishedAt: true,
+        metadataEnrichedAt: true,
+        qualityCheckedAt: true,
       },
     });
 
@@ -82,6 +94,9 @@ const getCachedArtworkPayload = unstable_cache(
       .map(normalizeUrl)
       .filter((value): value is string => Boolean(value));
     const visitedSources = new Set<string>();
+    let discoveredBandcampUrl = release.bandcampUrl || null;
+    let discoveredOfficialWebsiteUrl = release.officialWebsiteUrl || null;
+    let discoveredOfficialStoreUrl = release.officialStoreUrl || null;
 
     while (lookupQueue.length > 0 && visitedSources.size < MAX_ARTWORK_SOURCE_LOOKUPS) {
       const sourceUrl = lookupQueue.shift();
@@ -98,13 +113,22 @@ const getCachedArtworkPayload = unstable_cache(
       }).catch(() => null);
 
       pushCandidate(candidates, metadata?.sourceImageUrl || null);
+      discoveredBandcampUrl = discoveredBandcampUrl || normalizeUrl(metadata?.bandcampUrl || null);
+      discoveredOfficialWebsiteUrl =
+        discoveredOfficialWebsiteUrl || normalizeUrl(metadata?.officialWebsiteUrl || null);
+      discoveredOfficialStoreUrl =
+        discoveredOfficialStoreUrl || normalizeUrl(metadata?.officialStoreUrl || null);
       enqueueSourceCandidate(lookupQueue, visitedSources, metadata?.bandcampUrl || null);
       enqueueSourceCandidate(lookupQueue, visitedSources, metadata?.officialStoreUrl || null);
       enqueueSourceCandidate(lookupQueue, visitedSources, metadata?.officialWebsiteUrl || null);
     }
 
     return {
+      release,
       candidates: [...candidates],
+      discoveredBandcampUrl,
+      discoveredOfficialWebsiteUrl,
+      discoveredOfficialStoreUrl,
     };
   },
   ["release-artwork-proxy"],
@@ -147,6 +171,72 @@ async function fetchArtworkCandidate(url: string) {
   }
 }
 
+async function persistResolvedArtworkCandidate(
+  artworkPayload: NonNullable<Awaited<ReturnType<typeof getCachedArtworkPayload>>>,
+  candidateUrl: string,
+) {
+  const normalizedCandidateUrl = normalizeUrl(candidateUrl);
+  const proxyUrl = buildPersistentArtworkProxyUrl(artworkPayload.release.id);
+  if (!normalizedCandidateUrl || !proxyUrl) {
+    return;
+  }
+
+  const nextImageUrl = proxyUrl;
+  const nextThumbnailUrl = normalizedCandidateUrl;
+  const hasChanges =
+    artworkPayload.release.imageUrl !== nextImageUrl ||
+    artworkPayload.release.thumbnailUrl !== nextThumbnailUrl ||
+    (artworkPayload.discoveredBandcampUrl &&
+      artworkPayload.discoveredBandcampUrl !== artworkPayload.release.bandcampUrl) ||
+    (artworkPayload.discoveredOfficialWebsiteUrl &&
+      artworkPayload.discoveredOfficialWebsiteUrl !== artworkPayload.release.officialWebsiteUrl) ||
+    (artworkPayload.discoveredOfficialStoreUrl &&
+      artworkPayload.discoveredOfficialStoreUrl !== artworkPayload.release.officialStoreUrl);
+
+  if (!hasChanges) {
+    return;
+  }
+
+  const checkedAt = new Date();
+  const qualitySnapshot = assessReleaseQuality({
+    releaseType: artworkPayload.release.releaseType,
+    genreName: artworkPayload.release.genreName,
+    imageUrl: nextImageUrl,
+    thumbnailUrl: nextThumbnailUrl,
+    youtubeUrl: artworkPayload.release.youtubeUrl,
+    youtubeMusicUrl: artworkPayload.release.youtubeMusicUrl,
+    bandcampUrl: artworkPayload.discoveredBandcampUrl || artworkPayload.release.bandcampUrl,
+    officialWebsiteUrl:
+      artworkPayload.discoveredOfficialWebsiteUrl || artworkPayload.release.officialWebsiteUrl,
+    officialStoreUrl:
+      artworkPayload.discoveredOfficialStoreUrl || artworkPayload.release.officialStoreUrl,
+    releaseDate: artworkPayload.release.releaseDate,
+    publishedAt: artworkPayload.release.publishedAt,
+    metadataEnrichedAt: artworkPayload.release.metadataEnrichedAt,
+    qualityCheckedAt: checkedAt,
+  });
+
+  await prisma.release.update({
+    where: { id: artworkPayload.release.id },
+    data: {
+      imageUrl: nextImageUrl,
+      thumbnailUrl: nextThumbnailUrl,
+      bandcampUrl: artworkPayload.discoveredBandcampUrl || artworkPayload.release.bandcampUrl,
+      officialWebsiteUrl:
+        artworkPayload.discoveredOfficialWebsiteUrl || artworkPayload.release.officialWebsiteUrl,
+      officialStoreUrl:
+        artworkPayload.discoveredOfficialStoreUrl || artworkPayload.release.officialStoreUrl,
+      artworkStatus: qualitySnapshot.artworkStatus,
+      linkStatus: qualitySnapshot.linkStatus,
+      qualityScore: qualitySnapshot.qualityScore,
+      qualityCheckedAt: checkedAt,
+    },
+  });
+
+  clearReleaseDataCaches();
+  revalidateTag("releases", "max");
+}
+
 function pushCandidate(candidates: Set<string>, value: string | null | undefined) {
   const normalizedValue = normalizeUrl(value);
   if (!normalizedValue) {
@@ -181,8 +271,25 @@ function normalizeUrl(value: string | null | undefined) {
       return null;
     }
 
+    if (isArtworkProxyUrl(parsed)) {
+      return null;
+    }
+
     return parsed.toString();
   } catch {
     return null;
   }
+}
+
+function buildPersistentArtworkProxyUrl(releaseId: string) {
+  const relativeProxyUrl = buildArtworkProxyUrl(releaseId);
+  if (!relativeProxyUrl) {
+    return null;
+  }
+
+  return new URL(relativeProxyUrl, getSiteUrl()).toString();
+}
+
+function isArtworkProxyUrl(parsed: URL) {
+  return parsed.pathname === "/api/artwork";
 }

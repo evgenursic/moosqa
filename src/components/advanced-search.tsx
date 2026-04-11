@@ -1,44 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useDeferredValue, useEffect, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { ReleaseType } from "@/generated/prisma/enums";
 import { ReleaseArtwork } from "@/components/release-artwork";
+import { loadSearchIndex, readCachedSearchIndex } from "@/lib/client-search-index";
+import { type SearchOverlayIndexItem } from "@/lib/search-overlay";
+import { filterAndRankReleaseListings } from "@/lib/release-search";
 import { formatPubDate, formatReleaseTypeLabel, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
 
 const ACTIVE_RESULTS_LIMIT = 12;
 
-type SearchResultItem = {
-  id: string;
-  slug: string;
-  title: string;
-  artistName: string | null;
-  projectTitle: string | null;
-  releaseType: ReleaseType;
-  imageUrl: string | null;
-  thumbnailUrl: string | null;
-  sourceUrl?: string | null;
-  youtubeUrl?: string | null;
-  youtubeMusicUrl?: string | null;
-  bandcampUrl?: string | null;
-  officialWebsiteUrl?: string | null;
-  officialStoreUrl?: string | null;
-  genreName: string | null;
-  summary: string | null;
-  aiSummary: string | null;
-  publishedAt: string;
-};
+type SearchResultItem = SearchOverlayIndexItem;
 
 type SearchResponse = {
   total: number;
   results: SearchResultItem[];
-};
-
-type SearchFacetResponse = {
-  genres: string[];
 };
 
 type AdvancedSearchButtonProps = {
@@ -120,6 +99,7 @@ function AdvancedSearchDialog({
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const resultsCacheRef = useRef<Map<string, SearchResponse>>(new Map());
+  const cachedSearchPayload = readCachedSearchIndex();
   const [queryValue, setQueryValue] = useState(initialQuery);
   const [typeValue, setTypeValue] = useState(initialType);
   const [genreValue, setGenreValue] = useState(initialGenre);
@@ -128,11 +108,14 @@ function AdvancedSearchDialog({
   const [showFilters, setShowFilters] = useState(
     Boolean(initialType || initialGenre || initialPlatform || initialDirect),
   );
-  const [genreOptions, setGenreOptions] = useState<string[]>([]);
-  const [liveResults, setLiveResults] = useState<SearchResultItem[]>([]);
-  const [resultTotal, setResultTotal] = useState(0);
-  const [isSearching, setIsSearching] = useState(false);
-  const [hasLoadedResults, setHasLoadedResults] = useState(false);
+  const [genreOptions, setGenreOptions] = useState<string[]>(cachedSearchPayload?.genres || []);
+  const [searchIndex, setSearchIndex] = useState<SearchResultItem[]>(cachedSearchPayload?.results || []);
+  const [isIndexLoading, setIsIndexLoading] = useState(!cachedSearchPayload);
+  const [indexError, setIndexError] = useState<Error | null>(null);
+  const [remoteResults, setRemoteResults] = useState<SearchResultItem[]>([]);
+  const [remoteResultTotal, setRemoteResultTotal] = useState(0);
+  const [isRemoteSearching, setIsRemoteSearching] = useState(false);
+  const [hasLoadedRemoteResults, setHasLoadedRemoteResults] = useState(false);
   const deferredQuery = useDeferredValue(queryValue.trim());
   const hasStructuredFilters = Boolean(typeValue || genreValue || platformValue || directOnlyValue);
   const shouldSearch = deferredQuery.length >= 2 || hasStructuredFilters;
@@ -160,39 +143,68 @@ function AdvancedSearchDialog({
   }, [onClose]);
 
   useEffect(() => {
-    if (!showFilters || genreOptions.length > 0) {
+    const seededPayload = readCachedSearchIndex();
+    if (seededPayload) {
+      setGenreOptions(seededPayload.genres || []);
+      setSearchIndex(seededPayload.results || []);
+      setIsIndexLoading(false);
       return;
     }
 
-    const controller = new AbortController();
+    let isMounted = true;
+    setIsIndexLoading(true);
 
-    void fetch("/api/search/facets", {
-      signal: controller.signal,
-      cache: "force-cache",
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error(`Facet request failed with ${response.status}`);
+    void loadSearchIndex()
+      .then((payload) => {
+        if (!isMounted) {
+          return;
         }
 
-        const payload = (await response.json()) as SearchFacetResponse;
         setGenreOptions(payload.genres || []);
+        setSearchIndex(payload.results || []);
+        setIndexError(null);
       })
-      .catch((error) => {
-        if (!controller.signal.aborted) {
-          console.error(error);
+      .catch((error: unknown) => {
+        if (!isMounted) {
+          return;
+        }
+
+        console.error(error);
+        setIndexError(
+          error instanceof Error ? error : new Error("Search index failed to load."),
+        );
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsIndexLoading(false);
         }
       });
 
-    return () => controller.abort();
-  }, [genreOptions.length, showFilters]);
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const indexedResults = useMemo(() => {
+    if (searchIndex.length === 0) {
+      return [] as SearchResultItem[];
+    }
+
+    return filterAndRankReleaseListings(searchIndex, {
+      query: deferredQuery,
+      type: typeValue,
+      genre: genreValue,
+      platform: platformValue,
+      directOnly: directOnlyValue,
+    });
+  }, [deferredQuery, directOnlyValue, genreValue, platformValue, searchIndex, typeValue]);
 
   useEffect(() => {
-    if (!shouldSearch) {
-      setLiveResults([]);
-      setResultTotal(0);
-      setIsSearching(false);
-      setHasLoadedResults(false);
+    if (!indexError || !shouldSearch) {
+      setRemoteResults([]);
+      setRemoteResultTotal(0);
+      setIsRemoteSearching(false);
+      setHasLoadedRemoteResults(false);
       return;
     }
 
@@ -215,15 +227,15 @@ function AdvancedSearchDialog({
 
     const cachedResponse = resultsCacheRef.current.get(cacheKey);
     if (cachedResponse) {
-      setLiveResults(cachedResponse.results || []);
-      setResultTotal(cachedResponse.total || 0);
-      setHasLoadedResults(true);
-      setIsSearching(false);
+      setRemoteResults(cachedResponse.results || []);
+      setRemoteResultTotal(cachedResponse.total || 0);
+      setHasLoadedRemoteResults(true);
+      setIsRemoteSearching(false);
       return () => controller.abort();
     }
 
     const timeoutId = window.setTimeout(async () => {
-      setIsSearching(true);
+      setIsRemoteSearching(true);
 
       try {
         const response = await fetch(`/api/search?${params.toString()}`, {
@@ -237,21 +249,21 @@ function AdvancedSearchDialog({
 
         const payload = (await response.json()) as SearchResponse;
         resultsCacheRef.current.set(cacheKey, payload);
-        setLiveResults(payload.results || []);
-        setResultTotal(payload.total || 0);
-        setHasLoadedResults(true);
+        setRemoteResults(payload.results || []);
+        setRemoteResultTotal(payload.total || 0);
+        setHasLoadedRemoteResults(true);
       } catch (error) {
         if (controller.signal.aborted) {
           return;
         }
 
         console.error(error);
-        setLiveResults([]);
-        setResultTotal(0);
-        setHasLoadedResults(true);
+        setRemoteResults([]);
+        setRemoteResultTotal(0);
+        setHasLoadedRemoteResults(true);
       } finally {
         if (!controller.signal.aborted) {
-          setIsSearching(false);
+          setIsRemoteSearching(false);
         }
       }
     }, 90);
@@ -260,7 +272,14 @@ function AdvancedSearchDialog({
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [deferredQuery, directOnlyValue, genreValue, platformValue, shouldSearch, typeValue]);
+  }, [deferredQuery, directOnlyValue, genreValue, indexError, platformValue, shouldSearch, typeValue]);
+
+  const activeResults = indexError
+    ? remoteResults
+    : indexedResults.slice(0, ACTIVE_RESULTS_LIMIT);
+  const activeResultTotal = indexError ? remoteResultTotal : indexedResults.length;
+  const isSearching = indexError ? isRemoteSearching : isIndexLoading && shouldSearch;
+  const hasLoadedResults = indexError ? hasLoadedRemoteResults : !isIndexLoading;
 
   function clearSearch() {
     setQueryValue("");
@@ -477,8 +496,8 @@ function AdvancedSearchDialog({
             query={queryValue.trim()}
             shouldSearch={shouldSearch}
             hasDraftCriteria={hasDraftCriteria}
-            results={liveResults}
-            total={resultTotal}
+            results={activeResults}
+            total={activeResultTotal}
             isSearching={isSearching}
             hasLoadedResults={hasLoadedResults}
             onResultSelect={onClose}

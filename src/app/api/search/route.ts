@@ -1,8 +1,6 @@
 import { filterAndRankReleaseListings } from "@/lib/release-search";
 import { getSearchReleases } from "@/lib/release-sections";
 
-export const dynamic = "force-dynamic";
-
 const DEFAULT_LIMIT = 8;
 const MAX_LIMIT = 16;
 

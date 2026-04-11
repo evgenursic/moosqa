@@ -1,10 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, Search, X } from "lucide-react";
+
+import { preloadSearchIndex } from "@/lib/client-search-index";
 
 const AdvancedSearchOverlay = dynamic(
   () => import("@/components/advanced-search").then((mod) => mod.AdvancedSearchOverlay),
@@ -32,6 +34,11 @@ function preloadSearchOverlay() {
   }
 
   return searchOverlayPreloadPromise;
+}
+
+function preloadSearchExperience() {
+  void preloadSearchOverlay();
+  void preloadSearchIndex();
 }
 
 type NavLink = {
@@ -94,17 +101,26 @@ export function SiteHeader() {
 
     if (typeof browserWindow.requestIdleCallback === "function") {
       const idleId = browserWindow.requestIdleCallback(() => {
-        void preloadSearchOverlay();
+        preloadSearchExperience();
       }, { timeout: 1800 });
 
       return () => browserWindow.cancelIdleCallback?.(idleId);
     }
 
     const timeoutId = globalThis.setTimeout(() => {
-      void preloadSearchOverlay();
+      preloadSearchExperience();
     }, 900);
 
     return () => globalThis.clearTimeout(timeoutId);
+  }, []);
+
+  useLayoutEffect(() => {
+    return () => {
+      document.body.style.removeProperty("overflow");
+      commitCompact(false);
+      setMenuOpen(false);
+      setSearchOpen(false);
+    };
   }, []);
 
   useEffect(() => {
@@ -205,7 +221,7 @@ export function SiteHeader() {
   }
 
   function openSearch() {
-    void preloadSearchOverlay();
+    preloadSearchExperience();
     setSearchOpen(true);
   }
 
@@ -214,8 +230,8 @@ export function SiteHeader() {
       <button
         type="button"
         onClick={openSearch}
-        onPointerEnter={() => void preloadSearchOverlay()}
-        onFocus={() => void preloadSearchOverlay()}
+        onPointerEnter={preloadSearchExperience}
+        onFocus={preloadSearchExperience}
         aria-label="Open search"
         className={className}
       >

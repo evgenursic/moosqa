@@ -14,8 +14,6 @@ import {
 import { getSiteUrl } from "@/lib/site";
 import { getSyncStatusSummary } from "@/lib/sync-releases";
 
-export const revalidate = 300;
-
 type BrowseSectionPageProps = {
   params: Promise<{
     section: string;

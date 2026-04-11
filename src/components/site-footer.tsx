@@ -38,9 +38,9 @@ const footerColumns: FooterColumn[] = [
   },
 ];
 
-export function SiteFooter() {
-  const year = new Date().getFullYear();
+const COPYRIGHT_YEAR = 2026;
 
+export function SiteFooter() {
   return (
     <footer className="mt-16 border-t border-[var(--color-line)] bg-[#17181d] text-white">
       <div className="mx-auto max-w-[1760px] px-6 py-10 md:px-8 lg:px-10 lg:py-14">
@@ -82,7 +82,7 @@ export function SiteFooter() {
         </div>
 
         <div className="mt-10 border-t border-white/12 pt-5 text-[11px] uppercase tracking-[0.16em] text-white/46 md:flex md:items-center md:justify-between">
-          <p>© {year} MooSQA beta</p>
+          <p>&copy; {COPYRIGHT_YEAR} MooSQA beta</p>
           <p className="mt-3 md:mt-0">
             Editorial discovery feed for new singles, albums, EPs, and live sessions.
           </p>
