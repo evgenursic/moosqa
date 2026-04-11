@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
-import { syncIndieheadsReleases } from "@/lib/sync-releases";
+import { runQualityEnrichmentCycle, syncIndieheadsReleases } from "@/lib/sync-releases";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -19,8 +19,23 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const wantsEnrichment =
-    searchParams.get("enrich") === "1" || searchParams.get("deep") === "1";
+  const wantsQualityOnly =
+    searchParams.get("quality") === "1" || searchParams.get("deep") === "1";
+  const wantsEnrichment = searchParams.get("enrich") === "1";
+
+  if (wantsQualityOnly) {
+    const limit = clampQualityLimit(searchParams.get("limit"));
+    const result = await runQualityEnrichmentCycle(limit);
+    revalidatePath("/");
+
+    return NextResponse.json({
+      ok: true,
+      mode: "quality",
+      ...result,
+      syncedAt: new Date().toISOString(),
+    });
+  }
+
   const result = await syncIndieheadsReleases({
     enrich: wantsEnrichment,
     lightweight: !wantsEnrichment,
@@ -32,4 +47,14 @@ export async function GET(request: Request) {
     ...result,
     syncedAt: new Date().toISOString(),
   });
+}
+
+function clampQualityLimit(value: string | null) {
+  const parsed = Number.parseInt(value || "", 10);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return 6;
+  }
+
+  return Math.min(parsed, 12);
 }

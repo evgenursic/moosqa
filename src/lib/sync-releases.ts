@@ -25,6 +25,12 @@ export type SyncResult = {
   qualityImproved: number;
 };
 
+export type QualityEnrichmentResult = {
+  queued: number;
+  checked: number;
+  improved: number;
+};
+
 type SyncOptions = {
   enrich?: boolean;
   lightweight?: boolean;
@@ -139,6 +145,21 @@ export async function refreshHomepageData() {
 
 export async function ensureSeedData() {
   await refreshHomepageData();
+}
+
+export async function runQualityEnrichmentCycle(limit = 6): Promise<QualityEnrichmentResult> {
+  await ensureDatabase();
+
+  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 12);
+  const queued = await refreshQualityRetryQueue(Math.max(safeLimit * 3, 18));
+  const quality = await runRecentReleaseQualityPass(safeLimit);
+  clearReleaseDataCaches();
+
+  return {
+    queued,
+    checked: quality.checked,
+    improved: quality.improved,
+  };
 }
 
 export async function getSyncStatusSummary(): Promise<SyncStatusSummary> {
