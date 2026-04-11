@@ -18,7 +18,11 @@ import {
 } from "@/lib/release-sections";
 import { getHomepageGenreFilters } from "@/lib/search-overlay";
 import { getSiteUrl } from "@/lib/site";
-import { getSyncStatusSummary, refreshHomepageData } from "@/lib/sync-releases";
+import {
+  getSyncStatusSummary,
+  refreshHomepageData,
+  shouldBlockForHomepageRefresh,
+} from "@/lib/sync-releases";
 
 export const metadata: Metadata = {
   title: "Music Radar",
@@ -64,6 +68,11 @@ async function HomeContent({ searchParams }: HomePageProps) {
       getSearchParamValue(resolvedSearchParams.direct),
   );
   const selectedGenre = getSearchParamValue(resolvedSearchParams.genre);
+  const shouldWaitForRefresh = await shouldBlockForHomepageRefresh();
+
+  if (shouldWaitForRefresh) {
+    await refreshHomepageData();
+  }
 
   after(async () => {
     await refreshHomepageData();

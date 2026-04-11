@@ -7,12 +7,13 @@ import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
 import { searchBandcampRelease } from "@/lib/bandcamp-search";
 import { isSpecificGenreProfile, pickPreferredGenreProfile } from "@/lib/genre-profile";
 import { getGenreOverride } from "@/lib/genre-overrides";
-import { resolveBestGenreProfile } from "@/lib/genre-resolution";
+import { resolveBestGenreProfile, resolveGenreDecision } from "@/lib/genre-resolution";
 import { assessReleaseQuality, isWeakQualityRelease } from "@/lib/release-quality";
 import { fetchRedditPosts, normalizeRedditPost, shouldKeepReleaseRecord } from "@/lib/reddit";
 import { buildReleaseEnrichment, enrichRecentReleases } from "@/lib/release-enrichment";
 import { clearReleaseDataCaches } from "@/lib/release-sections";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
+import { scoreSummaryQuality } from "@/lib/summary-quality";
 
 export type SyncResult = {
   scanned: number;
@@ -76,7 +77,8 @@ export type SyncStatusSummary = {
 const HOMEPAGE_SYNC_STATE_KEY = "homepage-sync";
 const SYNC_STATUS_STATE_KEY = "sync-status";
 const QUALITY_RETRY_QUEUE_STATE_KEY = "quality-retry-queue";
-const HOMEPAGE_SYNC_STALE_MS = 45_000;
+const HOMEPAGE_SYNC_STALE_MS = 5_000;
+const HOMEPAGE_SYNC_BLOCKING_STALE_MS = 25_000;
 const SYNC_STATUS_STALE_MS = 1000 * 60 * 12;
 const RECENT_FEED_PRUNE_MIN_POSTS = 50;
 const LIGHTWEIGHT_SOURCE_LOOKUP_LIMIT = 3;
@@ -144,6 +146,21 @@ export async function refreshHomepageData() {
   } catch (error) {
     console.error("Homepage refresh sync failed.", error);
   }
+}
+
+export async function shouldBlockForHomepageRefresh() {
+  await ensureDatabase();
+
+  const syncState = await prisma.appState.findUnique({
+    where: { key: HOMEPAGE_SYNC_STATE_KEY },
+    select: { updatedAt: true },
+  });
+
+  if (!syncState) {
+    return true;
+  }
+
+  return Date.now() - syncState.updatedAt.getTime() >= HOMEPAGE_SYNC_BLOCKING_STALE_MS;
 }
 
 export async function ensureSeedData() {
@@ -403,6 +420,9 @@ async function sanitizeStoredMetadata() {
       aiSummary: null,
       metadataEnrichedAt: null,
       qualityCheckedAt: null,
+      genreConfidence: 0,
+      summaryQualityScore: 0,
+      summaryQualityCheckedAt: null,
       genreStatus: GenreStatus.MISSING,
       qualityScore: 0,
     },
@@ -435,6 +455,8 @@ async function sanitizeStoredMetadata() {
         aiSummary: null,
         metadataEnrichedAt: null,
         qualityCheckedAt: null,
+        summaryQualityScore: 0,
+        summaryQualityCheckedAt: null,
       },
     });
   }
@@ -796,7 +818,7 @@ async function runRecentReleaseQualityPass(
       console.error(`Quality pass enrichment failed for release ${candidate.release.id}.`, error);
       return null;
     });
-    const resolvedGenre = resolveBestGenreProfile({
+    const resolvedGenreDecision = resolveGenreDecision({
       releaseType: candidate.release.releaseType,
       currentGenre: metadata?.genreName || candidate.release.genreName,
       explicitGenres: [metadata?.genreName, candidate.release.genreName],
@@ -816,10 +838,15 @@ async function runRecentReleaseQualityPass(
       labelName: metadata?.labelName || candidate.release.labelName,
       limit: 3,
     });
+    const resolvedGenre = resolvedGenreDecision.genre;
     const mergedRelease = {
       ...candidate.release,
       ...(metadata || {}),
       genreName: resolvedGenre,
+      genreConfidence:
+        metadata?.genreConfidence ||
+        resolvedGenreDecision.confidence ||
+        candidate.release.genreConfidence,
     };
     const qualitySnapshot = assessReleaseQuality({
       ...mergedRelease,
@@ -831,12 +858,18 @@ async function runRecentReleaseQualityPass(
       data: {
         ...(metadata || {}),
         ...(resolvedGenre ? { genreName: resolvedGenre } : {}),
+        genreConfidence:
+          metadata?.genreConfidence ||
+          resolvedGenreDecision.confidence ||
+          candidate.release.genreConfidence,
         ...(metadata ? { metadataEnrichedAt: checkedAt } : {}),
         artworkStatus: qualitySnapshot.artworkStatus,
         genreStatus: qualitySnapshot.genreStatus,
         linkStatus: qualitySnapshot.linkStatus,
         qualityScore: qualitySnapshot.qualityScore,
         qualityCheckedAt: checkedAt,
+        summaryQualityCheckedAt:
+          metadata?.summaryQualityScore ? checkedAt : candidate.release.summaryQualityCheckedAt,
       },
     });
 
@@ -990,9 +1023,14 @@ async function upsertNormalizedReleases(
       linkStatus: true,
       qualityScore: true,
       qualityCheckedAt: true,
+      genreConfidence: true,
       labelName: true,
       publishedAt: true,
       metadataEnrichedAt: true,
+      summarySourceTitle: true,
+      summarySourceExcerpt: true,
+      summaryQualityScore: true,
+      summaryQualityCheckedAt: true,
     },
   });
   const existingBySourceItemId = new Map(
@@ -1099,9 +1137,14 @@ async function buildReleaseDataForUpsert(
     linkStatus: LinkStatus;
     qualityScore: number;
     qualityCheckedAt: Date | null;
+    genreConfidence: number;
     labelName: string | null;
     publishedAt: Date;
     metadataEnrichedAt: Date | null;
+    summarySourceTitle: string | null;
+    summarySourceExcerpt: string | null;
+    summaryQualityScore: number;
+    summaryQualityCheckedAt: Date | null;
   } | null,
   options: {
     lightweight?: boolean;
@@ -1156,6 +1199,47 @@ async function buildReleaseDataForUpsert(
       sourceMetadata,
       shouldLookupSourceMetadata ? supplementalSourceMetadata : null,
     );
+    const resolvedGenreDecision = resolveGenreDecision({
+      releaseType: release.releaseType,
+      currentGenre: existing?.genreName || null,
+      explicitGenres: [
+        effectiveSourceMetadata?.genreName || null,
+        options.artistGenreHint || null,
+        getGenreOverride(release),
+      ],
+      textSegments: [
+        release.title,
+        release.projectTitle,
+        release.summary,
+        existing?.aiSummary || null,
+        effectiveSourceMetadata?.sourceTitle || null,
+        effectiveSourceMetadata?.sourceExcerpt || null,
+      ],
+      artistName: release.artistName,
+      projectTitle: release.projectTitle,
+      title: release.title,
+      labelName: effectiveSourceMetadata?.labelName || existing?.labelName || null,
+      limit: 3,
+    });
+    const nextSummarySourceTitle =
+      effectiveSourceMetadata?.sourceTitle ||
+      existing?.summarySourceTitle ||
+      release.projectTitle ||
+      release.title;
+    const nextSummarySourceExcerpt =
+      effectiveSourceMetadata?.sourceExcerpt ||
+      existing?.summarySourceExcerpt ||
+      release.summary ||
+      null;
+    const nextSummaryQualityScore = existing?.aiSummary
+      ? existing.summaryQualityScore ||
+        scoreSummaryQuality({
+          summary: existing.aiSummary,
+          artistName: release.artistName,
+          projectTitle: release.projectTitle,
+          title: release.title,
+        })
+      : 0;
     const nextReleaseData = {
       ...release,
       releaseDate:
@@ -1176,13 +1260,8 @@ async function buildReleaseDataForUpsert(
         existing?.imageUrl ||
         effectiveSourceMetadata?.sourceImageUrl ||
         null,
-      genreName: resolvePreferredGenre({
-        currentGenre: existing?.genreName || null,
-        fallbackGenre: effectiveSourceMetadata?.genreName || null,
-        artistGenreHint: options.artistGenreHint || null,
-        release,
-        sourceMetadata: effectiveSourceMetadata,
-      }),
+      genreName: resolvedGenreDecision.genre,
+      genreConfidence: resolvedGenreDecision.confidence,
       labelName: effectiveSourceMetadata?.labelName || existing?.labelName || null,
       youtubeUrl:
         effectiveSourceMetadata?.youtubeUrl ||
@@ -1205,6 +1284,13 @@ async function buildReleaseDataForUpsert(
         existing?.officialStoreUrl ||
         null,
       aiSummary: existing?.aiSummary || null,
+      summarySourceTitle: nextSummarySourceTitle,
+      summarySourceExcerpt: nextSummarySourceExcerpt,
+      summaryQualityScore: nextSummaryQualityScore,
+      summaryQualityCheckedAt:
+        existing?.aiSummary && existing.summaryQualityCheckedAt
+          ? existing.summaryQualityCheckedAt
+          : null,
     };
 
     return withQualityFields(nextReleaseData);
@@ -1238,6 +1324,24 @@ async function buildReleaseDataForUpsert(
       outletName: release.outletName,
       labelName: null,
     }));
+  const fallbackGenreDecision = resolveGenreDecision({
+    releaseType: release.releaseType,
+    currentGenre: existing?.genreName || null,
+    explicitGenres: [fallbackGenre, sourceMetadata?.genreName || null, options.artistGenreHint || null],
+    textSegments: [
+      release.title,
+      release.projectTitle,
+      release.summary,
+      sourceMetadata?.sourceTitle || null,
+      sourceMetadata?.sourceExcerpt || null,
+    ],
+    artistName: release.artistName,
+    projectTitle: release.projectTitle,
+    title: release.title,
+    labelName: sourceMetadata?.labelName || existing?.labelName || null,
+    limit: 3,
+  });
+  const summaryCheckedAt = new Date();
 
   return withQualityFields({
     ...release,
@@ -1254,7 +1358,8 @@ async function buildReleaseDataForUpsert(
       existing?.imageUrl ||
       sourceMetadata?.sourceImageUrl ||
       null,
-    genreName: fallbackGenre,
+    genreName: fallbackGenreDecision.genre,
+    genreConfidence: fallbackGenreDecision.confidence,
     labelName: sourceMetadata?.labelName || existing?.labelName || null,
     youtubeUrl: sourceMetadata?.youtubeUrl || existing?.youtubeUrl || null,
     youtubeMusicUrl: sourceMetadata?.youtubeMusicUrl || existing?.youtubeMusicUrl || null,
@@ -1262,12 +1367,23 @@ async function buildReleaseDataForUpsert(
     officialWebsiteUrl: sourceMetadata?.officialWebsiteUrl || existing?.officialWebsiteUrl || null,
     officialStoreUrl: sourceMetadata?.officialStoreUrl || existing?.officialStoreUrl || null,
     aiSummary: fallbackAiSummary,
+    summarySourceTitle: sourceMetadata?.sourceTitle || existing?.summarySourceTitle || release.title,
+    summarySourceExcerpt:
+      sourceMetadata?.sourceExcerpt || existing?.summarySourceExcerpt || release.summary || null,
+    summaryQualityScore: scoreSummaryQuality({
+      summary: fallbackAiSummary,
+      artistName: release.artistName,
+      projectTitle: release.projectTitle,
+      title: release.title,
+    }),
+    summaryQualityCheckedAt: summaryCheckedAt,
   });
 }
 
 function withQualityFields<T extends {
   releaseType: ReleaseType;
   genreName: string | null;
+  genreConfidence?: number | null;
   imageUrl: string | null;
   thumbnailUrl: string | null;
   youtubeUrl: string | null;
@@ -1277,6 +1393,7 @@ function withQualityFields<T extends {
   officialStoreUrl: string | null;
   releaseDate: Date | null;
   publishedAt: Date;
+  summaryQualityScore?: number | null;
 }>(releaseData: T) {
   const qualitySnapshot = assessReleaseQuality(releaseData);
 
@@ -1286,6 +1403,8 @@ function withQualityFields<T extends {
     genreStatus: qualitySnapshot.genreStatus,
     linkStatus: qualitySnapshot.linkStatus,
     qualityScore: qualitySnapshot.qualityScore,
+    genreConfidence: releaseData.genreConfidence ?? 0,
+    summaryQualityScore: releaseData.summaryQualityScore ?? 0,
   };
 }
 
@@ -1575,12 +1694,16 @@ function hasCoreReleaseDataChanges(
     genreStatus: GenreStatus;
     linkStatus: LinkStatus;
     qualityScore: number;
+    genreConfidence: number;
     labelName: string | null;
     genreName: string | null;
     releaseDate: Date | null;
     publishedAt: Date;
     domain: string | null;
     aiSummary: string | null;
+    summarySourceTitle: string | null;
+    summarySourceExcerpt: string | null;
+    summaryQualityScore: number;
   },
   next: {
     slug: string;
@@ -1604,12 +1727,16 @@ function hasCoreReleaseDataChanges(
     genreStatus: GenreStatus;
     linkStatus: LinkStatus;
     qualityScore: number;
+    genreConfidence: number;
     labelName: string | null;
     genreName: string | null;
     releaseDate: Date | null;
     publishedAt: Date;
     domain: string | null;
     aiSummary: string | null;
+    summarySourceTitle: string | null;
+    summarySourceExcerpt: string | null;
+    summaryQualityScore: number;
   },
 ) {
   return (
@@ -1634,10 +1761,14 @@ function hasCoreReleaseDataChanges(
     existing.genreStatus !== next.genreStatus ||
     existing.linkStatus !== next.linkStatus ||
     existing.qualityScore !== next.qualityScore ||
+    existing.genreConfidence !== next.genreConfidence ||
     existing.labelName !== next.labelName ||
     existing.genreName !== next.genreName ||
     existing.domain !== next.domain ||
     existing.aiSummary !== next.aiSummary ||
+    existing.summarySourceTitle !== next.summarySourceTitle ||
+    existing.summarySourceExcerpt !== next.summarySourceExcerpt ||
+    existing.summaryQualityScore !== next.summaryQualityScore ||
     !datesEqual(existing.releaseDate, next.releaseDate) ||
     !datesEqual(existing.publishedAt, next.publishedAt)
   );

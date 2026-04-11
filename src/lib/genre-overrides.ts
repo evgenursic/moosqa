@@ -38,6 +38,14 @@ const RELEASE_GENRE_OVERRIDES = new Map<string, string>([
   ["tony molina::dear nellie goodrich somewhere there s a feather", "power pop / indie rock / lo-fi pop"],
   ["purity ring::lemonlime", "electropop / synth-pop / dream pop"],
   ["wisp::live in tokyo at www x full set", "shoegaze / alternative rock / grungegaze"],
+  ["harmony tividad::where strays go to find themselves", "lo-fi indie / post-punk / singer-songwriter"],
+  ["grandma s house::anything for you", "post-punk / noise rock / alternative dance"],
+  ["beaker::all these dog brains", "art punk / post-punk / lo-fi rock"],
+  ["los retros::all i ve got", "psychedelic soul / bedroom pop / chillwave"],
+  ["beatrice deer::fox", "indie folk / inuit folk / art pop"],
+  ["film::in water", "post-punk / new wave / indie rock"],
+  ["scarves::mutiny", "post-punk / art punk / indie rock"],
+  ["caravan palace::mirror mirror", "electro swing / nu jazz / electronic dance"],
 ]);
 
 const ARTIST_GENRE_OVERRIDES = new Map<string, string>([
@@ -88,14 +96,22 @@ const ARTIST_GENRE_OVERRIDES = new Map<string, string>([
   ["versus", "indie rock / noise pop / post-hardcore"],
   ["wisp", "shoegaze / alternative rock / grungegaze"],
   ["bay faction", "emo / indie rock / alternative rock"],
+  ["beaker", "art punk / post-punk / lo-fi rock"],
+  ["beatrice deer", "indie folk / inuit folk / art pop"],
+  ["caravan palace", "electro swing / nu jazz / electronic dance"],
   ["hannah lew", "darkwave / gothic rock / post-punk"],
+  ["film", "post-punk / new wave / indie rock"],
+  ["grandma s house", "post-punk / noise rock / alternative dance"],
+  ["harmony tividad", "lo-fi indie / post-punk / singer-songwriter"],
   ["hannah lew of grass widow cold beat", "darkwave / gothic rock / post-punk"],
+  ["los retros", "psychedelic soul / bedroom pop / chillwave"],
   ["marmozets", "alternative rock / post-hardcore / math rock"],
   ["enter shikari", "post-hardcore / electronic rock / alternative rock"],
   ["ambrose akinmusire mary halvorson", "avant-jazz / contemporary jazz / experimental guitar"],
   ["geordie greep", "avant-prog / jazz-rock / art rock"],
   ["girl trouble", "garage rock / punk rock / rock and roll"],
   ["bill orcutt", "free jazz / experimental guitar / avant-jazz"],
+  ["scarves", "post-punk / art punk / indie rock"],
 ]);
 
 export function getGenreOverride(input: GenreOverrideInput) {

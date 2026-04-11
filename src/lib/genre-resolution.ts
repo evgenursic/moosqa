@@ -1,5 +1,5 @@
 import { ReleaseType } from "@/generated/prisma/enums";
-import { buildGenreProfile, isSpecificGenreProfile, pickPreferredGenreProfile } from "@/lib/genre-profile";
+import { buildGenreProfile, countGenreProfileSegments, isSpecificGenreProfile } from "@/lib/genre-profile";
 import { getGenreOverride } from "@/lib/genre-overrides";
 
 type GenreResolutionInput = {
@@ -12,6 +12,12 @@ type GenreResolutionInput = {
   title?: string | null;
   labelName?: string | null;
   limit?: number;
+};
+
+type GenreDecision = {
+  genre: string;
+  confidence: number;
+  source: "override" | "profile" | "explicit" | "emergency" | "current" | "fallback";
 };
 
 type GenreFallbackRule = {
@@ -80,9 +86,17 @@ const GENRE_FALLBACK_RULES: GenreFallbackRule[] = [
 ];
 
 export function resolveBestGenreProfile(input: GenreResolutionInput) {
+  return resolveGenreDecision(input).genre;
+}
+
+export function resolveGenreDecision(input: GenreResolutionInput): GenreDecision {
   const overrideGenre = getGenreOverride(input);
   if (overrideGenre) {
-    return overrideGenre;
+    return {
+      genre: overrideGenre,
+      confidence: 98,
+      source: "override",
+    };
   }
 
   const explicitGenres = [
@@ -105,18 +119,52 @@ export function resolveBestGenreProfile(input: GenreResolutionInput) {
     explicitGenres.find((genre) => isSpecificGenreProfile(genre)) || null;
   const emergencyGenre = buildEmergencyGenreProfile(combinedText, input.releaseType);
 
-  return (
-    pickPreferredGenreProfile(
-      profiledGenre && isSpecificGenreProfile(profiledGenre) ? profiledGenre : null,
-      specificExplicitGenre,
-      emergencyGenre,
-      profiledGenre,
-      input.currentGenre || null,
-    ) ||
-    emergencyGenre ||
-    input.currentGenre ||
-    getReleaseTypeFallbackGenre(input.releaseType)
-  );
+  if (profiledGenre && isSpecificGenreProfile(profiledGenre)) {
+    return {
+      genre: profiledGenre,
+      confidence: Math.min(96, 84 + countGenreProfileSegments(profiledGenre) * 4),
+      source: "profile",
+    };
+  }
+
+  if (specificExplicitGenre) {
+    return {
+      genre: specificExplicitGenre,
+      confidence: Math.min(90, 78 + countGenreProfileSegments(specificExplicitGenre) * 4),
+      source: "explicit",
+    };
+  }
+
+  if (profiledGenre) {
+    return {
+      genre: profiledGenre,
+      confidence: 68,
+      source: "profile",
+    };
+  }
+
+  if (input.currentGenre && isSpecificGenreProfile(input.currentGenre)) {
+    return {
+      genre: input.currentGenre,
+      confidence: Math.min(84, 70 + countGenreProfileSegments(input.currentGenre) * 4),
+      source: "current",
+    };
+  }
+
+  if (emergencyGenre) {
+    const fallbackGenre = getReleaseTypeFallbackGenre(input.releaseType);
+    return {
+      genre: emergencyGenre,
+      confidence: normalizeGenre(emergencyGenre) === normalizeGenre(fallbackGenre) ? 48 : 64,
+      source: normalizeGenre(emergencyGenre) === normalizeGenre(fallbackGenre) ? "fallback" : "emergency",
+    };
+  }
+
+  return {
+    genre: input.currentGenre || getReleaseTypeFallbackGenre(input.releaseType),
+    confidence: input.currentGenre ? 40 : 32,
+    source: input.currentGenre ? "current" : "fallback",
+  };
 }
 
 function buildEmergencyGenreProfile(text: string, releaseType: ReleaseType) {
@@ -159,4 +207,8 @@ function normalizeTextSegments(values: Array<string | null | undefined> | undefi
     .join(". ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizeGenre(value: string) {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
 }

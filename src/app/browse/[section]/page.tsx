@@ -13,7 +13,7 @@ import {
   releaseSectionDefinitions,
 } from "@/lib/release-sections";
 import { getSiteUrl } from "@/lib/site";
-import { getSyncStatusSummary } from "@/lib/sync-releases";
+import { getSyncStatusSummary, refreshHomepageData, shouldBlockForHomepageRefresh } from "@/lib/sync-releases";
 
 type BrowseSectionPageProps = {
   params: Promise<{
@@ -62,6 +62,11 @@ export default async function BrowseSectionPage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const page = parsePageParam(resolvedSearchParams.page);
   const genre = parseGenreParam(resolvedSearchParams.genre);
+  const shouldWaitForRefresh = await shouldBlockForHomepageRefresh();
+
+  if (shouldWaitForRefresh) {
+    await refreshHomepageData();
+  }
 
   const [archive, syncStatus] = await Promise.all([
     getSectionArchivePage(section, page, genre),

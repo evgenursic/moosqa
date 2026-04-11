@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { buildArtworkProxyUrl } from "@/lib/artwork-fallback";
 import { ensureDatabase } from "@/lib/database";
 import { getGenreOverride } from "@/lib/genre-overrides";
-import { resolveBestGenreProfile } from "@/lib/genre-resolution";
+import { resolveGenreDecision } from "@/lib/genre-resolution";
 import { clearReleaseDataCaches } from "@/lib/release-sections";
 import { assessReleaseQuality } from "@/lib/release-quality";
 import { prisma } from "@/lib/prisma";
@@ -75,10 +75,13 @@ const getCachedArtworkPayload = unstable_cache(
         labelName: true,
         summary: true,
         aiSummary: true,
+        summarySourceTitle: true,
+        summarySourceExcerpt: true,
         releaseDate: true,
         publishedAt: true,
         metadataEnrichedAt: true,
         qualityCheckedAt: true,
+        genreConfidence: true,
       },
     });
 
@@ -210,7 +213,8 @@ async function persistResolvedArtworkCandidate(
 
   const nextImageUrl = proxyUrl;
   const nextThumbnailUrl = normalizedCandidateUrl;
-  const nextGenreName = buildPersistedGenre(artworkPayload);
+  const nextGenreDecision = buildPersistedGenreDecision(artworkPayload);
+  const nextGenreName = nextGenreDecision.genre;
   const nextReleaseDate = artworkPayload.discoveredReleaseDate || artworkPayload.release.releaseDate;
   const nextLabelName = artworkPayload.discoveredLabelName || artworkPayload.release.labelName;
   const nextYoutubeUrl = artworkPayload.discoveredYoutubeUrl || artworkPayload.release.youtubeUrl;
@@ -221,6 +225,10 @@ async function persistResolvedArtworkCandidate(
     artworkPayload.discoveredOfficialWebsiteUrl || artworkPayload.release.officialWebsiteUrl;
   const nextOfficialStoreUrl =
     artworkPayload.discoveredOfficialStoreUrl || artworkPayload.release.officialStoreUrl;
+  const nextSummarySourceTitle =
+    artworkPayload.discoveredSourceTitles[0] || artworkPayload.release.summarySourceTitle || artworkPayload.release.projectTitle || artworkPayload.release.title;
+  const nextSummarySourceExcerpt =
+    artworkPayload.discoveredSourceExcerpts[0] || artworkPayload.release.summarySourceExcerpt || artworkPayload.release.summary || null;
   const hasChanges =
     artworkPayload.release.imageUrl !== nextImageUrl ||
     artworkPayload.release.thumbnailUrl !== nextThumbnailUrl ||
@@ -231,7 +239,10 @@ async function persistResolvedArtworkCandidate(
     nextYoutubeMusicUrl !== artworkPayload.release.youtubeMusicUrl ||
     nextBandcampUrl !== artworkPayload.release.bandcampUrl ||
     nextOfficialWebsiteUrl !== artworkPayload.release.officialWebsiteUrl ||
-    nextOfficialStoreUrl !== artworkPayload.release.officialStoreUrl;
+    nextOfficialStoreUrl !== artworkPayload.release.officialStoreUrl ||
+    nextSummarySourceTitle !== artworkPayload.release.summarySourceTitle ||
+    nextSummarySourceExcerpt !== artworkPayload.release.summarySourceExcerpt ||
+    nextGenreDecision.confidence !== artworkPayload.release.genreConfidence;
 
   if (!hasChanges) {
     return;
@@ -247,12 +258,13 @@ async function persistResolvedArtworkCandidate(
     youtubeMusicUrl: nextYoutubeMusicUrl,
     bandcampUrl: nextBandcampUrl,
     officialWebsiteUrl: nextOfficialWebsiteUrl,
-    officialStoreUrl: nextOfficialStoreUrl,
-    releaseDate: nextReleaseDate,
-    publishedAt: artworkPayload.release.publishedAt,
-    metadataEnrichedAt: checkedAt,
-    qualityCheckedAt: checkedAt,
-  });
+      officialStoreUrl: nextOfficialStoreUrl,
+      releaseDate: nextReleaseDate,
+      publishedAt: artworkPayload.release.publishedAt,
+      metadataEnrichedAt: checkedAt,
+      qualityCheckedAt: checkedAt,
+      genreConfidence: nextGenreDecision.confidence,
+    });
 
   await prisma.release.update({
     where: { id: artworkPayload.release.id },
@@ -267,6 +279,9 @@ async function persistResolvedArtworkCandidate(
       bandcampUrl: nextBandcampUrl,
       officialWebsiteUrl: nextOfficialWebsiteUrl,
       officialStoreUrl: nextOfficialStoreUrl,
+      genreConfidence: nextGenreDecision.confidence,
+      summarySourceTitle: nextSummarySourceTitle,
+      summarySourceExcerpt: nextSummarySourceExcerpt,
       artworkStatus: qualitySnapshot.artworkStatus,
       genreStatus: qualitySnapshot.genreStatus,
       linkStatus: qualitySnapshot.linkStatus,
@@ -351,10 +366,10 @@ function normalizeLabel(value: string | null | undefined) {
   return normalized;
 }
 
-function buildPersistedGenre(
+function buildPersistedGenreDecision(
   artworkPayload: NonNullable<Awaited<ReturnType<typeof getCachedArtworkPayload>>>,
 ) {
-  return resolveBestGenreProfile({
+  return resolveGenreDecision({
     releaseType: artworkPayload.release.releaseType,
     currentGenre: artworkPayload.release.genreName,
     explicitGenres: [

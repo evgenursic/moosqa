@@ -1,6 +1,5 @@
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ListeningLinks } from "@/components/listening-links";
-import { MetadataStatusChip } from "@/components/metadata-status-chip";
 import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
@@ -100,9 +99,6 @@ export function HeroFeature({ release, fromHref = null }: HeroFeatureProps) {
               genreName: release.genreName,
             })}
           </p>
-
-          <MetadataStatusChip release={release} className="mt-4" />
-
           <div className="mt-6 flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.18em] text-black/55">
             <span>{displayGenre}</span>
             <span>{formatReleaseTypeLabel(release.releaseType)}</span>

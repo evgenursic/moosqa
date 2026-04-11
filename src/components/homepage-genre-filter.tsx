@@ -16,7 +16,6 @@ export function HomepageGenreFilter({
   return (
     <GenreFilterDrawer
       title="Browse by genre"
-      description="Keep the header clean, then open the full genre library only when you want to narrow the feed."
       selectedGenre={selectedGenre}
       allHref="/#latest"
       options={genres.map((genre) => ({

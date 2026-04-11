@@ -1,6 +1,5 @@
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ListeningLinks } from "@/components/listening-links";
-import { MetadataStatusChip } from "@/components/metadata-status-chip";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
 import { TopEngagedVisual } from "@/components/top-engaged-visual";
@@ -121,9 +120,6 @@ export function ReleaseCard({
             <span key={item}>{item}</span>
           ))}
         </div>
-
-        <MetadataStatusChip release={release} className="mt-3" />
-
         {context === "top-rated" ? (
           <TopRatedVisual average={release.scoreAverage} count={release.scoreCount} />
         ) : null}

@@ -4,6 +4,7 @@ import { countGenreProfileSegments, isSpecificGenreProfile } from "@/lib/genre-p
 type ReleaseQualityInput = {
   releaseType: ReleaseType;
   genreName?: string | null;
+  genreConfidence?: number | null;
   imageUrl?: string | null;
   thumbnailUrl?: string | null;
   youtubeUrl?: string | null;
@@ -15,6 +16,7 @@ type ReleaseQualityInput = {
   publishedAt?: Date | null;
   qualityCheckedAt?: Date | null;
   metadataEnrichedAt?: Date | null;
+  summaryQualityScore?: number | null;
 };
 
 export type ReleaseQualitySnapshot = {
@@ -70,7 +72,9 @@ export function isWeakQualityRelease(input: ReleaseQualityInput) {
     artworkStatus !== ArtworkStatus.STRONG ||
     genreStatus !== GenreStatus.STRONG ||
     linkStatus !== LinkStatus.STRONG ||
-    !input.releaseDate
+    !input.releaseDate ||
+    (input.genreConfidence ?? 0) < 70 ||
+    (input.summaryQualityScore ?? 100) < 72
   );
 }
 
@@ -227,9 +231,9 @@ function shouldRetryForQuality(
     : Number.POSITIVE_INFINITY;
 
   const retryAfterMs =
-    snapshot.qualityScore < 45
+    snapshot.qualityScore < 45 || (input.genreConfidence ?? 0) < 55 || (input.summaryQualityScore ?? 100) < 60
       ? 1000 * 60 * 20
-      : snapshot.qualityScore < 75
+      : snapshot.qualityScore < 75 || (input.genreConfidence ?? 0) < 72 || (input.summaryQualityScore ?? 100) < 72
         ? 1000 * 60 * 60 * 2
         : 1000 * 60 * 60 * 8;
 
@@ -257,6 +261,12 @@ function getQualityPriority(
     priority += 10;
   }
 
+  if ((input.genreConfidence ?? 100) < 55) {
+    priority += 18;
+  } else if ((input.genreConfidence ?? 100) < 72) {
+    priority += 10;
+  }
+
   if (snapshot.linkStatus === LinkStatus.MISSING) {
     priority += 18;
   } else if (snapshot.linkStatus === LinkStatus.PARTIAL) {
@@ -279,6 +289,12 @@ function getQualityPriority(
   }
 
   if (!input.metadataEnrichedAt) {
+    priority += 8;
+  }
+
+  if ((input.summaryQualityScore ?? 100) < 60) {
+    priority += 16;
+  } else if ((input.summaryQualityScore ?? 100) < 72) {
     priority += 8;
   }
 

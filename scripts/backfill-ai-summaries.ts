@@ -3,6 +3,7 @@ import { Pool } from "pg";
 
 import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
+import { scoreSummaryQuality } from "@/lib/summary-quality";
 
 type ReleaseRow = {
   id: string;
@@ -12,6 +13,8 @@ type ReleaseRow = {
   genreName: string | null;
   releaseType: string;
   summary: string | null;
+  summarySourceTitle: string | null;
+  summarySourceExcerpt: string | null;
   sourceUrl: string;
   outletName: string | null;
   labelName: string | null;
@@ -69,6 +72,8 @@ async function main() {
       "genreName",
       "releaseType",
       summary,
+      "summarySourceTitle",
+      "summarySourceExcerpt",
       "sourceUrl",
       "outletName",
       "labelName",
@@ -88,7 +93,10 @@ async function main() {
   skipped = eligibleRows.length - candidates.length;
   for (const row of candidates) {
     try {
-      const shouldFetchSourceMetadata = mode !== "archive-upgrade" || !row.summary;
+      const shouldFetchSourceMetadata =
+        !row.summary &&
+        !row.summarySourceExcerpt &&
+        (mode !== "archive-upgrade" || !row.summary);
       const sourceMetadata = shouldFetchSourceMetadata
         ? await resolveSourceMetadata(row.sourceUrl, {
             artistName: row.artistName,
@@ -96,8 +104,8 @@ async function main() {
             title: row.title,
           })
         : {
-            sourceTitle: row.projectTitle || row.title,
-            sourceExcerpt: row.summary,
+            sourceTitle: row.summarySourceTitle || row.projectTitle || row.title,
+            sourceExcerpt: row.summarySourceExcerpt || row.summary,
           };
 
       const aiSummary = await generateAiSummary({
@@ -113,16 +121,26 @@ async function main() {
         outletName: row.outletName,
         labelName: row.labelName,
       });
+      const summaryQualityScore = scoreSummaryQuality({
+        summary: aiSummary,
+        artistName: row.artistName,
+        projectTitle: row.projectTitle,
+        title: row.title,
+      });
 
       if (!dryRun) {
         await pool.query(
           sql`
             update "Release"
             set "aiSummary" = $1,
+                "summarySourceTitle" = $2,
+                "summarySourceExcerpt" = $3,
+                "summaryQualityScore" = $4,
+                "summaryQualityCheckedAt" = now(),
                 "metadataEnrichedAt" = now()
-            where id = $2
+            where id = $5
           `,
-          [aiSummary, row.id],
+          [aiSummary, sourceMetadata.sourceTitle || row.projectTitle || row.title, sourceMetadata.sourceExcerpt || row.summary || null, summaryQualityScore, row.id],
         );
       }
 
@@ -161,10 +179,17 @@ function shouldRefreshSummary(
   mode: BackfillMode,
   beforeDate: Date | null,
 ) {
+  const summaryQualityScore = scoreSummaryQuality({
+    summary: row.aiSummary,
+    artistName: row.artistName,
+    projectTitle: row.projectTitle,
+    title: row.title,
+  });
   const isStale =
     !row.aiSummary ||
     shouldRegenerateAiSummary(row.aiSummary) ||
-    mentionsReleaseIdentity(row.aiSummary, row);
+    mentionsReleaseIdentity(row.aiSummary, row) ||
+    summaryQualityScore < 72;
 
   if (mode === "all") {
     return true;

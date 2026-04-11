@@ -6,6 +6,7 @@ import { isSpecificGenreProfile } from "@/lib/genre-profile";
 import { prisma } from "@/lib/prisma";
 import { resolveBestGenreProfile } from "@/lib/genre-resolution";
 import { normalizeSearchText } from "@/lib/release-search";
+import { buildSummaryAudit } from "@/lib/summary-quality";
 
 const QUALITY_RETRY_QUEUE_STATE_KEY = "quality-retry-queue";
 const GENRE_AUDIT_LOOKBACK_DAYS = 45;
@@ -41,6 +42,26 @@ export type QualityDashboardData = {
       publishedAt: Date;
     }>;
   };
+  summaryAudit: {
+    lowQuality: number;
+    repetitive: number;
+    repeatedPatterns: Array<{
+      patternLabel: string;
+      count: number;
+      examples: string[];
+    }>;
+    flaggedCards: Array<{
+      id: string;
+      slug: string;
+      title: string;
+      artistName: string | null;
+      projectTitle: string | null;
+      aiSummary: string | null;
+      summaryQualityScore: number;
+      patternLabel: string | null;
+      publishedAt: Date;
+    }>;
+  };
   recentWeakCards: Array<{
     id: string;
     slug: string;
@@ -73,6 +94,7 @@ const getCachedQualityDashboardData = unstable_cache(
       retryQueueRow,
       recentWeakCards,
       genreAuditRows,
+      summaryAuditRows,
     ] = await Promise.all([
       prisma.release.count(),
       prisma.release.count({
@@ -157,10 +179,32 @@ const getCachedQualityDashboardData = unstable_cache(
         orderBy: [{ publishedAt: "desc" }],
         take: 320,
       }),
+      prisma.release.findMany({
+        where: {
+          publishedAt: {
+            gte: new Date(Date.now() - GENRE_AUDIT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000),
+          },
+          aiSummary: {
+            not: null,
+          },
+        },
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          artistName: true,
+          projectTitle: true,
+          aiSummary: true,
+          publishedAt: true,
+        },
+        orderBy: [{ publishedAt: "desc" }],
+        take: 320,
+      }),
     ]);
 
     const retryQueue = parseRetryQueueCount(retryQueueRow?.value || null);
     const genreAudit = buildGenreAudit(genreAuditRows);
+    const summaryAudit = buildSummaryAudit(summaryAuditRows);
 
     return {
       totals: {
@@ -185,6 +229,7 @@ const getCachedQualityDashboardData = unstable_cache(
         (group) => group.linkStatus,
       ),
       genreAudit,
+      summaryAudit,
       recentWeakCards,
     };
   },

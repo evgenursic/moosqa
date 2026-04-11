@@ -60,10 +60,15 @@ model Release {
   outletName      String?
   labelName       String?
   genreName       String?
+  genreConfidence Int           @default(0)
   releaseDate     DateTime?
   publishedAt     DateTime
   importedAt      DateTime      @default(now())
   metadataEnrichedAt DateTime?
+  summarySourceTitle String?
+  summarySourceExcerpt String?
+  summaryQualityScore Int       @default(0)
+  summaryQualityCheckedAt DateTime?
   updatedAt       DateTime      @updatedAt
   redditPermalink String
   sourceUrl       String

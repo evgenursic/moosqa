@@ -110,6 +110,26 @@ const GENERIC_SUMMARY_PATTERNS = [
   "an audiotree session strips",
   "a world cafe session",
   "a studio session",
+  "across the release",
+  "stays consistent",
+  "keeps that consistency from becoming blur",
+  "the live setup puts",
+  "the appeal here is how",
+  "keeps the release taut enough",
+  "gives the album a steady center of gravity",
+  "gives the ep a steady center of gravity",
+  "gives the set a steady center of gravity",
+  "gives the release its backbone",
+  "gives the whole set a stable center",
+  "stops the return from feeling ceremonial",
+  "stops that consistency from turning generic",
+  "keeps the set purposeful",
+  "the performance gains most from how",
+  "what sticks is the tension between",
+  "with the sequencing making",
+  "the arrangement registers as",
+  "trades polish for proximity",
+  "recasts the song through proximity",
 ];
 
 const MOOD_CUES: Array<[RegExp, string]> = [
@@ -309,49 +329,49 @@ function buildSingleFallback(
 
   if (facts.isCoverSet || facts.isReimagining || facts.isReissue) {
     return chooseVariant(seed, [
-      `${color || "The recasting is the hook here"}, and ${sonic} keeps the older material from settling into tribute mode`,
-      `${facts.referenceWork ? `${facts.referenceWork} is only the starting point here` : "The source material is only the starting point here"}, with ${sonic} pushing the new reading into focus`,
-      `${facts.originalYear ? `Material first heard in ${facts.originalYear}` : "Earlier material"} is pulled into a different light once ${sonic} and ${buildAtmosphereHook(facts)} start pressing on it`,
+      `${color || "The reworking shifts the song's center of gravity"}, and ${sonic} keeps it feeling newly inhabited rather than preserved`,
+      `${facts.referenceWork ? `The outline of ${facts.referenceWork} still hovers in the background` : "The original outline still hovers in the background"}, but ${sonic} bends the new version toward ${buildAtmosphereHook(facts)}`,
+      `${facts.originalYear ? `Its ${facts.originalYear} lineage still peeks through` : "Its earlier lineage still peeks through"}, though ${sonic} turns the revisit into something more lived-in than reverent`,
     ]);
   }
 
   if (facts.upcomingProject && facts.guestArtist) {
     return chooseVariant(seed, [
-      `${color || "The featured voice matters structurally here"}, with ${sonic} turning the preview toward ${inferUpcomingProjectFrame(context, titleCueSource)}`,
-      `${facts.guestArtist} is felt in the shape of the arrangement rather than as a cameo, and ${sonic} gives ${inferUpcomingProjectFrame(context, titleCueSource)} a sharper profile`,
-      `${sonic} makes the collaboration feel purposeful, while ${inferUpcomingProjectFrame(context, titleCueSource)} is sketched in the background`,
+      `${color || "The guest spot changes the architecture of the song"}, with ${sonic} framing a more revealing first look at ${inferUpcomingProjectFrame(context, titleCueSource)}`,
+      `${facts.guestArtist} lands as part of the arrangement rather than decoration, and ${sonic} gives ${inferUpcomingProjectFrame(context, titleCueSource)} a more distinctive silhouette`,
+      `${sonic} turns the collaboration into a real structural shift, while ${inferUpcomingProjectFrame(context, titleCueSource)} stays visible behind it`,
     ]);
   }
 
   if (facts.upcomingProject) {
     return chooseVariant(seed, [
-      `${color || "This preview does more than tee up the rollout"}, with ${sonic} giving ${inferUpcomingProjectFrame(context, titleCueSource)} a clear contour`,
-      `${sonic} turns the song into a more precise signal for ${inferUpcomingProjectFrame(context, titleCueSource)} than a standard advance drop`,
-      `${buildAtmosphereHook(facts)} sits on the surface, but ${sonic} is what gives the coming project a distinct first outline`,
+      `${color || "This preview does more than announce the rollout"}, with ${sonic} sketching a sharper picture of ${inferUpcomingProjectFrame(context, titleCueSource)}`,
+      `${sonic} makes the song feel like a real clue to ${inferUpcomingProjectFrame(context, titleCueSource)} instead of a routine advance single`,
+      `${buildAtmosphereHook(facts)} sits on the surface, but ${sonic} is what makes the coming project feel specific rather than merely promised`,
     ]);
   }
 
   if (facts.descriptiveClause) {
     return chooseVariant(seed, [
-      `One telling move is that it ${facts.descriptiveClause}, while ${sonic} keeps the whole thing from reading as a placeholder`,
-      `${color}, and ${sonic} is what lets that idea land cleanly`,
-      `${sonic} gives the release its backbone, but the real hook is how it ${facts.descriptiveClause}`,
+      `The telling move is that it ${facts.descriptiveClause}, with ${sonic} making that decision feel central instead of cosmetic`,
+      `${color}, and ${sonic} is what keeps the song from slipping into sketchbook territory`,
+      `${sonic} gives the track its frame, but the real pull is how it ${facts.descriptiveClause}`,
     ]);
   }
 
   if (facts.guestArtist) {
     return chooseVariant(seed, [
       `${facts.guestArtist} changes the temperature of the track, and ${sonic} makes that contrast stick`,
-      `The collaboration registers in the arrangement as much as the billing, with ${sonic} doing the connecting work`,
-      `${sonic} keeps the guest turn from feeling decorative and pushes the track toward ${buildAtmosphereHook(facts)}`,
+      `The collaboration shows up in the shape of the arrangement as much as the billing, with ${sonic} doing the connecting work`,
+      `${sonic} keeps the guest turn from feeling ornamental and nudges the song toward ${buildAtmosphereHook(facts)}`,
     ]);
   }
 
   return chooseVariant(seed, [
-    `${sonic} puts the song's ${buildAtmosphereHook(facts)} close to the front instead of leaving it to implication`,
-    `${buildAtmosphereHook(facts)} stays in view, but ${sonic} is what gives the track its actual shape`,
-    `${sonic} keeps the release taut enough for ${buildThemeHook(facts)} to register without overstatement`,
-    `What sticks is the tension between ${sonic} and ${buildThemeHook(facts)}, which gives the track a firmer identity`,
+    `${sonic} keeps the emotional center close to the mic, so ${buildAtmosphereHook(facts)} reads as a choice rather than background color`,
+    `${buildAtmosphereHook(facts)} lingers on the surface, but ${sonic} is what gives the track a memorable silhouette`,
+    `The strongest detail is how ${sonic} rubs against ${buildThemeHook(facts)}, leaving the song with more edge than softness`,
+    `${sonic} carries the tension while ${buildThemeHook(facts)} keeps leaking through the seams`,
   ]);
 }
 
@@ -369,45 +389,45 @@ function buildCollectionFallback(
 
   if (facts.isReissue || facts.isReimagining) {
     return chooseVariant(seed, [
-      `${color || "The archival angle is only half the story"}, because ${sonic} keeps the set feeling active instead of sealed in amber`,
-      `${facts.originalYear ? `Its ${facts.originalYear} origin still shows` : "Its earlier origin still shows"}, but ${sonic} stops the return from feeling ceremonial`,
-      `${runtimeHook} carry a strong sense of return, though ${sonic} keeps the material vivid rather than preserved`,
+      `${color || "The archival angle is only half the story"}, because ${sonic} keeps the set animated instead of museum-lit`,
+      `${facts.originalYear ? `Its ${facts.originalYear} origin still shows` : "Its earlier origin still shows"}, but ${sonic} keeps the return from feeling ceremonial`,
+      `${runtimeHook} carry a strong sense of return, though ${sonic} keeps the material vivid enough to feel current`,
     ]);
   }
 
   if (facts.trackCount && facts.descriptiveClause) {
     return chooseVariant(seed, [
-      `${runtimeHook} are used to ${facts.descriptiveClause}, with ${sonic} holding the shape together from start to finish`,
-      `${color}, and ${runtimeHook} give that idea enough room to feel structural rather than decorative`,
-      `${sonic} is what keeps ${runtimeHook} coherent, especially once it ${facts.descriptiveClause}`,
+      `${runtimeHook} are used to ${facts.descriptiveClause}, with ${sonic} making the through-line easy to follow`,
+      `${color}, and ${runtimeHook} give that idea room to echo across the sequence without losing momentum`,
+      `${sonic} keeps ${runtimeHook} coherent, especially once the set starts to ${facts.descriptiveClause}`,
     ]);
   }
 
   if (facts.trackCount) {
     return chooseVariant(seed, [
-      `${runtimeHook} keep circling ${buildThemeHook(facts)}, while ${sonic} gives the whole set a stable center`,
-      `${sonic} is spread across ${runtimeHook}, which is why the release feels sequenced rather than merely assembled`,
-      `${runtimeHook} are enough to build a clear ${buildAtmosphereHook(facts)} frame, and ${sonic} makes that frame hold`,
+      `${runtimeHook} keep returning to ${buildThemeHook(facts)}, but ${sonic} keeps changing the scale of that idea from piece to piece`,
+      `${sonic} threads through ${runtimeHook}, which is why the set feels paced rather than simply complete`,
+      `${runtimeHook} sketch a durable ${buildAtmosphereHook(facts)} world, and ${sonic} gives each pass enough contrast to matter`,
     ]);
   }
 
   if (facts.descriptiveClause) {
     return chooseVariant(seed, [
       `${color}, with ${sonic} making the release feel shaped rather than loosely gathered`,
-      `${sonic} does the unglamorous work of coherence here, which matters because it ${facts.descriptiveClause}`,
-      `${buildAtmosphereHook(facts)} runs through the set, but it ${facts.descriptiveClause} is the move that gives it definition`,
+      `${sonic} does the quiet work of coherence here, which matters because it ${facts.descriptiveClause}`,
+      `${buildAtmosphereHook(facts)} runs through the set, but the defining move is still how it ${facts.descriptiveClause}`,
     ]);
   }
 
   return chooseVariant(seed, [
-    `${sonic} gives the ${typeLabel} a steady center of gravity, while ${buildThemeHook(facts)} keeps the mood from flattening out`,
-    `${buildAtmosphereHook(facts)} is consistent across the release, but ${sonic} is what stops that consistency from turning generic`,
-    `${sonic} and ${buildThemeHook(facts)} keep the set purposeful without forcing it into a single blunt mood`,
+    `${sonic} keeps the ${typeLabel} grounded, while ${buildThemeHook(facts)} keeps the mood from settling into one color`,
+    `${buildAtmosphereHook(facts)} colors the whole set, but ${sonic} keeps redrawing the edges so it never turns into one wash`,
+    `${sonic} and ${buildThemeHook(facts)} give the set enough movement to feel curated rather than boxed into one blunt mood`,
   ]);
 }
 
 function buildPerformanceFallback(facts: SummaryFacts, seed: number) {
-  const setting = facts.performanceSetting || "the live setup";
+  const setting = facts.performanceSetting || resolveFallbackPerformanceSetting(seed);
   const sonic = facts.detailCue || "room sound";
   const color = facts.descriptiveClause || buildColorHook(facts);
   const atmosphere = buildAtmosphereHook(facts);
@@ -425,14 +445,23 @@ function buildPerformanceFallback(facts: SummaryFacts, seed: number) {
     return chooseVariant(seed, [
       `${capitalizeFirst(setting)} pulls ${sonic} close enough that ${atmosphere} stops feeling abstract`,
       `In ${normalizedSetting}, ${sonic} carries the take and leaves ${buildThemeHook(facts)} plainly exposed`,
-      `${capitalizeFirst(setting)} gives the arrangement just enough room sound for ${buildThemeHook(facts)} to register differently`,
+      `${capitalizeFirst(setting)} gives the arrangement just enough room sound for ${buildThemeHook(facts)} to register at a different scale`,
     ]);
   }
 
   return chooseVariant(seed, [
-    `${capitalizeFirst(setting)} puts ${sonic} at the front, which changes the proportions of the song more than sheer volume ever could`,
-    `${sonic} becomes the real lead in ${normalizedSetting}, while ${buildThemeHook(facts)} fills in the rest`,
-    `The performance gains most from how ${normalizedSetting} leaves ${sonic} and ${atmosphere} exposed`,
+    `${capitalizeFirst(setting)} recasts the song through proximity, with ${sonic} doing more dramatic work than any extra volume`,
+    `In ${normalizedSetting}, ${sonic} becomes part of the drama while ${buildThemeHook(facts)} settles into sharper relief`,
+    `${capitalizeFirst(setting)} leaves enough air around the performance for ${sonic} to roughen the edges of ${atmosphere}`,
+  ]);
+}
+
+function resolveFallbackPerformanceSetting(seed: number) {
+  return chooseVariant(seed, [
+    "the live setup",
+    "the room take",
+    "this close-range setup",
+    "the onstage frame",
   ]);
 }
 
@@ -840,26 +869,43 @@ function extractDescriptiveClause(context: string) {
 function inferArrangementFromGenre(genreName: string | null | undefined, releaseType: ReleaseType) {
   const genre = (sanitizeGenreForSummary(genreName) || "").toLowerCase();
 
-  if (releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION) {
-    return "live arrangement details";
-  }
   if (genre.includes("dream") || genre.includes("shoegaze")) {
-    return "hazy layers";
+    return releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION
+      ? "guitar haze in the room"
+      : "hazy layers";
   }
   if (genre.includes("folk") || genre.includes("americana")) {
-    return "acoustic texture";
+    return releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION
+      ? "close-mic acoustic grain"
+      : "acoustic texture";
   }
   if (genre.includes("electronic") || genre.includes("synth")) {
-    return "electronic detail";
+    return releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION
+      ? "synth pulse in the room"
+      : "electronic detail";
   }
   if (genre.includes("punk")) {
-    return "ragged momentum";
+    return releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION
+      ? "snare-and-guitar friction"
+      : "ragged momentum";
   }
   if (genre.includes("hip-hop") || genre.includes("rap")) {
-    return "rhythmic focus";
+    return releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION
+      ? "beat-and-vocal attack"
+      : "rhythmic focus";
+  }
+  if (genre.includes("jazz")) {
+    return releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION
+      ? "ensemble interplay"
+      : "ensemble interplay";
   }
   if (genre.includes("metal") || genre.includes("drone")) {
-    return "heavier low-end pressure";
+    return releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION
+      ? "amplifier weight"
+      : "heavier low-end pressure";
+  }
+  if (releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION) {
+    return "room sound and band interplay";
   }
 
   return null;
@@ -891,7 +937,16 @@ function inferThemeFromTitle(title: string, context: string) {
   const normalized = `${title} ${context}`.toLowerCase();
 
   if (normalized.includes("live") || normalized.includes("session")) {
-    return "a close-mic feel";
+    if (normalized.includes("tiny desk")) {
+      return "a stripped-room intimacy";
+    }
+    if (normalized.includes("world cafe") || normalized.includes("kexp") || normalized.includes("audiotree")) {
+      return "a broadcast-room immediacy";
+    }
+    if (normalized.includes("jimmy kimmel") || normalized.includes("fallon") || normalized.includes("colbert")) {
+      return "TV-stage tension";
+    }
+    return "a more exposed live feel";
   }
   if (normalized.includes("cover")) {
     return "a re-framing instinct";

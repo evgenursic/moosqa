@@ -7,9 +7,10 @@ import {
   countGenreProfileSegments,
   isSpecificGenreProfile,
 } from "@/lib/genre-profile";
-import { resolveBestGenreProfile } from "@/lib/genre-resolution";
+import { resolveGenreDecision } from "@/lib/genre-resolution";
 import { fetchMusicMetadata, type MusicMetadata } from "@/lib/musicbrainz";
 import { assessReleaseQuality } from "@/lib/release-quality";
+import { scoreSummaryQuality } from "@/lib/summary-quality";
 import { detectPlatform } from "@/lib/listening-links";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
 
@@ -56,6 +57,7 @@ export async function enrichRecentReleases(limit = 8) {
         linkStatus: qualitySnapshot.linkStatus,
         qualityScore: qualitySnapshot.qualityScore,
         qualityCheckedAt: checkedAt,
+        summaryQualityCheckedAt: checkedAt,
       },
     });
     enriched += 1;
@@ -224,6 +226,8 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
         fallbackBandcampMetadata?.sourceExcerpt,
         searchedBandcampMetadata?.sourceTitle,
         searchedBandcampMetadata?.sourceExcerpt,
+        release.summarySourceTitle,
+        release.summarySourceExcerpt,
         release.summary,
         release.aiSummary,
         release.title,
@@ -237,7 +241,7 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
       labelName: normalizeLabel(musicMetadata.labelName) || normalizeLabel(sourceMetadata.labelName),
       limit: 3,
     }) || null;
-  const genreName = resolveBestGenreProfile({
+  const genreDecision = resolveGenreDecision({
     releaseType: release.releaseType,
     currentGenre: release.genreName,
     explicitGenres: [overrideGenre, profiledGenre, ...genreCandidates],
@@ -248,6 +252,8 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
       fallbackBandcampMetadata?.sourceExcerpt,
       searchedBandcampMetadata?.sourceTitle,
       searchedBandcampMetadata?.sourceExcerpt,
+      release.summarySourceTitle,
+      release.summarySourceExcerpt,
       release.summary,
       release.aiSummary,
       release.title,
@@ -260,6 +266,7 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
     labelName: normalizeLabel(musicMetadata.labelName) || normalizeLabel(sourceMetadata.labelName),
     limit: 3,
   });
+  const genreName = genreDecision.genre;
   const labelName =
     normalizeLabel(musicMetadata.labelName) ||
     normalizeLabel(sourceMetadata.labelName) ||
@@ -267,7 +274,9 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
     normalizeLabel(searchedBandcampMetadata?.labelName) ||
     release.labelName ||
     null;
-  const summaryNeedsRefresh = shouldRegenerateAiSummary(release.aiSummary);
+  const summaryNeedsRefresh =
+    shouldRegenerateAiSummary(release.aiSummary) ||
+    (release.summaryQualityScore ?? 100) < 72;
   const summaryContext = [
     sourceMetadata.sourceTitle,
     sourceMetadata.sourceExcerpt,
@@ -275,6 +284,8 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
     fallbackBandcampMetadata?.sourceExcerpt,
     searchedBandcampMetadata?.sourceTitle,
     searchedBandcampMetadata?.sourceExcerpt,
+    release.summarySourceTitle,
+    release.summarySourceExcerpt,
     release.summary,
   ]
     .filter(Boolean)
@@ -293,11 +304,29 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
       outletName: release.outletName || null,
       labelName,
     }));
+  const summarySourceTitle =
+    sourceMetadata.sourceTitle ||
+    fallbackBandcampMetadata?.sourceTitle ||
+    searchedBandcampMetadata?.sourceTitle ||
+    release.projectTitle ||
+    release.title ||
+    null;
+  const summarySourceExcerpt = summaryContext || null;
+  const summaryQualityScore = scoreSummaryQuality({
+    summary: aiSummary,
+    artistName: release.artistName,
+    projectTitle: release.projectTitle,
+    title: release.title,
+  });
 
   return {
     aiSummary,
     labelName,
     genreName,
+    genreConfidence: genreDecision.confidence,
+    summarySourceTitle,
+    summarySourceExcerpt,
+    summaryQualityScore,
     releaseDate:
       musicMetadata.releaseDate ||
       sourceMetadata.releaseDate ||
