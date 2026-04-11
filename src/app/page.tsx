@@ -42,6 +42,7 @@ export default async function Home({ searchParams }: HomePageProps) {
   const hasSearchResults = Boolean(
     getSearchParamValue(resolvedSearchParams.q) ||
       getSearchParamValue(resolvedSearchParams.type) ||
+      getSearchParamValue(resolvedSearchParams.genre) ||
       getSearchParamValue(resolvedSearchParams.platform) ||
       getSearchParamValue(resolvedSearchParams.direct),
   );

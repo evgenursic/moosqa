@@ -10,6 +10,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q") || "";
   const type = searchParams.get("type") || "";
+  const genre = searchParams.get("genre") || "";
   const platform = searchParams.get("platform") || "";
   const directOnly = searchParams.get("direct") === "1";
   const limit = clampLimit(searchParams.get("limit"));
@@ -18,6 +19,7 @@ export async function GET(request: Request) {
   const filtered = filterAndRankReleaseListings(releases, {
     query,
     type,
+    genre,
     platform,
     directOnly,
   });

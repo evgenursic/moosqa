@@ -44,6 +44,11 @@ type StoredSyncStatus = {
   lastError: string | null;
   lastResult: SyncResult | null;
 };
+type StoredQualityRetryQueue = {
+  version: 1;
+  releaseIds: string[];
+  updatedAt: string | null;
+};
 export type SyncStatusSummary = {
   level: "healthy" | "running" | "warning" | "error" | "idle";
   label: string;
@@ -62,10 +67,12 @@ export type SyncStatusSummary = {
 
 const HOMEPAGE_SYNC_STATE_KEY = "homepage-sync";
 const SYNC_STATUS_STATE_KEY = "sync-status";
+const QUALITY_RETRY_QUEUE_STATE_KEY = "quality-retry-queue";
 const HOMEPAGE_SYNC_STALE_MS = 45_000;
 const SYNC_STATUS_STALE_MS = 1000 * 60 * 12;
 const RECENT_FEED_PRUNE_MIN_POSTS = 50;
 const LIGHTWEIGHT_SOURCE_LOOKUP_LIMIT = 3;
+const QUALITY_AUDIT_LOOKBACK_DAYS = 14;
 
 declare global {
   var __moosqaHomepageSyncPromise: Promise<SyncResult> | null | undefined;
@@ -90,9 +97,13 @@ export async function syncIndieheadsReleases(options: SyncOptions = {}) {
       ? Math.max(12, sanitized + created)
       : Math.max(60, sanitized + created + updated);
     const enriched = enrich ? await enrichRecentReleases(enrichTarget) : 0;
+    await refreshQualityRetryQueue(lightweight ? 18 : 30);
     const quality = lightweight
       ? { checked: 0, improved: 0 }
       : await runRecentReleaseQualityPass(12);
+    if (!lightweight) {
+      await refreshQualityRetryQueue(30);
+    }
     await markHomepageSyncFresh();
     clearReleaseDataCaches();
 
@@ -394,6 +405,7 @@ async function syncLatestHomepageReleases() {
       lightweight: true,
     });
     const missingRecentRemoved = await pruneMissingRecentReleases(posts, normalizedReleases);
+    await refreshQualityRetryQueue(18);
     await markHomepageSyncFresh();
     clearReleaseDataCaches();
 
@@ -653,18 +665,39 @@ async function runRecentReleaseQualityPass(limit = 6) {
     return { checked: 0, improved: 0 };
   }
 
-  const cutoffDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const queuedIds = await readQualityRetryQueue();
+  const queuedReleases = queuedIds.length
+    ? await prisma.release.findMany({
+        where: {
+          id: {
+            in: queuedIds,
+          },
+        },
+      })
+    : [];
   const recentReleases = await prisma.release.findMany({
     where: {
       publishedAt: {
-        gte: cutoffDate,
+        gte: getQualityAuditCutoffDate(),
       },
     },
     orderBy: [{ publishedAt: "desc" }],
     take: Math.max(limit * 6, 36),
   });
 
-  const candidates = recentReleases
+  const candidatePool = new Map<string, (typeof recentReleases)[number]>();
+
+  for (const release of queuedReleases) {
+    candidatePool.set(release.id, release);
+  }
+
+  for (const release of recentReleases) {
+    if (!candidatePool.has(release.id)) {
+      candidatePool.set(release.id, release);
+    }
+  }
+
+  const candidates = [...candidatePool.values()]
     .map((release) => ({
       release,
       snapshot: assessReleaseQuality(release),
@@ -724,6 +757,85 @@ async function runRecentReleaseQualityPass(limit = 6) {
   }
 
   return { checked, improved };
+}
+
+async function refreshQualityRetryQueue(limit = 24) {
+  const candidates = await collectQualityRetryCandidates(limit);
+  await writeQualityRetryQueue(candidates.map((candidate) => candidate.release.id));
+  return candidates.length;
+}
+
+async function collectQualityRetryCandidates(limit = 24) {
+  const recentReleases = await prisma.release.findMany({
+    where: {
+      publishedAt: {
+        gte: getQualityAuditCutoffDate(),
+      },
+    },
+    orderBy: [{ publishedAt: "desc" }],
+    take: Math.max(limit * 8, 48),
+  });
+
+  return recentReleases
+    .map((release) => ({
+      release,
+      snapshot: assessReleaseQuality(release),
+    }))
+    .filter((entry) => entry.snapshot.needsRetry)
+    .sort((left, right) => {
+      const priorityDelta = right.snapshot.priorityScore - left.snapshot.priorityScore;
+      if (priorityDelta !== 0) {
+        return priorityDelta;
+      }
+
+      return right.release.publishedAt.getTime() - left.release.publishedAt.getTime();
+    })
+    .slice(0, limit);
+}
+
+async function readQualityRetryQueue() {
+  const row = await prisma.appState.findUnique({
+    where: { key: QUALITY_RETRY_QUEUE_STATE_KEY },
+    select: { value: true },
+  });
+
+  if (!row?.value) {
+    return [] as string[];
+  }
+
+  try {
+    const parsed = JSON.parse(row.value) as Partial<StoredQualityRetryQueue>;
+    if (!Array.isArray(parsed.releaseIds)) {
+      return [] as string[];
+    }
+
+    return parsed.releaseIds.filter((value): value is string => typeof value === "string");
+  } catch {
+    return [] as string[];
+  }
+}
+
+async function writeQualityRetryQueue(releaseIds: string[]) {
+  const next: StoredQualityRetryQueue = {
+    version: 1,
+    releaseIds,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await prisma.appState.upsert({
+    where: { key: QUALITY_RETRY_QUEUE_STATE_KEY },
+    update: {
+      value: JSON.stringify(next),
+    },
+    create: {
+      key: QUALITY_RETRY_QUEUE_STATE_KEY,
+      value: JSON.stringify(next),
+    },
+  });
+}
+
+function getQualityAuditCutoffDate() {
+  return new Date(Date.now() - QUALITY_AUDIT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
 }
 
 async function upsertNormalizedReleases(

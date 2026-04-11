@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ReleaseArtwork } from "@/components/release-artwork";
@@ -29,6 +29,10 @@ type SearchResultItem = {
 type SearchResponse = {
   total: number;
   results: SearchResultItem[];
+};
+
+type SearchFacetResponse = {
+  genres: string[];
 };
 
 type AdvancedSearchButtonProps = {
@@ -66,9 +70,12 @@ export function AdvancedSearchOverlay({
   const searchParams = useSearchParams();
   const currentQuery = searchParams.get("q") || "";
   const currentType = searchParams.get("type") || "";
+  const currentGenre = searchParams.get("genre") || "";
   const currentPlatform = searchParams.get("platform") || "";
   const currentDirect = searchParams.get("direct") === "1";
-  const searchKey = `${currentQuery}|${currentType}|${currentPlatform}|${currentDirect ? "1" : "0"}`;
+  const searchKey = `${currentQuery}|${currentType}|${currentGenre}|${currentPlatform}|${
+    currentDirect ? "1" : "0"
+  }`;
 
   if (!isOpen) {
     return null;
@@ -80,6 +87,7 @@ export function AdvancedSearchOverlay({
       onClose={onClose}
       initialQuery={currentQuery}
       initialType={currentType}
+      initialGenre={currentGenre}
       initialPlatform={currentPlatform}
       initialDirect={currentDirect}
     />
@@ -90,6 +98,7 @@ type AdvancedSearchDialogProps = {
   onClose: () => void;
   initialQuery: string;
   initialType: string;
+  initialGenre: string;
   initialPlatform: string;
   initialDirect: boolean;
 };
@@ -98,28 +107,32 @@ function AdvancedSearchDialog({
   onClose,
   initialQuery,
   initialType,
+  initialGenre,
   initialPlatform,
   initialDirect,
 }: AdvancedSearchDialogProps) {
+  const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const resultsCacheRef = useRef<Map<string, SearchResponse>>(new Map());
   const [queryValue, setQueryValue] = useState(initialQuery);
   const [typeValue, setTypeValue] = useState(initialType);
+  const [genreValue, setGenreValue] = useState(initialGenre);
   const [platformValue, setPlatformValue] = useState(initialPlatform);
   const [directOnlyValue, setDirectOnlyValue] = useState(initialDirect);
   const [showFilters, setShowFilters] = useState(
-    Boolean(initialType || initialPlatform || initialDirect),
+    Boolean(initialType || initialGenre || initialPlatform || initialDirect),
   );
+  const [genreOptions, setGenreOptions] = useState<string[]>([]);
   const [liveResults, setLiveResults] = useState<SearchResultItem[]>([]);
   const [resultTotal, setResultTotal] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
   const [hasLoadedResults, setHasLoadedResults] = useState(false);
   const deferredQuery = useDeferredValue(queryValue.trim());
-  const hasStructuredFilters = Boolean(typeValue || platformValue || directOnlyValue);
+  const hasStructuredFilters = Boolean(typeValue || genreValue || platformValue || directOnlyValue);
   const shouldSearch = deferredQuery.length >= 2 || hasStructuredFilters;
 
   const hasDraftCriteria = Boolean(
-    queryValue.trim() || typeValue || platformValue || directOnlyValue,
+    queryValue.trim() || typeValue || genreValue || platformValue || directOnlyValue,
   );
 
   useEffect(() => {
@@ -141,6 +154,34 @@ function AdvancedSearchDialog({
   }, [onClose]);
 
   useEffect(() => {
+    if (!showFilters || genreOptions.length > 0) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    void fetch("/api/search/facets", {
+      signal: controller.signal,
+      cache: "force-cache",
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Facet request failed with ${response.status}`);
+        }
+
+        const payload = (await response.json()) as SearchFacetResponse;
+        setGenreOptions(payload.genres || []);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          console.error(error);
+        }
+      });
+
+    return () => controller.abort();
+  }, [genreOptions.length, showFilters]);
+
+  useEffect(() => {
     if (!shouldSearch) {
       setLiveResults([]);
       setResultTotal(0);
@@ -151,10 +192,17 @@ function AdvancedSearchDialog({
 
     const controller = new AbortController();
     const params = new URLSearchParams();
-    const cacheKey = [deferredQuery, typeValue, platformValue, directOnlyValue ? "1" : "0"].join("|");
+    const cacheKey = [
+      deferredQuery,
+      typeValue,
+      genreValue,
+      platformValue,
+      directOnlyValue ? "1" : "0",
+    ].join("|");
 
     setParam(params, "q", deferredQuery);
     setParam(params, "type", typeValue);
+    setParam(params, "genre", genreValue);
     setParam(params, "platform", platformValue);
     setParam(params, "direct", directOnlyValue ? "1" : "");
     params.set("limit", String(ACTIVE_RESULTS_LIMIT));
@@ -206,11 +254,12 @@ function AdvancedSearchDialog({
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [deferredQuery, directOnlyValue, platformValue, shouldSearch, typeValue]);
+  }, [deferredQuery, directOnlyValue, genreValue, platformValue, shouldSearch, typeValue]);
 
   function clearSearch() {
     setQueryValue("");
     setTypeValue("");
+    setGenreValue("");
     setPlatformValue("");
     setDirectOnlyValue(false);
     setShowFilters(false);
@@ -218,6 +267,19 @@ function AdvancedSearchDialog({
     requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
+  }
+
+  function openFullResults() {
+    const params = new URLSearchParams();
+    setParam(params, "q", queryValue.trim());
+    setParam(params, "type", typeValue);
+    setParam(params, "genre", genreValue);
+    setParam(params, "platform", platformValue);
+    setParam(params, "direct", directOnlyValue ? "1" : "");
+
+    const queryString = params.toString();
+    router.push(queryString ? `/?${queryString}#explore` : "/");
+    onClose();
   }
 
   return (
@@ -275,19 +337,29 @@ function AdvancedSearchDialog({
               </button>
 
               {hasDraftCriteria ? (
-                <button
-                  type="button"
-                  onClick={clearSearch}
-                  className="inline-flex min-h-10 cursor-pointer items-center rounded-full border border-white/12 px-4 py-2 transition hover:border-white/24 hover:bg-white/6 hover:text-white"
-                >
-                  Clear
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={openFullResults}
+                    className="inline-flex min-h-10 cursor-pointer items-center rounded-full border border-white/12 px-4 py-2 transition hover:border-white/24 hover:bg-white/6 hover:text-white"
+                  >
+                    View all
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={clearSearch}
+                    className="inline-flex min-h-10 cursor-pointer items-center rounded-full border border-white/12 px-4 py-2 transition hover:border-white/24 hover:bg-white/6 hover:text-white"
+                  >
+                    Clear
+                  </button>
+                </>
               ) : null}
             </div>
           </div>
 
           {showFilters ? (
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(12rem,0.72fr)_minmax(12rem,0.72fr)_auto]">
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(12rem,0.72fr)_minmax(14rem,0.9fr)_minmax(12rem,0.72fr)_auto]">
               <div>
                 <label
                   htmlFor="advanced-type"
@@ -317,6 +389,31 @@ function AdvancedSearchDialog({
                   <option value="PERFORMANCE" className="bg-[#0f1521]">
                     Live / Session
                   </option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="advanced-genre"
+                  className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-white/46"
+                >
+                  Genre
+                </label>
+                <select
+                  id="advanced-genre"
+                  name="genre"
+                  value={genreValue}
+                  onChange={(event) => setGenreValue(event.target.value)}
+                  className="w-full rounded-2xl border border-white/12 bg-white/6 px-4 py-3 text-sm text-white outline-none transition focus:border-white/28"
+                >
+                  <option value="" className="bg-[#0f1521]">
+                    Any genre
+                  </option>
+                  {genreOptions.map((genre) => (
+                    <option key={genre} value={genre} className="bg-[#0f1521]">
+                      {genre}
+                    </option>
+                  ))}
                 </select>
               </div>
 

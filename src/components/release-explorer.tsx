@@ -41,6 +41,7 @@ export function ReleaseExplorer({ releases }: ReleaseExplorerProps) {
   const searchParams = useSearchParams();
   const queryFromUrl = searchParams.get("q") || "";
   const typeFromUrl = searchParams.get("type") || "";
+  const genreFromUrl = searchParams.get("genre") || "";
   const platformFromUrl = searchParams.get("platform") || "";
   const directOnly = searchParams.get("direct") === "1";
   const [visibleCount, setVisibleCount] = useState(INITIAL_PAGE_SIZE);
@@ -51,6 +52,7 @@ export function ReleaseExplorer({ releases }: ReleaseExplorerProps) {
   const filteredReleases = filterAndRankReleaseListings(releases, {
     query: deferredQuery,
     type: typeFromUrl,
+    genre: genreFromUrl,
     platform: platformFromUrl,
     directOnly,
   });
@@ -59,7 +61,7 @@ export function ReleaseExplorer({ releases }: ReleaseExplorerProps) {
     startTransition(() => {
       setVisibleCount(INITIAL_PAGE_SIZE);
     });
-  }, [deferredQuery, directOnly, platformFromUrl, typeFromUrl]);
+  }, [deferredQuery, directOnly, genreFromUrl, platformFromUrl, typeFromUrl]);
 
   useEffect(() => {
     const node = sentinelRef.current;
@@ -104,6 +106,7 @@ export function ReleaseExplorer({ releases }: ReleaseExplorerProps) {
         <span>{visibleReleases.length} visible</span>
         {queryFromUrl ? <span>Query: {queryFromUrl}</span> : null}
         {typeFromUrl ? <span>Type: {typeFromUrl.replace("_", " ")}</span> : null}
+        {genreFromUrl ? <span>Genre: {genreFromUrl}</span> : null}
         {platformFromUrl ? <span>Platform: {platformFromUrl}</span> : null}
         {directOnly ? <span>Working links only</span> : null}
         {isPending ? <span>Loading more</span> : null}

@@ -1,4 +1,4 @@
-import { ReleaseType } from "@/generated/prisma/enums";
+import { GenreStatus, ReleaseType } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { ensureDatabase } from "@/lib/database";
 import { dedupeReleasesForDisplay } from "@/lib/display-dedupe";
@@ -70,6 +70,7 @@ const TOP_ENGAGED_LOOKBACK_DAYS = 60;
 const ARCHIVE_PAGE_SIZE = 24;
 const SECTION_CACHE_TTL_MS = 12_000;
 const SEARCH_INDEX_CACHE_TTL_MS = 15_000;
+const SEARCH_GENRE_FACET_LIMIT = 24;
 let homepageSectionsCache:
   | {
       expiresAt: number;
@@ -87,6 +88,12 @@ let searchIndexCache:
   | {
       expiresAt: number;
       data: ReleaseListingItem[];
+    }
+  | null = null;
+let searchGenreFacetCache:
+  | {
+      expiresAt: number;
+      data: string[];
     }
   | null = null;
 
@@ -146,6 +153,7 @@ export function clearReleaseDataCaches() {
   homepageSectionsCache = null;
   sectionArchiveCache = new Map();
   searchIndexCache = null;
+  searchGenreFacetCache = null;
 }
 
 const releaseListingSelect = {
@@ -299,6 +307,95 @@ export async function getSearchReleases(options?: { useCache?: boolean; ttlMs?: 
   }
 
   return preparedReleases;
+}
+
+export async function getSearchGenreFacets(options?: { useCache?: boolean; ttlMs?: number }) {
+  await ensureDatabase();
+  const useCache = options?.useCache ?? true;
+  const ttlMs = options?.ttlMs ?? SEARCH_INDEX_CACHE_TTL_MS;
+
+  if (useCache && searchGenreFacetCache && searchGenreFacetCache.expiresAt > Date.now()) {
+    return searchGenreFacetCache.data;
+  }
+
+  const recentCutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+  const releases = await prisma.release.findMany({
+    where: {
+      genreStatus: GenreStatus.STRONG,
+      genreName: {
+        not: null,
+      },
+      publishedAt: {
+        gte: recentCutoff,
+      },
+    },
+    select: {
+      genreName: true,
+      publishedAt: true,
+      qualityScore: true,
+    },
+    orderBy: [{ publishedAt: "desc" }],
+    take: 500,
+  });
+
+  const genreMap = new Map<
+    string,
+    {
+      label: string;
+      count: number;
+      latestPublishedAt: number;
+      bestQualityScore: number;
+    }
+  >();
+
+  for (const release of releases) {
+    const genreName = release.genreName?.trim();
+    if (!genreName) {
+      continue;
+    }
+
+    const key = genreName.toLowerCase();
+    const existing = genreMap.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.latestPublishedAt = Math.max(existing.latestPublishedAt, release.publishedAt.getTime());
+      existing.bestQualityScore = Math.max(existing.bestQualityScore, release.qualityScore);
+      continue;
+    }
+
+    genreMap.set(key, {
+      label: genreName,
+      count: 1,
+      latestPublishedAt: release.publishedAt.getTime(),
+      bestQualityScore: release.qualityScore,
+    });
+  }
+
+  const genres = [...genreMap.values()]
+    .sort((left, right) => {
+      const countDelta = right.count - left.count;
+      if (countDelta !== 0) {
+        return countDelta;
+      }
+
+      const qualityDelta = right.bestQualityScore - left.bestQualityScore;
+      if (qualityDelta !== 0) {
+        return qualityDelta;
+      }
+
+      return right.latestPublishedAt - left.latestPublishedAt;
+    })
+    .slice(0, SEARCH_GENRE_FACET_LIMIT)
+    .map((entry) => entry.label);
+
+  if (useCache) {
+    searchGenreFacetCache = {
+      expiresAt: Date.now() + ttlMs,
+      data: genres,
+    };
+  }
+
+  return genres;
 }
 
 export async function getSectionArchivePage(section: ReleaseSectionKey, requestedPage = 1) {

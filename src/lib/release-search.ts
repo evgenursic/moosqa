@@ -27,6 +27,7 @@ export type SearchableReleaseListing = {
 export type ReleaseSearchFilters = {
   query?: string;
   type?: string;
+  genre?: string;
   platform?: string;
   directOnly?: boolean;
 };
@@ -37,6 +38,7 @@ export function filterAndRankReleaseListings<T extends SearchableReleaseListing>
 ) {
   const normalizedQuery = normalizeSearchText(filters.query || "");
   const typeValue = filters.type || "";
+  const genreValue = normalizeSearchText(filters.genre || "");
   const platformValue = filters.platform || "";
   const directOnly = Boolean(filters.directOnly);
 
@@ -52,6 +54,13 @@ export function filterAndRankReleaseListings<T extends SearchableReleaseListing>
 
       if (typeValue && release.releaseType !== typeValue) {
         return false;
+      }
+
+      if (genreValue) {
+        const releaseGenre = normalizeSearchText(release.genreName || "");
+        if (!releaseGenre || (releaseGenre !== genreValue && !releaseGenre.includes(genreValue))) {
+          return false;
+        }
       }
 
       if (platformValue && getReleasePlatform(release) !== platformValue) {
