@@ -11,7 +11,6 @@ import { SiteHeader } from "@/components/site-header";
 import {
   getSectionArchivePage,
   isReleaseSectionKey,
-  releaseSectionDefinitions,
 } from "@/lib/release-sections";
 import { getSiteUrl } from "@/lib/site";
 import { refreshHomepageData, shouldBlockForHomepageRefresh } from "@/lib/sync-releases";
@@ -25,62 +24,27 @@ type BrowseSectionPageProps = {
 
 export const unstable_instant = false;
 
-export async function generateMetadata({
-  params,
-  searchParams,
-}: BrowseSectionPageProps): Promise<Metadata> {
-  try {
-    const { section } = await params;
-    const resolvedSearchParams = searchParams ? await searchParams : {};
+export function generateMetadata(): Metadata {
+  const title = "Browse | MooSQA";
+  const description = "Explore the MooSQA archive of singles, albums, EPs and live sessions.";
 
-    if (!isReleaseSectionKey(section)) {
-      return {
-        title: "Browse | MooSQA",
-      };
-    }
-
-    const definition = releaseSectionDefinitions[section];
-    const page = parsePageParam(resolvedSearchParams.page);
-    const genre = parseGenreParam(resolvedSearchParams.genre);
-    const url = new URL(buildArchiveHref(section, { page, genre }), getSiteUrl()).toString();
-    const titleParts = [definition.title];
-    if (genre) {
-      titleParts.push(genre);
-    }
-    if (page > 1) {
-      titleParts.push(`Page ${page}`);
-    }
-    const title = `${titleParts.join(" | ")} | MooSQA`;
-    const description = genre
-      ? `${definition.description} Filtered to ${genre}${page > 1 ? `, page ${page}` : ""}.`
-      : page > 1
-        ? `${definition.description} Archive page ${page}.`
-        : definition.description;
-
-    return {
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: new URL("/browse/latest", getSiteUrl()).toString(),
+    },
+    openGraph: {
       title,
       description,
-      alternates: {
-        canonical: url,
-      },
-      openGraph: {
-        title,
-        description,
-        url,
-      },
-      twitter: {
-        card: "summary",
-        title,
-        description,
-      },
-    };
-  } catch (error) {
-    console.error("Browse metadata generation failed.", error);
-    return {
-      title: "Browse | MooSQA",
-      description: "Explore the MooSQA archive.",
-    };
-  }
+      url: new URL("/browse/latest", getSiteUrl()).toString(),
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+    },
+  };
 }
 
 export default async function BrowseSectionPage({

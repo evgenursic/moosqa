@@ -45,8 +45,12 @@ export function getClientDeviceKey() {
 }
 
 export function trackClientAnalyticsEvent(payload: AnalyticsPayload) {
+  void postAnalyticsEvent(payload);
+}
+
+export async function postAnalyticsEvent(payload: AnalyticsPayload) {
   if (typeof window === "undefined") {
-    return;
+    return null;
   }
 
   const body = JSON.stringify({
@@ -58,17 +62,53 @@ export function trackClientAnalyticsEvent(payload: AnalyticsPayload) {
   if ("sendBeacon" in navigator) {
     const blob = new Blob([body], { type: "application/json" });
     navigator.sendBeacon("/api/analytics", blob);
-    return;
+    return { ok: true, recorded: true };
   }
 
-  void fetch("/api/analytics", {
+  try {
+    const response = await fetch("/api/analytics", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body,
+      keepalive: true,
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function postAnalyticsEventWithResponse(payload: AnalyticsPayload) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const body = JSON.stringify({
+    ...payload,
+    sourcePath: payload.sourcePath || `${window.location.pathname}${window.location.search}${window.location.hash}`,
+    deviceKey: getClientDeviceKey(),
+  });
+
+  const response = await fetch("/api/analytics", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body,
-    keepalive: true,
-  }).catch(() => undefined);
+  }).catch(() => null);
+
+  if (!response?.ok) {
+    return null;
+  }
+
+  return response.json().catch(() => null);
 }
 
 export function rememberScrollPosition(targetHref?: string | null) {

@@ -40,6 +40,8 @@ type ReleaseCardProps = {
     qualityScore: number;
     scoreAverage: number;
     scoreCount: number;
+    positiveReactionCount: number;
+    negativeReactionCount: number;
     score?: number | null;
     commentCount?: number | null;
     upvoteRatio?: number | null;
@@ -163,6 +165,8 @@ export function ReleaseCard({
           title={release.title}
           artistName={release.artistName}
           projectTitle={release.projectTitle}
+          positiveReactionCount={release.positiveReactionCount}
+          negativeReactionCount={release.negativeReactionCount}
         />
 
         <div className="mt-4">

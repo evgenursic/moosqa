@@ -12,7 +12,17 @@ if (candidateUrls.length === 0) {
   process.exit(1);
 }
 
-const PUBLIC_TABLES = ['"Release"', '"Vote"', '"AppState"', '"AnalyticsEvent"', '"RateLimitEntry"'];
+const PUBLIC_TABLES = [
+  '"Release"',
+  '"Vote"',
+  '"AppState"',
+  '"AnalyticsEvent"',
+  '"RateLimitEntry"',
+  '"ReleaseReaction"',
+  '"AnalyticsActionLock"',
+  '"WorkflowRunState"',
+  '"OpsAlert"',
+];
 
 async function main() {
   let lastError = null;

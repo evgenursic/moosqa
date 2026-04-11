@@ -1,6 +1,11 @@
 import { unstable_cache } from "next/cache";
 
-import { getAnalyticsOverview } from "@/lib/analytics";
+import {
+  evaluateProductionAlerts,
+  getActiveProductionAlerts,
+  getAnalyticsOverview,
+  getWorkflowRunSummary,
+} from "@/lib/analytics";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
 import { getQualityDashboardData } from "@/lib/quality-dashboard";
@@ -10,13 +15,14 @@ const STALE_METADATA_DAYS = 10;
 
 export async function getOpsDashboardData() {
   await ensureDatabase();
+  await evaluateProductionAlerts();
   return getCachedOpsDashboardData();
 }
 
 const getCachedOpsDashboardData = unstable_cache(
   async () => {
     const staleCutoff = new Date(Date.now() - STALE_METADATA_DAYS * 24 * 60 * 60 * 1000);
-    const [sync, quality, analytics, staleMetadata, activeRateLimits] = await Promise.all([
+    const [sync, quality, analytics, staleMetadata, activeRateLimits, alerts, workflows] = await Promise.all([
       getSyncStatusSummary(),
       getQualityDashboardData(),
       getAnalyticsOverview(24),
@@ -51,6 +57,8 @@ const getCachedOpsDashboardData = unstable_cache(
           updatedAt: true,
         },
       }),
+      getActiveProductionAlerts(),
+      getWorkflowRunSummary(),
     ]);
 
     return {
@@ -64,6 +72,8 @@ const getCachedOpsDashboardData = unstable_cache(
         resetAt: entry.resetAt,
         updatedAt: entry.updatedAt,
       })),
+      alerts,
+      workflows,
     };
   },
   ["ops-dashboard"],

@@ -40,7 +40,22 @@ async function OpsContent({ searchParams }: OpsPageProps) {
   const dashboard = await getOpsDashboardData();
 
   return (
-    <OpsShell>
+      <OpsShell>
+        {dashboard.alerts.length > 0 ? (
+          <section className="grid gap-3 border-t border-[var(--color-line)] py-8">
+            {dashboard.alerts.map((alert) => (
+              <div
+                key={alert.key}
+                className="border border-[#d48b6d] bg-[#fff1e8] p-4 text-sm leading-7 text-[#6a3a27]"
+              >
+                <p className="section-kicker text-[#9a5a41]">{alert.severity}</p>
+                <p className="mt-2 text-xl text-[var(--color-ink)] serif-display">{alert.title}</p>
+                <p className="mt-2">{alert.message}</p>
+              </div>
+            ))}
+          </section>
+        ) : null}
+
         <section className="border-t border-[var(--color-line)] py-8">
           <p className="section-kicker text-black/43">Private ops</p>
           <h1 className="mt-3 text-5xl leading-none text-[var(--color-ink)] serif-display">
@@ -75,20 +90,59 @@ async function OpsContent({ searchParams }: OpsPageProps) {
         <section className="grid gap-4 border-t border-[var(--color-line)] py-8 lg:grid-cols-2">
           <PanelCard title="Top tracked releases">
             <div className="grid gap-3">
-              {dashboard.analytics.topReleases.map((entry) => (
+              {dashboard.analytics.aggregateTopReleases.map((entry) => (
                 <div
-                  key={`${entry.releaseId}-${entry.count}`}
+                  key={`${entry.id}-${entry.analyticsUpdatedAt?.toISOString() || "none"}`}
                   className="flex items-center justify-between gap-4 border-t border-[var(--color-soft-line)] pt-3 first:border-t-0 first:pt-0"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-lg text-[var(--color-ink)] serif-display">
-                      {entry.release?.artistName || entry.release?.projectTitle || entry.release?.title || "Unknown release"}
+                      {entry.artistName || entry.projectTitle || entry.title || "Unknown release"}
                     </p>
                     <p className="truncate text-sm text-black/58 serif-display">
-                      {entry.release?.projectTitle || entry.release?.title || entry.releaseId || "n/a"}
+                      {entry.projectTitle || entry.title || entry.id || "n/a"}
                     </p>
                   </div>
-                  <span className="text-lg text-[var(--color-ink)] serif-display">{entry.count}</span>
+                  <div className="text-right text-xs uppercase tracking-[0.14em] text-black/52">
+                    <p>{entry.openCount} opens</p>
+                    <p>{entry.listenClickCount} listens</p>
+                    <p>{entry.shareCount} shares</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </PanelCard>
+
+          <PanelCard title="GitHub workflows">
+            <div className="grid gap-3">
+              {dashboard.workflows.map((workflow) => (
+                <div
+                  key={workflow.workflowName}
+                  className="flex items-center justify-between gap-4 border-t border-[var(--color-soft-line)] pt-3 first:border-t-0 first:pt-0"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm uppercase tracking-[0.16em] text-black/52">
+                      {workflow.workflowName}
+                    </p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.14em] text-black/44">
+                      {workflow.lastRunAt ? `last run ${formatRelative(workflow.lastRunAt)}` : "no runs yet"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm uppercase tracking-[0.14em] text-[var(--color-ink)]">
+                      {workflow.status}
+                    </span>
+                    {workflow.runUrl ? (
+                      <a
+                        href={workflow.runUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="section-kicker text-[var(--color-accent-strong)]"
+                      >
+                        Open
+                      </a>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>

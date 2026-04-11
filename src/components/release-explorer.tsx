@@ -32,6 +32,8 @@ type ReleaseExplorerProps = {
     publishedAt: string;
     scoreAverage: number;
     scoreCount: number;
+    positiveReactionCount: number;
+    negativeReactionCount: number;
   }>;
 };
 

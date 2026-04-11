@@ -50,17 +50,22 @@ export async function generateMetadata({ params }: ReleasePageProps): Promise<Me
       ? `${release.artistName} - ${release.projectTitle} | MooSQA`
       : `${release.title} | MooSQA`;
     const url = new URL(`/releases/${release.slug}`, getSiteUrl()).toString();
-    const image = release.imageUrl || release.thumbnailUrl || undefined;
+    const socialImage = new URL(`/releases/${release.slug}/opengraph-image`, getSiteUrl()).toString();
+    const image = release.imageUrl || release.thumbnailUrl || socialImage;
+    const socialDescription = [
+      getDisplayGenre(release.genreName, release.releaseType),
+      summary,
+    ].filter(Boolean).join(". ");
 
     return {
       title,
-      description: summary,
+      description: socialDescription,
       alternates: {
         canonical: url,
       },
       openGraph: {
         title,
-        description: summary,
+        description: socialDescription,
         url,
         siteName: "MooSQA",
         type: "article",
@@ -69,7 +74,7 @@ export async function generateMetadata({ params }: ReleasePageProps): Promise<Me
       twitter: {
         card: image ? "summary_large_image" : "summary",
         title,
-        description: summary,
+        description: socialDescription,
         images: image ? [image] : undefined,
       },
     };

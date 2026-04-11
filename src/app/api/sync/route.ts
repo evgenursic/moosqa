@@ -2,6 +2,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { readRequestSecret } from "@/lib/admin-auth";
+import { evaluateProductionAlerts } from "@/lib/analytics";
 import {
   createRateLimitResponse,
   getRateLimitIdentity,
@@ -41,46 +42,60 @@ export async function GET(request: Request) {
   const wantsRepairOnly = searchParams.get("repair") === "1";
   const wantsEnrichment = searchParams.get("enrich") === "1";
 
-  if (wantsQualityOnly) {
-    const limit = clampQualityLimit(searchParams.get("limit"));
-    const result = await runQualityEnrichmentCycle(limit);
+  try {
+    if (wantsQualityOnly) {
+      const limit = clampQualityLimit(searchParams.get("limit"));
+      const result = await runQualityEnrichmentCycle(limit);
+      revalidatePath("/");
+      revalidateTag("releases", "max");
+      await evaluateProductionAlerts();
+      revalidateTag("ops-dashboard", "max");
+      revalidateTag("quality-dashboard", "max");
+
+      return withRateLimitHeaders(NextResponse.json({
+        ok: true,
+        mode: "quality",
+        ...result,
+        syncedAt: new Date().toISOString(),
+      }), rateLimit);
+    }
+
+    if (wantsRepairOnly) {
+      const limit = clampQualityLimit(searchParams.get("limit"));
+      const result = await runWeakCardReprocess(limit);
+      revalidatePath("/");
+      revalidateTag("releases", "max");
+      await evaluateProductionAlerts();
+      revalidateTag("ops-dashboard", "max");
+      revalidateTag("quality-dashboard", "max");
+
+      return withRateLimitHeaders(NextResponse.json({
+        ok: true,
+        mode: "repair",
+        ...result,
+        syncedAt: new Date().toISOString(),
+      }), rateLimit);
+    }
+
+    const result = await syncIndieheadsReleases({
+      enrich: wantsEnrichment,
+      lightweight: !wantsEnrichment,
+    });
     revalidatePath("/");
     revalidateTag("releases", "max");
+    await evaluateProductionAlerts();
+    revalidateTag("ops-dashboard", "max");
+    revalidateTag("quality-dashboard", "max");
 
     return withRateLimitHeaders(NextResponse.json({
       ok: true,
-      mode: "quality",
       ...result,
       syncedAt: new Date().toISOString(),
     }), rateLimit);
+  } catch (error) {
+    await evaluateProductionAlerts().catch(() => undefined);
+    throw error;
   }
-
-  if (wantsRepairOnly) {
-    const limit = clampQualityLimit(searchParams.get("limit"));
-    const result = await runWeakCardReprocess(limit);
-    revalidatePath("/");
-    revalidateTag("releases", "max");
-
-    return withRateLimitHeaders(NextResponse.json({
-      ok: true,
-      mode: "repair",
-      ...result,
-      syncedAt: new Date().toISOString(),
-    }), rateLimit);
-  }
-
-  const result = await syncIndieheadsReleases({
-    enrich: wantsEnrichment,
-    lightweight: !wantsEnrichment,
-  });
-  revalidatePath("/");
-  revalidateTag("releases", "max");
-
-  return withRateLimitHeaders(NextResponse.json({
-    ok: true,
-    ...result,
-    syncedAt: new Date().toISOString(),
-  }), rateLimit);
 }
 
 function clampQualityLimit(value: string | null) {

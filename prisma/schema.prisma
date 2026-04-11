@@ -54,6 +54,29 @@ enum AnalyticsEventType {
   REACTION_NEGATIVE
 }
 
+enum ReleaseReactionValue {
+  POSITIVE
+  NEGATIVE
+}
+
+enum WorkflowRunStatus {
+  SUCCESS
+  FAILURE
+  RUNNING
+  CANCELLED
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  RESOLVED
+}
+
 model Release {
   id              String        @id @default(cuid())
   source          ReleaseSource @default(REDDIT)
@@ -104,8 +127,16 @@ model Release {
   rawJson         String?
   scoreAverage    Float         @default(0)
   scoreCount      Int           @default(0)
+  openCount       Int           @default(0)
+  listenClickCount Int          @default(0)
+  shareCount      Int           @default(0)
+  positiveReactionCount Int     @default(0)
+  negativeReactionCount Int     @default(0)
+  analyticsUpdatedAt DateTime?
   votes           Vote[]
   analyticsEvents AnalyticsEvent[]
+  reactions       ReleaseReaction[]
+  analyticsLocks  AnalyticsActionLock[]
 
   @@index([publishedAt(sort: Desc)])
   @@index([releaseType, publishedAt(sort: Desc)])
@@ -155,4 +186,60 @@ model RateLimitEntry {
   updatedAt DateTime @updatedAt
 
   @@index([resetAt(sort: Asc)])
+}
+
+model ReleaseReaction {
+  id         String               @id @default(cuid())
+  releaseId  String
+  deviceHash String
+  value      ReleaseReactionValue
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  release    Release              @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@unique([releaseId, deviceHash])
+  @@index([releaseId, value])
+}
+
+model AnalyticsActionLock {
+  key        String             @id
+  releaseId  String?
+  action     AnalyticsEventType
+  deviceHash String
+  platform   String?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  release    Release?           @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@index([releaseId, action, updatedAt(sort: Desc)])
+  @@index([deviceHash, action, updatedAt(sort: Desc)])
+}
+
+model WorkflowRunState {
+  workflowName  String            @id
+  status        WorkflowRunStatus
+  runUrl        String?
+  branch        String?
+  commitSha     String?
+  details       String?
+  lastRunAt     DateTime?
+  lastSuccessAt DateTime?
+  lastFailureAt DateTime?
+  updatedAt     DateTime          @updatedAt
+}
+
+model OpsAlert {
+  key             String        @id
+  severity        AlertSeverity
+  status          AlertStatus   @default(OPEN)
+  title           String
+  message         String
+  metricValue     Int?
+  contextJson     String?
+  firstTriggeredAt DateTime     @default(now())
+  lastTriggeredAt DateTime      @default(now())
+  resolvedAt      DateTime?
+  updatedAt       DateTime      @updatedAt
+
+  @@index([status, severity, updatedAt(sort: Desc)])
 }

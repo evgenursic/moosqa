@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Call MooSQA sync endpoint
+        id: sync_call
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           SYNC_URL: https://moosqa-ci4e.vercel.app/api/sync
@@ -20,3 +21,20 @@ jobs:
             --max-time 55 \
             --header "Authorization: Bearer ${CRON_SECRET}" \
             "${SYNC_URL}"
+      - name: Report workflow status
+        if: always()
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          STATUS_URL: https://moosqa-ci4e.vercel.app/api/internal/workflow-status
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          JOB_STATUS: ${{ job.status }}
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          if [ "${JOB_STATUS}" = "success" ]; then STATUS="SUCCESS"; else STATUS="FAILURE"; fi
+          curl --fail --show-error --silent \
+            --request POST \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            --header "Content-Type: application/json" \
+            --data "{\"workflowName\":\"sync\",\"status\":\"${STATUS}\",\"runUrl\":\"${RUN_URL}\",\"branch\":\"${BRANCH_NAME}\",\"commitSha\":\"${COMMIT_SHA}\"}" \
+            "${STATUS_URL}"

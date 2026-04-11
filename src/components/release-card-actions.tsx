@@ -4,7 +4,7 @@ import { type ReactNode, useMemo, useState } from "react";
 import { Share2, ThumbsDown, ThumbsUp } from "lucide-react";
 
 import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/browser-storage";
-import { trackClientAnalyticsEvent } from "@/lib/client-analytics";
+import { postAnalyticsEventWithResponse, trackClientAnalyticsEvent } from "@/lib/client-analytics";
 import { cn } from "@/lib/utils";
 
 type ReactionValue = "positive" | "negative" | null;
@@ -15,6 +15,8 @@ type ReleaseCardActionsProps = {
   title: string;
   artistName: string | null;
   projectTitle: string | null;
+  positiveReactionCount: number;
+  negativeReactionCount: number;
 };
 
 export function ReleaseCardActions({
@@ -23,6 +25,8 @@ export function ReleaseCardActions({
   title,
   artistName,
   projectTitle,
+  positiveReactionCount,
+  negativeReactionCount,
 }: ReleaseCardActionsProps) {
   const [reaction, setReaction] = useState<ReactionValue>(() => {
     if (typeof window === "undefined") {
@@ -32,18 +36,40 @@ export function ReleaseCardActions({
     const storedReaction = safeLocalStorageGet(getReactionStorageKey(releaseId));
     return storedReaction === "positive" || storedReaction === "negative" ? storedReaction : null;
   });
+  const [counts, setCounts] = useState({
+    positive: positiveReactionCount,
+    negative: negativeReactionCount,
+  });
   const shareHref = useMemo(() => `/releases/${slug}`, [slug]);
   const displayLabel = artistName && projectTitle
     ? `${artistName} - ${projectTitle}`
     : artistName || projectTitle || title;
 
-  function handleReaction(nextValue: Exclude<ReactionValue, null>) {
-    const normalized = nextValue;
-    setReaction(normalized);
+  async function handleReaction(nextValue: Exclude<ReactionValue, null>) {
+    if (reaction === nextValue) {
+      return;
+    }
 
-    safeLocalStorageSet(getReactionStorageKey(releaseId), normalized);
+    setCounts((current) => {
+      const next = { ...current };
+      if (reaction === "positive") {
+        next.positive = Math.max(0, next.positive - 1);
+      }
+      if (reaction === "negative") {
+        next.negative = Math.max(0, next.negative - 1);
+      }
+      if (nextValue === "positive") {
+        next.positive += 1;
+      }
+      if (nextValue === "negative") {
+        next.negative += 1;
+      }
+      return next;
+    });
+    setReaction(nextValue);
+    safeLocalStorageSet(getReactionStorageKey(releaseId), nextValue);
 
-    trackClientAnalyticsEvent({
+    const result = await postAnalyticsEventWithResponse({
       releaseId,
       action: nextValue === "negative" ? "REACTION_NEGATIVE" : "REACTION_POSITIVE",
       href: shareHref,
@@ -51,6 +77,18 @@ export function ReleaseCardActions({
         state: nextValue,
       },
     });
+
+    const releaseCounters = result?.releaseCounters;
+    if (
+      releaseCounters &&
+      typeof releaseCounters.positiveReactionCount === "number" &&
+      typeof releaseCounters.negativeReactionCount === "number"
+    ) {
+      setCounts({
+        positive: releaseCounters.positiveReactionCount,
+        negative: releaseCounters.negativeReactionCount,
+      });
+    }
   }
 
   async function handleShare() {
@@ -65,6 +103,7 @@ export function ReleaseCardActions({
           })
         : null;
 
+    let shared = false;
     if (currentNavigator?.share) {
       try {
         await currentNavigator.share({
@@ -72,15 +111,21 @@ export function ReleaseCardActions({
           text: displayLabel,
           url: absoluteUrl,
         });
+        shared = true;
       } catch {
-        // no-op, clipboard fallback below
+        // ignore share aborts
       }
     } else if (currentNavigator?.clipboard) {
       try {
         await currentNavigator.clipboard.writeText(absoluteUrl);
+        shared = true;
       } catch {
-        // no-op
+        // ignore clipboard failures
       }
+    }
+
+    if (!shared) {
+      return;
     }
 
     trackClientAnalyticsEvent({
@@ -99,7 +144,8 @@ export function ReleaseCardActions({
         <ActionButton
           active={reaction === "positive"}
           icon={<ThumbsUp size={15} strokeWidth={2} />}
-          label="Všeč mi je"
+          label="Like"
+          count={counts.positive}
           onClick={() => handleReaction("positive")}
           roundedLeft
         />
@@ -107,7 +153,8 @@ export function ReleaseCardActions({
         <ActionButton
           active={reaction === "negative"}
           icon={<ThumbsDown size={15} strokeWidth={2} />}
-          label="Ni mi všeč"
+          label="Dislike"
+          count={counts.negative}
           onClick={() => handleReaction("negative")}
           roundedRight
         />
@@ -116,10 +163,11 @@ export function ReleaseCardActions({
       <button
         type="button"
         onClick={handleShare}
-        className="inline-flex items-center gap-2 rounded-full border border-[var(--color-line)] bg-[var(--color-panel)] px-4 py-2 text-sm text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+        title="Share"
+        aria-label="Share"
+        className="inline-flex items-center rounded-full border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2 text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
       >
         <Share2 size={16} strokeWidth={2} />
-        <span>Deli</span>
       </button>
     </div>
   );
@@ -129,6 +177,7 @@ function ActionButton({
   active,
   icon,
   label,
+  count,
   onClick,
   roundedLeft = false,
   roundedRight = false,
@@ -136,6 +185,7 @@ function ActionButton({
   active: boolean;
   icon: ReactNode;
   label: string;
+  count: number;
   onClick: () => void;
   roundedLeft?: boolean;
   roundedRight?: boolean;
@@ -144,8 +194,10 @@ function ActionButton({
     <button
       type="button"
       onClick={onClick}
+      title={label}
+      aria-label={label}
       className={cn(
-        "inline-flex items-center gap-2 px-4 py-2 text-sm text-[var(--color-ink)] transition",
+        "inline-flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-ink)] transition",
         active
           ? "bg-[var(--color-accent-strong)] text-white"
           : "hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]",
@@ -154,7 +206,7 @@ function ActionButton({
       )}
     >
       {icon}
-      <span>{label}</span>
+      <span className="min-w-[1.25rem] text-xs font-medium tabular-nums">{count}</span>
     </button>
   );
 }

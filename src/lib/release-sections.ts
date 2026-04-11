@@ -42,6 +42,11 @@ export type ReleaseListingItem = {
   publishedAt: Date;
   scoreAverage: number;
   scoreCount: number;
+  openCount: number;
+  listenClickCount: number;
+  shareCount: number;
+  positiveReactionCount: number;
+  negativeReactionCount: number;
   score: number | null;
   commentCount: number | null;
   upvoteRatio: number | null;
@@ -186,6 +191,11 @@ const releaseListingSelect = {
   publishedAt: true,
   scoreAverage: true,
   scoreCount: true,
+  openCount: true,
+  listenClickCount: true,
+  shareCount: true,
+  positiveReactionCount: true,
+  negativeReactionCount: true,
   score: true,
   commentCount: true,
   upvoteRatio: true,
@@ -450,6 +460,11 @@ export async function getSectionArchivePage(
     selectedGenre: matchedGenre,
     releases: filteredReleases.slice(start, end),
   };
+}
+
+export async function getSectionReleasesForInsights(section: ReleaseSectionKey) {
+  await ensureDatabase();
+  return getSectionReleases(section);
 }
 
 export function isReleaseSectionKey(value: string): value is ReleaseSectionKey {

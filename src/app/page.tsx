@@ -3,6 +3,8 @@ import Link from "next/link";
 import { after, connection } from "next/server";
 import { Suspense } from "react";
 
+import { getPublicAnalyticsInsights } from "@/lib/analytics";
+import { AnalyticsInsightsStrip } from "@/components/analytics-insights-strip";
 import { HomepageGenreFilter } from "@/components/homepage-genre-filter";
 import { PageScrollRestorer } from "@/components/page-scroll-restorer";
 import { ReleaseCard } from "@/components/release-card";
@@ -24,55 +26,28 @@ type HomePageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export async function generateMetadata({ searchParams }: HomePageProps): Promise<Metadata> {
-  try {
-    const resolvedSearchParams = searchParams ? await searchParams : {};
-    const genre = getSearchParamValue(resolvedSearchParams.genre);
-    const query = getSearchParamValue(resolvedSearchParams.q);
-    const titleParts = ["MooSQA", "Music Radar"];
-    const descriptionBase =
-      "Track fresh indie singles, albums, EPs and live sessions with a fast editorial feed built around r/indieheads discoveries.";
+export function generateMetadata(): Metadata {
+  const title = "MooSQA | Music Radar";
+  const description =
+    "Track fresh indie singles, albums, EPs and live sessions with a fast editorial feed built around r/indieheads discoveries.";
 
-    if (genre) {
-      titleParts.unshift(genre);
-    }
-
-    if (query) {
-      titleParts.unshift(`Search: ${query}`);
-    }
-
-    const title = titleParts.join(" | ");
-    const description = genre
-      ? `${descriptionBase} Current homepage filter: ${genre}.`
-      : query
-        ? `${descriptionBase} Current search query: ${query}.`
-        : descriptionBase;
-
-    return {
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: getSiteUrl(),
+    },
+    openGraph: {
       title,
       description,
-      alternates: {
-        canonical: getSiteUrl(),
-      },
-      openGraph: {
-        title,
-        description,
-        url: getSiteUrl(),
-      },
-      twitter: {
-        card: "summary",
-        title,
-        description,
-      },
-    };
-  } catch (error) {
-    console.error("Homepage metadata generation failed.", error);
-    return {
-      title: "MooSQA | Music Radar",
-      description:
-        "Track fresh indie singles, albums, EPs and live sessions with a fast editorial feed built around r/indieheads discoveries.",
-    };
-  }
+      url: getSiteUrl(),
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+    },
+  };
 }
 
 export default function Home({ searchParams }: HomePageProps) {
@@ -104,6 +79,7 @@ async function HomeContent({ searchParams }: HomePageProps) {
   let sections = createEmptyHomepageSections();
   let searchReleases: ReleaseListingItem[] = [];
   let homepageGenres: string[] = [];
+  let analyticsInsights: Awaited<ReturnType<typeof getPublicAnalyticsInsights>> | null = null;
   let loadError = false;
 
   try {
@@ -121,21 +97,23 @@ async function HomeContent({ searchParams }: HomePageProps) {
       }
     });
 
-    [sections, searchReleases, homepageGenres] = await Promise.all([
+    [sections, searchReleases, homepageGenres, analyticsInsights] = await Promise.all([
       getHomepageSectionsData(),
       hasSearchResults ? getSearchReleases() : Promise.resolve([] as ReleaseListingItem[]),
       getHomepageGenreFilters(),
+      getPublicAnalyticsInsights(),
     ]);
 
     if (sections.latest.length === 0) {
       await refreshHomepageData();
 
-      [sections, searchReleases, homepageGenres] = await Promise.all([
+      [sections, searchReleases, homepageGenres, analyticsInsights] = await Promise.all([
         getHomepageSectionsData(),
         hasSearchResults
           ? getSearchReleases({ useCache: false, ttlMs: 0 })
           : Promise.resolve([] as ReleaseListingItem[]),
         getHomepageGenreFilters(),
+        getPublicAnalyticsInsights(),
       ]);
     }
   } catch (error) {
@@ -162,6 +140,16 @@ async function HomeContent({ searchParams }: HomePageProps) {
             publishedAt: release.publishedAt.toISOString(),
           }))}
         />
+      ) : null}
+
+      {analyticsInsights ? (
+        <div id="audience-pulse">
+          <AnalyticsInsightsStrip
+            mostOpenedToday={toInsightRelease(analyticsInsights.mostOpenedToday)}
+            mostSharedThisWeek={toInsightRelease(analyticsInsights.mostSharedThisWeek)}
+            mostClickedToListen={toInsightRelease(analyticsInsights.mostClickedToListen)}
+          />
+        </div>
       ) : null}
 
       <section id="latest" className="scroll-mt-32 py-10 md:scroll-mt-40 lg:scroll-mt-52">
@@ -212,6 +200,24 @@ async function HomeContent({ searchParams }: HomePageProps) {
       <ReleaseCardSection section="live" releases={sections.live} />
     </>
   );
+}
+
+function toInsightRelease(
+  entry:
+    | {
+        count: number;
+        release: ReleaseListingItem | null;
+      }
+    | null,
+) {
+  if (!entry?.release) {
+    return null;
+  }
+
+  return {
+    count: entry.count,
+    release: entry.release,
+  };
 }
 
 function createEmptyHomepageSections() {
