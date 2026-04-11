@@ -8,7 +8,11 @@ import {
   takeRateLimit,
   withRateLimitHeaders,
 } from "@/lib/rate-limit";
-import { runQualityEnrichmentCycle, syncIndieheadsReleases } from "@/lib/sync-releases";
+import {
+  runQualityEnrichmentCycle,
+  runWeakCardReprocess,
+  syncIndieheadsReleases,
+} from "@/lib/sync-releases";
 
 const SYNC_RATE_LIMIT = {
   key: "api-sync",
@@ -17,7 +21,7 @@ const SYNC_RATE_LIMIT = {
 } as const;
 
 export async function GET(request: Request) {
-  const rateLimit = takeRateLimit(SYNC_RATE_LIMIT, getRateLimitIdentity(request));
+  const rateLimit = await takeRateLimit(SYNC_RATE_LIMIT, getRateLimitIdentity(request));
   if (!rateLimit.allowed) {
     return createRateLimitResponse(rateLimit, "Too many sync requests.");
   }
@@ -34,6 +38,7 @@ export async function GET(request: Request) {
 
   const wantsQualityOnly =
     searchParams.get("quality") === "1" || searchParams.get("deep") === "1";
+  const wantsRepairOnly = searchParams.get("repair") === "1";
   const wantsEnrichment = searchParams.get("enrich") === "1";
 
   if (wantsQualityOnly) {
@@ -45,6 +50,20 @@ export async function GET(request: Request) {
     return withRateLimitHeaders(NextResponse.json({
       ok: true,
       mode: "quality",
+      ...result,
+      syncedAt: new Date().toISOString(),
+    }), rateLimit);
+  }
+
+  if (wantsRepairOnly) {
+    const limit = clampQualityLimit(searchParams.get("limit"));
+    const result = await runWeakCardReprocess(limit);
+    revalidatePath("/");
+    revalidateTag("releases", "max");
+
+    return withRateLimitHeaders(NextResponse.json({
+      ok: true,
+      mode: "repair",
       ...result,
       syncedAt: new Date().toISOString(),
     }), rateLimit);

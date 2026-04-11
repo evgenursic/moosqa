@@ -1,5 +1,6 @@
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ListeningLinks } from "@/components/listening-links";
+import { ReleaseCardActions } from "@/components/release-card-actions";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
 import { TopEngagedVisual } from "@/components/top-engaged-visual";
@@ -64,7 +65,12 @@ export function ReleaseCard({
 
   return (
     <article className="group min-w-0 border-t border-[var(--color-line)] pt-6">
-      <ReleaseLink slug={release.slug} fromHref={fromHref} className="block min-w-0 cursor-pointer">
+      <ReleaseLink
+        releaseId={release.id}
+        slug={release.slug}
+        fromHref={fromHref}
+        className="block min-w-0 cursor-pointer"
+      >
         <ReleaseArtwork
           releaseId={release.id}
           title={release.title}
@@ -98,7 +104,12 @@ export function ReleaseCard({
         <p className="section-kicker text-black/43">
           {formatReleaseTypeLabel(release.releaseType)}
         </p>
-        <ReleaseLink slug={release.slug} fromHref={fromHref} className="block cursor-pointer">
+        <ReleaseLink
+          releaseId={release.id}
+          slug={release.slug}
+          fromHref={fromHref}
+          className="block cursor-pointer"
+        >
           <h3
             className={
               compact
@@ -144,10 +155,19 @@ export function ReleaseCard({
           })}
         </p>
 
-        <ListeningLinks release={release} compact />
+        <ListeningLinks release={release} compact releaseId={release.id} sourcePath={fromHref || undefined} />
+
+        <ReleaseCardActions
+          releaseId={release.id}
+          slug={release.slug}
+          title={release.title}
+          artistName={release.artistName}
+          projectTitle={release.projectTitle}
+        />
 
         <div className="mt-4">
           <ReleaseLink
+            releaseId={release.id}
             slug={release.slug}
             fromHref={fromHref}
             className="inline-flex items-center border border-[var(--color-line)] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:border-[var(--color-ink)]"

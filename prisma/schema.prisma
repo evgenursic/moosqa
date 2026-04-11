@@ -45,6 +45,15 @@ enum LinkStatus {
   STRONG
 }
 
+enum AnalyticsEventType {
+  OPEN
+  LISTEN_CLICK
+  VOTE
+  SHARE
+  REACTION_POSITIVE
+  REACTION_NEGATIVE
+}
+
 model Release {
   id              String        @id @default(cuid())
   source          ReleaseSource @default(REDDIT)
@@ -96,6 +105,7 @@ model Release {
   scoreAverage    Float         @default(0)
   scoreCount      Int           @default(0)
   votes           Vote[]
+  analyticsEvents AnalyticsEvent[]
 
   @@index([publishedAt(sort: Desc)])
   @@index([releaseType, publishedAt(sort: Desc)])
@@ -118,4 +128,31 @@ model AppState {
   key       String   @id
   value     String?
   updatedAt DateTime @updatedAt
+}
+
+model AnalyticsEvent {
+  id         String             @id @default(cuid())
+  releaseId  String?
+  action     AnalyticsEventType
+  platform   String?
+  href       String?
+  sourcePath String?
+  deviceHash String?
+  metadata   String?
+  createdAt  DateTime           @default(now())
+  release    Release?           @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+  @@index([releaseId, createdAt(sort: Desc)])
+}
+
+model RateLimitEntry {
+  key       String   @id
+  count     Int      @default(0)
+  resetAt   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt(sort: Asc)])
 }

@@ -4,6 +4,7 @@ import { after, connection } from "next/server";
 import { Suspense } from "react";
 
 import { HomepageGenreFilter } from "@/components/homepage-genre-filter";
+import { PageScrollRestorer } from "@/components/page-scroll-restorer";
 import { ReleaseCard } from "@/components/release-card";
 import { ReleaseExplorer } from "@/components/release-explorer";
 import { SiteFooter } from "@/components/site-footer";
@@ -19,30 +20,58 @@ import { getHomepageGenreFilters } from "@/lib/search-overlay";
 import { getSiteUrl } from "@/lib/site";
 import { refreshHomepageData, shouldBlockForHomepageRefresh } from "@/lib/sync-releases";
 
-export const metadata: Metadata = {
-  title: "Music Radar",
-  description:
-    "Track fresh indie singles, albums, EPs and live sessions with a fast editorial feed built around r/indieheads discoveries.",
-  alternates: {
-    canonical: getSiteUrl(),
-  },
-  openGraph: {
-    title: "MooSQA | Music Radar",
-    description:
-      "Track fresh indie singles, albums, EPs and live sessions with a fast editorial feed built around r/indieheads discoveries.",
-    url: getSiteUrl(),
-  },
-};
-
 type HomePageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
+
+export async function generateMetadata({ searchParams }: HomePageProps): Promise<Metadata> {
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const genre = getSearchParamValue(resolvedSearchParams.genre);
+  const query = getSearchParamValue(resolvedSearchParams.q);
+  const titleParts = ["MooSQA", "Music Radar"];
+  const descriptionBase =
+    "Track fresh indie singles, albums, EPs and live sessions with a fast editorial feed built around r/indieheads discoveries.";
+
+  if (genre) {
+    titleParts.unshift(genre);
+  }
+
+  if (query) {
+    titleParts.unshift(`Search: ${query}`);
+  }
+
+  const title = titleParts.join(" | ");
+  const description = genre
+    ? `${descriptionBase} Current homepage filter: ${genre}.`
+    : query
+      ? `${descriptionBase} Current search query: ${query}.`
+      : descriptionBase;
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: getSiteUrl(),
+    },
+    openGraph: {
+      title,
+      description,
+      url: getSiteUrl(),
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+    },
+  };
+}
 
 export default function Home({ searchParams }: HomePageProps) {
   return (
     <main className="editorial-shell flex-1 px-4 pb-10 pt-4 md:px-8">
       <div className="mx-auto max-w-[1760px] bg-[var(--color-paper)] px-2 md:px-4">
         <SiteHeader />
+        <PageScrollRestorer />
         <Suspense fallback={<HomePageSkeleton />}>
           <HomeContent searchParams={searchParams} />
         </Suspense>

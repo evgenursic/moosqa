@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { recordAnalyticsEvent } from "@/lib/analytics";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
 import {
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
     deviceId = crypto.randomUUID();
   }
 
-  const rateLimit = takeRateLimit(
+  const rateLimit = await takeRateLimit(
     VOTE_RATE_LIMIT,
     getRateLimitIdentity(request, `${deviceId}:${body.data.releaseId}`),
   );
@@ -88,6 +89,22 @@ export async function POST(request: Request) {
     average: aggregate._avg.value ?? 0,
     count: aggregate._count.value,
   });
+  try {
+    await recordAnalyticsEvent({
+      releaseId: body.data.releaseId,
+      action: "VOTE",
+      sourcePath: "/releases",
+      metadata: {
+        value: body.data.value,
+        average: aggregate._avg.value ?? 0,
+        count: aggregate._count.value,
+      },
+      request,
+      deviceKey: deviceId,
+    });
+  } catch (error) {
+    console.error("Vote analytics write failed.", error);
+  }
 
   response.cookies.set({
     name: "moosqa_device",

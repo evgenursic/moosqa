@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense, type ReactNode } from "react";
@@ -41,7 +42,7 @@ async function DebugContent({ searchParams }: DebugPageProps) {
   const dashboard = await getQualityDashboardData();
 
   return (
-    <DebugShell>
+    <DebugShell opsSecret={allowedSecret}>
       <DebugReprocessControls secret={allowedSecret} />
 
       <section className="grid gap-4 border-t border-[var(--color-line)] py-8 md:grid-cols-2 xl:grid-cols-4">
@@ -223,7 +224,13 @@ async function DebugContent({ searchParams }: DebugPageProps) {
   );
 }
 
-function DebugShell({ children }: { children?: ReactNode }) {
+function DebugShell({
+  children,
+  opsSecret,
+}: {
+  children?: ReactNode;
+  opsSecret?: string | null;
+}) {
   return (
     <main className="min-h-screen bg-[var(--color-background)] px-4 py-6 md:px-8">
       <div className="mx-auto max-w-[1480px] bg-[var(--color-paper)] p-4 md:p-6">
@@ -235,6 +242,16 @@ function DebugShell({ children }: { children?: ReactNode }) {
           <p className="mt-4 max-w-3xl text-sm leading-7 text-black/63">
             Internal overview of weak cards, retry queue pressure, and metadata coverage.
           </p>
+          {opsSecret ? (
+            <div className="mt-4">
+              <Link
+                href={`/ops?secret=${opsSecret}`}
+                className="inline-flex items-center border border-[var(--color-line)] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+              >
+                Open ops health
+              </Link>
+            </div>
+          ) : null}
         </section>
         {children}
       </div>

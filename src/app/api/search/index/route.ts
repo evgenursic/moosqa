@@ -14,7 +14,7 @@ const SEARCH_INDEX_RATE_LIMIT = {
 } as const;
 
 export async function GET(request: Request) {
-  const rateLimit = takeRateLimit(SEARCH_INDEX_RATE_LIMIT, getRateLimitIdentity(request));
+  const rateLimit = await takeRateLimit(SEARCH_INDEX_RATE_LIMIT, getRateLimitIdentity(request));
   if (!rateLimit.allowed) {
     return createRateLimitResponse(rateLimit, "Too many search index requests.");
   }

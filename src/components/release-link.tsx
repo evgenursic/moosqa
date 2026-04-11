@@ -4,7 +4,10 @@ import { type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { rememberScrollPosition, trackClientAnalyticsEvent } from "@/lib/client-analytics";
+
 type ReleaseLinkProps = {
+  releaseId?: string;
   slug: string;
   fromHref?: string | null;
   className?: string;
@@ -15,6 +18,7 @@ type ReleaseLinkProps = {
 };
 
 export function ReleaseLink({
+  releaseId,
   slug,
   fromHref,
   className,
@@ -34,6 +38,21 @@ export function ReleaseLink({
     router.prefetch(href);
   }
 
+  function handleClick() {
+    rememberScrollPosition(fromHref || undefined);
+
+    if (releaseId) {
+      trackClientAnalyticsEvent({
+        releaseId,
+        action: "OPEN",
+        href,
+        sourcePath: fromHref || undefined,
+      });
+    }
+
+    onClick?.();
+  }
+
   return (
     <Link
       href={href}
@@ -42,7 +61,7 @@ export function ReleaseLink({
       onPointerEnter={handlePrefetch}
       onFocus={handlePrefetch}
       onTouchStart={handlePrefetch}
-      onClick={onClick}
+      onClick={handleClick}
       className={className}
     >
       {children}

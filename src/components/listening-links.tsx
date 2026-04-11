@@ -1,5 +1,6 @@
 import { ShoppingBag, Zap } from "lucide-react";
 
+import { trackClientAnalyticsEvent } from "@/lib/client-analytics";
 import { getListeningLinks, getPurchaseLink } from "@/lib/listening-links";
 import { cn } from "@/lib/utils";
 
@@ -18,12 +19,16 @@ type ListeningLinksProps = {
   };
   compact?: boolean;
   dark?: boolean;
+  releaseId?: string | null;
+  sourcePath?: string | null;
 };
 
 export function ListeningLinks({
   release,
   compact = false,
   dark = false,
+  releaseId = null,
+  sourcePath = null,
 }: ListeningLinksProps) {
   const links = getListeningLinks(release);
   const purchaseLink = getPurchaseLink(release);
@@ -36,6 +41,19 @@ export function ListeningLinks({
           href={link.href}
           target="_blank"
           rel="noreferrer"
+          onClick={() => {
+            if (!releaseId) {
+              return;
+            }
+
+            trackClientAnalyticsEvent({
+              releaseId,
+              action: "LISTEN_CLICK",
+              platform: link.label,
+              href: link.href,
+              sourcePath: sourcePath || undefined,
+            });
+          }}
           className={cn(
             "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] uppercase tracking-[0.18em] transition",
             dark
@@ -77,6 +95,22 @@ export function ListeningLinks({
           href={purchaseLink.href}
           target="_blank"
           rel="noreferrer"
+          onClick={() => {
+            if (!releaseId) {
+              return;
+            }
+
+            trackClientAnalyticsEvent({
+              releaseId,
+              action: "LISTEN_CLICK",
+              platform: purchaseLink.label,
+              href: purchaseLink.href,
+              sourcePath: sourcePath || undefined,
+              metadata: {
+                purchase: true,
+              },
+            });
+          }}
           className={cn(
             "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] uppercase tracking-[0.18em] transition",
             dark

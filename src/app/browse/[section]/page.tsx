@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { GenreFilterDrawer } from "@/components/genre-filter-drawer";
+import { PageScrollRestorer } from "@/components/page-scroll-restorer";
 import { ReleaseCard } from "@/components/release-card";
 import { ShareFilterLink } from "@/components/share-filter-link";
 import { SiteFooter } from "@/components/site-footer";
@@ -50,8 +51,10 @@ export async function generateMetadata({
   }
   const title = `${titleParts.join(" | ")} | MooSQA`;
   const description = genre
-    ? `${definition.description} Filtered to ${genre}.`
-    : definition.description;
+    ? `${definition.description} Filtered to ${genre}${page > 1 ? `, page ${page}` : ""}.`
+    : page > 1
+      ? `${definition.description} Archive page ${page}.`
+      : definition.description;
 
   return {
     title,
@@ -131,6 +134,7 @@ export default async function BrowseSectionPage({
       />
       <div className="mx-auto max-w-[1760px] bg-[var(--color-paper)] px-2 md:px-4">
         <SiteHeader />
+        <PageScrollRestorer />
 
         <section id="archive" className="border-t border-[var(--color-line)] py-10">
           <div className="flex flex-col gap-5 border-b border-[var(--color-soft-line)] pb-8 lg:flex-row lg:items-end lg:justify-between">

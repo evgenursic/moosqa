@@ -1,0 +1,84 @@
+import { unstable_cache } from "next/cache";
+
+import { getAnalyticsOverview } from "@/lib/analytics";
+import { ensureDatabase } from "@/lib/database";
+import { prisma } from "@/lib/prisma";
+import { getQualityDashboardData } from "@/lib/quality-dashboard";
+import { getSyncStatusSummary } from "@/lib/sync-releases";
+
+const STALE_METADATA_DAYS = 10;
+
+export async function getOpsDashboardData() {
+  await ensureDatabase();
+  return getCachedOpsDashboardData();
+}
+
+const getCachedOpsDashboardData = unstable_cache(
+  async () => {
+    const staleCutoff = new Date(Date.now() - STALE_METADATA_DAYS * 24 * 60 * 60 * 1000);
+    const [sync, quality, analytics, staleMetadata, activeRateLimits] = await Promise.all([
+      getSyncStatusSummary(),
+      getQualityDashboardData(),
+      getAnalyticsOverview(24),
+      prisma.release.count({
+        where: {
+          publishedAt: {
+            gte: staleCutoff,
+          },
+          OR: [
+            { releaseDate: null },
+            { artworkStatus: { not: "STRONG" } },
+            { genreStatus: { not: "STRONG" } },
+            { linkStatus: { not: "STRONG" } },
+          ],
+        },
+      }),
+      prisma.rateLimitEntry.findMany({
+        where: {
+          resetAt: {
+            gt: new Date(),
+          },
+        },
+        orderBy: [
+          { count: "desc" },
+          { updatedAt: "desc" },
+        ],
+        take: 12,
+        select: {
+          key: true,
+          count: true,
+          resetAt: true,
+          updatedAt: true,
+        },
+      }),
+    ]);
+
+    return {
+      sync,
+      quality,
+      analytics,
+      staleMetadata,
+      activeRateLimits: activeRateLimits.map((entry) => ({
+        key: redactRateLimitKey(entry.key),
+        count: entry.count,
+        resetAt: entry.resetAt,
+        updatedAt: entry.updatedAt,
+      })),
+    };
+  },
+  ["ops-dashboard"],
+  {
+    revalidate: 60,
+    tags: ["releases", "analytics", "quality-dashboard"],
+  },
+);
+
+function redactRateLimitKey(value: string) {
+  const [scope, ...rest] = value.split(":");
+  const target = rest.join(":");
+  if (!target) {
+    return scope;
+  }
+
+  return `${scope}:${target.slice(0, 14)}...`;
+}

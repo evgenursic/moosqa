@@ -17,7 +17,7 @@ const DEBUG_REPROCESS_RATE_LIMIT = {
 } as const;
 
 export async function POST(request: Request) {
-  const rateLimit = takeRateLimit(
+  const rateLimit = await takeRateLimit(
     DEBUG_REPROCESS_RATE_LIMIT,
     getRateLimitIdentity(request),
   );

@@ -193,7 +193,11 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
               commentCount={release.commentCount}
             />
 
-            <ListeningLinks release={release} />
+            <ListeningLinks
+              release={release}
+              releaseId={release.id}
+              sourcePath={`/releases/${release.slug}`}
+            />
 
             <div className="flex flex-wrap gap-3">
               <a
