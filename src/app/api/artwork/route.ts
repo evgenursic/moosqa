@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 
 import { buildArtworkProxyUrl } from "@/lib/artwork-fallback";
 import { ensureDatabase } from "@/lib/database";
-import { buildGenreProfile, isSpecificGenreProfile, pickPreferredGenreProfile } from "@/lib/genre-profile";
 import { getGenreOverride } from "@/lib/genre-overrides";
+import { resolveBestGenreProfile } from "@/lib/genre-resolution";
 import { clearReleaseDataCaches } from "@/lib/release-sections";
 import { assessReleaseQuality } from "@/lib/release-quality";
 import { prisma } from "@/lib/prisma";
@@ -354,48 +354,28 @@ function normalizeLabel(value: string | null | undefined) {
 function buildPersistedGenre(
   artworkPayload: NonNullable<Awaited<ReturnType<typeof getCachedArtworkPayload>>>,
 ) {
-  const overrideGenre = getGenreOverride(artworkPayload.release);
-  if (overrideGenre) {
-    return overrideGenre;
-  }
-
-  const specificStoredGenre =
-    artworkPayload.release.genreName && isSpecificGenreProfile(artworkPayload.release.genreName)
-      ? artworkPayload.release.genreName
-      : null;
-  const specificDiscoveredGenre =
-    artworkPayload.discoveredGenreCandidates.find((candidate) => isSpecificGenreProfile(candidate)) || null;
-  const profiledGenre = buildGenreProfile({
+  return resolveBestGenreProfile({
+    releaseType: artworkPayload.release.releaseType,
+    currentGenre: artworkPayload.release.genreName,
     explicitGenres: [
+      getGenreOverride(artworkPayload.release),
       artworkPayload.release.genreName,
       ...artworkPayload.discoveredGenreCandidates,
     ],
-    text: [
+    textSegments: [
       artworkPayload.release.title,
       artworkPayload.release.projectTitle,
       artworkPayload.release.summary,
       artworkPayload.release.aiSummary,
       ...artworkPayload.discoveredSourceTitles,
       ...artworkPayload.discoveredSourceExcerpts,
-    ]
-      .filter(Boolean)
-      .join(". "),
+    ],
     artistName: artworkPayload.release.artistName,
     projectTitle: artworkPayload.release.projectTitle,
     title: artworkPayload.release.title,
     labelName: artworkPayload.discoveredLabelName || artworkPayload.release.labelName || null,
     limit: 3,
   });
-
-  return (
-    pickPreferredGenreProfile(
-      profiledGenre && isSpecificGenreProfile(profiledGenre) ? profiledGenre : null,
-      specificDiscoveredGenre,
-      specificStoredGenre,
-    ) ||
-    artworkPayload.release.genreName ||
-    null
-  );
 }
 
 function datesEqual(left: Date | null | undefined, right: Date | null | undefined) {

@@ -1,11 +1,12 @@
 import { unstable_cache } from "next/cache";
-import { GenreStatus, ReleaseType } from "@/generated/prisma/enums";
+import { ReleaseType } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { ensureDatabase } from "@/lib/database";
 import { dedupeReleasesForDisplay } from "@/lib/display-dedupe";
-import { buildGenreProfile, isSpecificGenreProfile } from "@/lib/genre-profile";
+import { isSpecificGenreProfile } from "@/lib/genre-profile";
 import { getGenreOverride } from "@/lib/genre-overrides";
 import { prisma } from "@/lib/prisma";
+import { resolveBestGenreProfile } from "@/lib/genre-resolution";
 import { normalizeSearchText } from "@/lib/release-search";
 
 export type ReleaseSectionKey =
@@ -72,7 +73,7 @@ const TOP_ENGAGED_LOOKBACK_DAYS = 60;
 const ARCHIVE_PAGE_SIZE = 24;
 const SECTION_CACHE_TTL_MS = 12_000;
 const SEARCH_INDEX_CACHE_TTL_MS = 15_000;
-const SEARCH_GENRE_FACET_LIMIT = 24;
+const SEARCH_GENRE_FACET_LIMIT = 96;
 const RELEASES_CACHE_REVALIDATE_SECONDS = 300;
 const RELEASES_CACHE_TAG = "releases";
 let homepageSectionsCache:
@@ -325,16 +326,19 @@ export async function getSearchGenreFacets(options?: { useCache?: boolean; ttlMs
   const recentCutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
   const releases = await prisma.release.findMany({
     where: {
-      genreStatus: GenreStatus.STRONG,
-      genreName: {
-        not: null,
-      },
       publishedAt: {
         gte: recentCutoff,
       },
     },
     select: {
+      title: true,
+      artistName: true,
+      projectTitle: true,
+      releaseType: true,
       genreName: true,
+      summary: true,
+      aiSummary: true,
+      labelName: true,
       publishedAt: true,
       qualityScore: true,
     },
@@ -353,8 +357,23 @@ export async function getSearchGenreFacets(options?: { useCache?: boolean; ttlMs
   >();
 
   for (const release of releases) {
-    const genreName = release.genreName?.trim();
-    if (!genreName) {
+    const genreName = resolveBestGenreProfile({
+      releaseType: release.releaseType,
+      currentGenre: release.genreName,
+      explicitGenres: [release.genreName],
+      textSegments: [
+        release.title,
+        release.projectTitle,
+        release.summary,
+        release.aiSummary,
+      ],
+      artistName: release.artistName,
+      projectTitle: release.projectTitle,
+      title: release.title,
+      labelName: release.labelName,
+      limit: 3,
+    })?.trim();
+    if (!genreName || !isSpecificGenreProfile(genreName)) {
       continue;
     }
 
@@ -587,7 +606,7 @@ function buildSectionGenreFacets(releases: ReleaseListingItem[]) {
 
       return right.latestPublishedAt - left.latestPublishedAt;
     })
-    .slice(0, 18)
+    .slice(0, 48)
     .map((entry) => entry.label);
 }
 
@@ -625,22 +644,19 @@ function releaseMatchesGenre(release: ReleaseListingItem, selectedGenre: string)
 }
 
 function refineDisplayGenre(release: ReleaseListingItem): ReleaseListingItem {
-  if (release.genreName && isSpecificGenreProfile(release.genreName)) {
-    return release;
-  }
-
-  const overrideGenre = getGenreOverride(release);
-  const refinedGenre = buildGenreProfile({
-    explicitGenres: [overrideGenre, release.genreName],
-    text: [
+  const refinedGenre = resolveBestGenreProfile({
+    releaseType: release.releaseType,
+    currentGenre: release.genreName,
+    explicitGenres: [getGenreOverride(release), release.genreName],
+    textSegments: [
       release.title,
       release.projectTitle,
       release.summary,
       release.aiSummary,
       release.outletName,
-    ]
-      .filter(Boolean)
-      .join(". "),
+      release.labelName,
+      release.sourceUrl,
+    ],
     artistName: release.artistName,
     projectTitle: release.projectTitle,
     title: release.title,
@@ -648,14 +664,7 @@ function refineDisplayGenre(release: ReleaseListingItem): ReleaseListingItem {
     limit: 3,
   });
 
-  if (overrideGenre) {
-    return {
-      ...release,
-      genreName: overrideGenre,
-    };
-  }
-
-  if (!refinedGenre || (!isSpecificGenreProfile(refinedGenre) && release.genreName)) {
+  if (!refinedGenre) {
     return release;
   }
 

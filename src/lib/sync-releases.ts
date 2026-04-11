@@ -5,8 +5,9 @@ import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
 import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
 import { searchBandcampRelease } from "@/lib/bandcamp-search";
-import { buildGenreProfile, isSpecificGenreProfile, pickPreferredGenreProfile } from "@/lib/genre-profile";
+import { isSpecificGenreProfile, pickPreferredGenreProfile } from "@/lib/genre-profile";
 import { getGenreOverride } from "@/lib/genre-overrides";
+import { resolveBestGenreProfile } from "@/lib/genre-resolution";
 import { assessReleaseQuality, isWeakQualityRelease } from "@/lib/release-quality";
 import { fetchRedditPosts, normalizeRedditPost, shouldKeepReleaseRecord } from "@/lib/reddit";
 import { buildReleaseEnrichment, enrichRecentReleases } from "@/lib/release-enrichment";
@@ -363,6 +364,12 @@ async function sanitizeStoredMetadata() {
         { genreName: { equals: "pop rock" } },
         { genreName: { equals: "Punk rock" } },
         { genreName: { equals: "punk rock" } },
+        { genreName: { equals: "Rock" } },
+        { genreName: { equals: "rock" } },
+        { genreName: { equals: "Pop" } },
+        { genreName: { equals: "pop" } },
+        { genreName: { equals: "Electronic" } },
+        { genreName: { equals: "electronic" } },
         { genreName: { equals: "Single release" } },
         { genreName: { equals: "Album release" } },
         { genreName: { equals: "EP release" } },
@@ -789,9 +796,30 @@ async function runRecentReleaseQualityPass(
       console.error(`Quality pass enrichment failed for release ${candidate.release.id}.`, error);
       return null;
     });
+    const resolvedGenre = resolveBestGenreProfile({
+      releaseType: candidate.release.releaseType,
+      currentGenre: metadata?.genreName || candidate.release.genreName,
+      explicitGenres: [metadata?.genreName, candidate.release.genreName],
+      textSegments: [
+        candidate.release.title,
+        candidate.release.projectTitle,
+        metadata?.aiSummary,
+        metadata?.genreName,
+        candidate.release.summary,
+        candidate.release.aiSummary,
+        candidate.release.outletName,
+        candidate.release.labelName,
+      ],
+      artistName: candidate.release.artistName,
+      projectTitle: candidate.release.projectTitle,
+      title: candidate.release.title,
+      labelName: metadata?.labelName || candidate.release.labelName,
+      limit: 3,
+    });
     const mergedRelease = {
       ...candidate.release,
       ...(metadata || {}),
+      genreName: resolvedGenre,
     };
     const qualitySnapshot = assessReleaseQuality({
       ...mergedRelease,
@@ -802,6 +830,7 @@ async function runRecentReleaseQualityPass(
       where: { id: candidate.release.id },
       data: {
         ...(metadata || {}),
+        ...(resolvedGenre ? { genreName: resolvedGenre } : {}),
         ...(metadata ? { metadataEnrichedAt: checkedAt } : {}),
         artworkStatus: qualitySnapshot.artworkStatus,
         genreStatus: qualitySnapshot.genreStatus,
@@ -1323,44 +1352,23 @@ function resolvePreferredGenre(input: {
     labelName?: string | null;
   } | null;
 }) {
-  const specificStoredGenre = input.currentGenre?.trim();
-  const specificFallbackGenre = input.fallbackGenre?.trim();
-  const artistGenreHint = input.artistGenreHint?.trim();
-  const synthesizedGenre = buildGenreProfile({
-    explicitGenres: [input.currentGenre, input.fallbackGenre, artistGenreHint],
-    text: [
+  return resolveBestGenreProfile({
+    releaseType: input.release.releaseType,
+    currentGenre: input.currentGenre,
+    explicitGenres: [input.fallbackGenre, input.artistGenreHint, getGenreOverride(input.release)],
+    textSegments: [
       input.release.title,
       input.release.projectTitle,
       input.release.summary,
       input.sourceMetadata?.sourceTitle,
       input.sourceMetadata?.sourceExcerpt,
-    ]
-      .filter(Boolean)
-      .join(". "),
+    ],
     artistName: input.release.artistName,
     projectTitle: input.release.projectTitle,
     title: input.release.title,
     labelName: input.sourceMetadata?.labelName || null,
     limit: 3,
   });
-
-  const overrideGenre = getGenreOverride(input.release);
-  if (overrideGenre) {
-    return overrideGenre;
-  }
-
-  return (
-    pickPreferredGenreProfile(
-      synthesizedGenre,
-      specificFallbackGenre && isSpecificGenreProfile(specificFallbackGenre)
-        ? specificFallbackGenre
-        : null,
-      artistGenreHint && isSpecificGenreProfile(artistGenreHint) ? artistGenreHint : null,
-      specificStoredGenre && isSpecificGenreProfile(specificStoredGenre)
-        ? specificStoredGenre
-        : null,
-    ) || null
-  );
 }
 
 async function loadArtistGenreHints(releases: NormalizedReleaseRecord[]) {

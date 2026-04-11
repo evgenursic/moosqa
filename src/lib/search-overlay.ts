@@ -4,6 +4,7 @@ import { ReleaseType } from "@/generated/prisma/enums";
 import { ensureDatabase } from "@/lib/database";
 import { isSpecificGenreProfile } from "@/lib/genre-profile";
 import { prisma } from "@/lib/prisma";
+import { resolveBestGenreProfile } from "@/lib/genre-resolution";
 import { normalizeSearchText } from "@/lib/release-search";
 
 export type SearchOverlayIndexItem = {
@@ -33,8 +34,7 @@ export type SearchOverlayPayload = {
   results: SearchOverlayIndexItem[];
 };
 
-const HOMEPAGE_GENRE_LIMIT = 12;
-const SEARCH_OVERLAY_GENRE_LIMIT = 24;
+const SEARCH_OVERLAY_GENRE_LIMIT = 120;
 const SEARCH_OVERLAY_GENRE_LOOKBACK_DAYS = 365;
 
 const searchOverlaySelect = {
@@ -85,12 +85,18 @@ export async function getSearchOverlayPayload(): Promise<SearchOverlayPayload> {
 
 export async function getHomepageGenreFilters() {
   const payload = await getSearchOverlayPayload();
-  return payload.genres.slice(0, HOMEPAGE_GENRE_LIMIT);
+  return payload.genres;
 }
 
 function buildGenreFacets(
   releases: Array<{
+    title: string;
+    artistName: string | null;
+    projectTitle: string | null;
+    releaseType: ReleaseType;
     genreName: string | null;
+    summary: string | null;
+    aiSummary: string | null;
     publishedAt: Date;
   }>,
 ) {
@@ -101,7 +107,7 @@ function buildGenreFacets(
   });
 
   const fallbackGenres =
-    specificGenres.length >= HOMEPAGE_GENRE_LIMIT
+    specificGenres.length >= SEARCH_OVERLAY_GENRE_LIMIT
       ? specificGenres
       : collectGenres(releases, {
           recentCutoff,
@@ -113,7 +119,13 @@ function buildGenreFacets(
 
 function collectGenres(
   releases: Array<{
+    title: string;
+    artistName: string | null;
+    projectTitle: string | null;
+    releaseType: ReleaseType;
     genreName: string | null;
+    summary: string | null;
+    aiSummary: string | null;
     publishedAt: Date;
   }>,
   options: {
@@ -133,7 +145,22 @@ function collectGenres(
   >();
 
   for (const release of releases) {
-    const genreName = release.genreName?.trim() || "";
+    const genreName =
+      resolveBestGenreProfile({
+        releaseType: release.releaseType,
+        currentGenre: release.genreName,
+        explicitGenres: [release.genreName],
+        textSegments: [
+          release.title,
+          release.projectTitle,
+          release.summary,
+          release.aiSummary,
+        ],
+        artistName: release.artistName,
+        projectTitle: release.projectTitle,
+        title: release.title,
+        limit: 3,
+      }) || "";
     if (!genreName) {
       continue;
     }

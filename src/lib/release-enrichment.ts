@@ -6,8 +6,8 @@ import {
   buildGenreProfile,
   countGenreProfileSegments,
   isSpecificGenreProfile,
-  pickPreferredGenreProfile,
 } from "@/lib/genre-profile";
+import { resolveBestGenreProfile } from "@/lib/genre-resolution";
 import { fetchMusicMetadata, type MusicMetadata } from "@/lib/musicbrainz";
 import { assessReleaseQuality } from "@/lib/release-quality";
 import { detectPlatform } from "@/lib/listening-links";
@@ -214,9 +214,6 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
     normalizeGenre(release.genreName),
   ];
   const overrideGenre = getGenreOverride(release);
-  const specificGenreCandidate = genreCandidates.find((candidate) =>
-    candidate ? isSpecificGenreProfile(candidate) : false,
-  );
   const profiledGenre =
     buildGenreProfile({
       explicitGenres: genreCandidates,
@@ -240,16 +237,29 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
       labelName: normalizeLabel(musicMetadata.labelName) || normalizeLabel(sourceMetadata.labelName),
       limit: 3,
     }) || null;
-  const genreName =
-    overrideGenre ||
-    pickPreferredGenreProfile(
-      profiledGenre && isSpecificGenreProfile(profiledGenre) ? profiledGenre : null,
-      specificGenreCandidate,
-    ) ||
-    genreCandidates.find(Boolean) ||
-    inferGenreFromRelease(release) ||
-    release.genreName ||
-    null;
+  const genreName = resolveBestGenreProfile({
+    releaseType: release.releaseType,
+    currentGenre: release.genreName,
+    explicitGenres: [overrideGenre, profiledGenre, ...genreCandidates],
+    textSegments: [
+      sourceMetadata.sourceTitle,
+      sourceMetadata.sourceExcerpt,
+      fallbackBandcampMetadata?.sourceTitle,
+      fallbackBandcampMetadata?.sourceExcerpt,
+      searchedBandcampMetadata?.sourceTitle,
+      searchedBandcampMetadata?.sourceExcerpt,
+      release.summary,
+      release.aiSummary,
+      release.title,
+      release.projectTitle,
+      release.outletName,
+    ],
+    artistName: canonicalArtistName || release.artistName,
+    projectTitle: release.projectTitle,
+    title: release.title,
+    labelName: normalizeLabel(musicMetadata.labelName) || normalizeLabel(sourceMetadata.labelName),
+    limit: 3,
+  });
   const labelName =
     normalizeLabel(musicMetadata.labelName) ||
     normalizeLabel(sourceMetadata.labelName) ||
@@ -475,29 +485,6 @@ function extractGenreFromUrl(value: string) {
     return null;
   }
 }
-
-function inferGenreFromRelease(release: EnrichableRelease) {
-  const overrideGenre = getGenreOverride(release);
-  if (overrideGenre) {
-    return overrideGenre;
-  }
-
-  const haystack = `${release.title} ${release.projectTitle || ""} ${release.artistName || ""}`.toLowerCase();
-
-  const inferredGenre = buildGenreProfile({
-    text: haystack,
-    artistName: release.artistName,
-    projectTitle: release.projectTitle,
-    title: release.title,
-    limit: 2,
-  });
-  if (inferredGenre) {
-    return inferredGenre;
-  }
-
-  return null;
-}
-
 function isPurchasableRelease(releaseType: EnrichableRelease["releaseType"]) {
   return (
     releaseType === "SINGLE" ||
