@@ -56,6 +56,71 @@ async function DebugContent({ searchParams }: DebugPageProps) {
         <StatusCard title="Link coverage" rows={dashboard.links} />
       </section>
 
+      <section className="grid gap-4 border-t border-[var(--color-line)] py-8 md:grid-cols-3">
+        <StatCard label="Genre missing" value={String(dashboard.genreAudit.missing)} />
+        <StatCard label="Genre generic" value={String(dashboard.genreAudit.generic)} />
+        <StatCard label="Genre suspicious" value={String(dashboard.genreAudit.suspicious)} />
+      </section>
+
+      <section className="border-t border-[var(--color-line)] py-8">
+        <div className="mb-5">
+          <p className="section-kicker text-black/43">Genre confidence</p>
+          <h2 className="mt-3 text-4xl leading-none text-[var(--color-ink)] serif-display">
+            Cards worth reviewing.
+          </h2>
+        </div>
+
+        <div className="grid gap-4">
+          {dashboard.genreAudit.suspiciousCards.map((release) => (
+            <article
+              key={release.id}
+              className="border border-[var(--color-line)] bg-[var(--color-panel)] p-4"
+            >
+              <div className="flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-[0.18em] text-black/50">
+                <span>{formatPubDate(release.publishedAt)}</span>
+                <span>Current {release.currentGenre || "missing"}</span>
+                <span>Suggested {release.suggestedGenre}</span>
+              </div>
+              <h3 className="mt-3 text-3xl leading-[0.94] text-[var(--color-ink)] serif-display">
+                {release.artistName || release.projectTitle || release.title}
+              </h3>
+              <p className="mt-2 text-base text-black/66 serif-display">
+                {release.projectTitle || release.title}
+              </p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-t border-[var(--color-line)] py-8">
+        <div className="mb-5">
+          <p className="section-kicker text-black/43">Override candidates</p>
+          <h2 className="mt-3 text-4xl leading-none text-[var(--color-ink)] serif-display">
+            Artists still drifting too wide.
+          </h2>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          {dashboard.genreAudit.artistSuggestions.map((entry) => (
+            <article
+              key={`${entry.artistName}-${entry.suggestedGenre}`}
+              className="border border-[var(--color-line)] bg-[var(--color-panel)] p-4"
+            >
+              <div className="flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-[0.18em] text-black/50">
+                <span>{entry.count} cards</span>
+                <span>{entry.suggestedGenre}</span>
+              </div>
+              <h3 className="mt-3 text-3xl leading-[0.94] text-[var(--color-ink)] serif-display">
+                {entry.artistName}
+              </h3>
+              <p className="mt-2 text-sm leading-7 text-black/62">
+                Examples: {entry.exampleTitles.join(" • ")}
+              </p>
+            </article>
+          ))}
+        </div>
+      </section>
+
       <section className="border-t border-[var(--color-line)] py-8">
         <div className="mb-5">
           <p className="section-kicker text-black/43">Weak cards</p>

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { FeedFreshness } from "@/components/feed-freshness";
+import { GenreFilterDrawer } from "@/components/genre-filter-drawer";
 import { ReleaseCard } from "@/components/release-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -110,36 +111,19 @@ export default async function BrowseSectionPage({
           </div>
 
           {archive.genres.length > 0 ? (
-            <div className="mt-6 flex flex-wrap gap-2 border-b border-[var(--color-soft-line)] pb-6 text-[11px] uppercase tracking-[0.18em] text-black/55">
-              <Link
-                href={buildArchiveHref(section)}
-                prefetch
-                scroll={false}
-                className={
-                  archive.selectedGenre
-                    ? "inline-flex items-center border border-[var(--color-line)] px-3 py-2 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
-                    : "inline-flex items-center border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-3 py-2 text-white"
-                }
-              >
-                All genres
-              </Link>
-
-              {archive.genres.map((genreOption) => (
-                <Link
-                  key={genreOption}
-                  href={buildArchiveHref(section, { genre: genreOption })}
-                  prefetch
-                  scroll={false}
-                  className={
-                    archive.selectedGenre === genreOption
-                      ? "inline-flex items-center border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-3 py-2 text-white"
-                      : "inline-flex items-center border border-[var(--color-line)] px-3 py-2 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
-                  }
-                >
-                  {genreOption}
-                </Link>
-              ))}
-            </div>
+            <GenreFilterDrawer
+              title="Genre filter"
+              description={`Filter ${archive.title.toLowerCase()} without leaving the ${archive.title.toLowerCase()} archive.`}
+              selectedGenre={archive.selectedGenre || ""}
+              allHref={buildArchiveHref(section)}
+              options={archive.genres.map((genreOption) => ({
+                label: genreOption,
+                href: buildArchiveHref(section, { genre: genreOption }),
+              }))}
+              searchPlaceholder={`Filter ${archive.title.toLowerCase()} genres`}
+              className="mt-6 border-b border-[var(--color-soft-line)] pb-6"
+              compact
+            />
           ) : null}
 
           {archive.releases.length > 0 ? (

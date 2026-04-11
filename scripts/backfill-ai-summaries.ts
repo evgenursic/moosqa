@@ -16,7 +16,11 @@ type ReleaseRow = {
   outletName: string | null;
   labelName: string | null;
   aiSummary: string | null;
+  publishedAt: Date;
+  metadataEnrichedAt: Date | null;
 };
+
+type BackfillMode = "stale" | "archive-upgrade" | "all";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_RUNTIME_URL || process.env.DATABASE_URL,
@@ -24,6 +28,7 @@ const pool = new Pool({
 });
 
 const sql = String.raw;
+const cliOptions = parseCliOptions(process.argv.slice(2));
 
 main().catch(async (error) => {
   console.error(error);
@@ -49,6 +54,12 @@ function normalizeIdentityText(value: string) {
 }
 
 async function main() {
+  const { mode, limit, beforeDays, dryRun } = cliOptions;
+  const { offset } = cliOptions;
+  const beforeDate =
+    typeof beforeDays === "number"
+      ? new Date(Date.now() - beforeDays * 24 * 60 * 60 * 1000)
+      : null;
   const { rows } = await pool.query<ReleaseRow>(sql`
     select
       id,
@@ -61,32 +72,33 @@ async function main() {
       "sourceUrl",
       "outletName",
       "labelName",
-      "aiSummary"
+      "aiSummary",
+      "publishedAt",
+      "metadataEnrichedAt"
     from "Release"
     order by "publishedAt" desc
   `);
 
+  const eligibleRows = rows.filter((row) => shouldRefreshSummary(row, mode, beforeDate));
+  const candidates = eligibleRows.slice(offset, offset + limit);
   let refreshed = 0;
   let skipped = 0;
   let failed = 0;
 
-  for (const row of rows) {
-    const shouldRefresh =
-      !row.aiSummary ||
-      shouldRegenerateAiSummary(row.aiSummary) ||
-      mentionsReleaseIdentity(row.aiSummary, row);
-
-    if (!shouldRefresh) {
-      skipped += 1;
-      continue;
-    }
-
+  skipped = eligibleRows.length - candidates.length;
+  for (const row of candidates) {
     try {
-      const sourceMetadata = await resolveSourceMetadata(row.sourceUrl, {
-        artistName: row.artistName,
-        projectTitle: row.projectTitle,
-        title: row.title,
-      });
+      const shouldFetchSourceMetadata = mode !== "archive-upgrade" || !row.summary;
+      const sourceMetadata = shouldFetchSourceMetadata
+        ? await resolveSourceMetadata(row.sourceUrl, {
+            artistName: row.artistName,
+            projectTitle: row.projectTitle,
+            title: row.title,
+          })
+        : {
+            sourceTitle: row.projectTitle || row.title,
+            sourceExcerpt: row.summary,
+          };
 
       const aiSummary = await generateAiSummary({
         artistName: row.artistName,
@@ -102,15 +114,17 @@ async function main() {
         labelName: row.labelName,
       });
 
-      await pool.query(
-        sql`
-          update "Release"
-          set "aiSummary" = $1,
-              "metadataEnrichedAt" = now()
-          where id = $2
-        `,
-        [aiSummary, row.id],
-      );
+      if (!dryRun) {
+        await pool.query(
+          sql`
+            update "Release"
+            set "aiSummary" = $1,
+                "metadataEnrichedAt" = now()
+            where id = $2
+          `,
+          [aiSummary, row.id],
+        );
+      }
 
       refreshed += 1;
     } catch (error) {
@@ -122,7 +136,14 @@ async function main() {
   console.log(
     JSON.stringify(
       {
+        mode,
+        dryRun,
+        beforeDays,
+        offset,
+        limit,
         checked: rows.length,
+        eligible: eligibleRows.length,
+        candidates: candidates.length,
         refreshed,
         skipped,
         failed,
@@ -133,4 +154,84 @@ async function main() {
   );
 
   await pool.end();
+}
+
+function shouldRefreshSummary(
+  row: ReleaseRow,
+  mode: BackfillMode,
+  beforeDate: Date | null,
+) {
+  const isStale =
+    !row.aiSummary ||
+    shouldRegenerateAiSummary(row.aiSummary) ||
+    mentionsReleaseIdentity(row.aiSummary, row);
+
+  if (mode === "all") {
+    return true;
+  }
+
+  if (mode === "archive-upgrade") {
+    if (!beforeDate) {
+      return true;
+    }
+
+    return row.publishedAt <= beforeDate;
+  }
+
+  return isStale;
+}
+
+function parseCliOptions(args: string[]) {
+  const options: {
+    mode: BackfillMode;
+    limit: number;
+    offset: number;
+    beforeDays?: number;
+    dryRun: boolean;
+  } = {
+    mode: "stale",
+    limit: 160,
+    offset: 0,
+    dryRun: false,
+  };
+
+  for (const arg of args) {
+    if (arg === "--dry-run") {
+      options.dryRun = true;
+      continue;
+    }
+
+    if (arg.startsWith("--mode=")) {
+      const value = arg.split("=")[1] as BackfillMode;
+      if (value === "stale" || value === "archive-upgrade" || value === "all") {
+        options.mode = value;
+      }
+      continue;
+    }
+
+    if (arg.startsWith("--limit=")) {
+      const value = Number(arg.split("=")[1]);
+      if (Number.isFinite(value) && value > 0) {
+        options.limit = Math.floor(value);
+      }
+      continue;
+    }
+
+    if (arg.startsWith("--before-days=")) {
+      const value = Number(arg.split("=")[1]);
+      if (Number.isFinite(value) && value >= 0) {
+        options.beforeDays = Math.floor(value);
+      }
+      continue;
+    }
+
+    if (arg.startsWith("--offset=")) {
+      const value = Number(arg.split("=")[1]);
+      if (Number.isFinite(value) && value >= 0) {
+        options.offset = Math.floor(value);
+      }
+    }
+  }
+
+  return options;
 }

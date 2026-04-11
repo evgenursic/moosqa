@@ -1,8 +1,4 @@
-"use client";
-
-import { useDeferredValue, useMemo, useState } from "react";
-import Link from "next/link";
-import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
+import { GenreFilterDrawer } from "@/components/genre-filter-drawer";
 
 type HomepageGenreFilterProps = {
   genres: string[];
@@ -13,142 +9,22 @@ export function HomepageGenreFilter({
   genres,
   selectedGenre,
 }: HomepageGenreFilterProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const deferredQuery = useDeferredValue(query.trim().toLowerCase());
-
-  const filteredGenres = useMemo(() => {
-    if (!deferredQuery) {
-      return genres;
-    }
-
-    return genres.filter((genre) => genre.toLowerCase().includes(deferredQuery));
-  }, [deferredQuery, genres]);
-
   if (genres.length === 0) {
     return null;
   }
 
   return (
-    <section className="mt-4 border-t border-[var(--color-line)] pt-5 md:mt-5 md:pt-6">
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="section-kicker text-black/43">Browse by genre</p>
-            <p className="mt-2 text-sm leading-7 text-black/62">
-              Keep the header clean, then open the full genre library only when you need it.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {selectedGenre ? (
-              <Link
-                href="/#latest"
-                scroll={false}
-                className="inline-flex items-center gap-2 rounded-full border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)]/10 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-[var(--color-accent-strong)] transition hover:bg-[var(--color-accent-strong)]/14"
-              >
-                <span>{selectedGenre}</span>
-                <X size={12} strokeWidth={2} />
-              </Link>
-            ) : null}
-
-            <button
-              type="button"
-              onClick={() => setIsOpen((current) => !current)}
-              aria-expanded={isOpen}
-              aria-controls="homepage-genre-drawer"
-              className="inline-flex min-h-11 items-center gap-3 rounded-full border border-[var(--color-ink)]/14 bg-[linear-gradient(135deg,rgba(50,88,164,0.1),rgba(112,132,196,0.04))] px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] shadow-[0_10px_28px_rgba(52,71,116,0.08)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
-            >
-              <SlidersHorizontal size={15} strokeWidth={1.9} />
-              <span>Genre filter</span>
-              <span className="rounded-full border border-[var(--color-ink)]/10 bg-white/72 px-2 py-1 text-[10px] text-black/55">
-                {genres.length}
-              </span>
-              <ChevronDown
-                size={14}
-                strokeWidth={1.9}
-                className={`transition ${isOpen ? "rotate-180" : ""}`}
-              />
-            </button>
-          </div>
-        </div>
-
-        {isOpen ? (
-          <div
-            id="homepage-genre-drawer"
-            className="overflow-hidden border border-[var(--color-line)] bg-[linear-gradient(180deg,rgba(247,249,253,0.96),rgba(236,242,250,0.96))] px-4 py-4 shadow-[0_18px_40px_rgba(34,48,89,0.08)] backdrop-blur-sm md:px-5"
-          >
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="relative max-w-xl flex-1">
-                  <Search
-                    size={15}
-                    strokeWidth={1.9}
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/38"
-                  />
-                  <input
-                    type="search"
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Filter genres"
-                    className="h-11 w-full border border-[var(--color-line)] bg-white/76 pl-10 pr-4 text-sm text-[var(--color-ink)] outline-none transition focus:border-[var(--color-accent-strong)]"
-                  />
-                </div>
-
-                <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-black/55">
-                  <Link
-                    href="/#latest"
-                    scroll={false}
-                    className={
-                      selectedGenre
-                        ? "inline-flex items-center rounded-full border border-[var(--color-line)] px-3 py-2 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
-                        : "inline-flex items-center rounded-full border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-3 py-2 text-white"
-                    }
-                  >
-                    All genres
-                  </Link>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuery("");
-                      setIsOpen(false);
-                    }}
-                    className="inline-flex items-center rounded-full border border-[var(--color-line)] px-3 py-2 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-
-              <div className="max-h-[24rem] overflow-y-auto pr-1">
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                  {filteredGenres.map((genre) => (
-                    <Link
-                      key={genre}
-                      href={`/?genre=${encodeURIComponent(genre)}#explore`}
-                      scroll={false}
-                      className={
-                        selectedGenre === genre
-                          ? "inline-flex items-center rounded-full border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-white"
-                          : "inline-flex items-center rounded-full border border-[var(--color-line)] bg-white/72 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-black/58 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
-                      }
-                    >
-                      {genre}
-                    </Link>
-                  ))}
-                </div>
-
-                {filteredGenres.length === 0 ? (
-                  <div className="mt-4 border border-dashed border-[var(--color-line)] bg-white/62 px-4 py-5 text-sm text-black/58">
-                    No genre matches that filter yet.
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </section>
+    <GenreFilterDrawer
+      title="Browse by genre"
+      description="Keep the header clean, then open the full genre library only when you want to narrow the feed."
+      selectedGenre={selectedGenre}
+      allHref="/#latest"
+      options={genres.map((genre) => ({
+        label: genre,
+        href: `/?genre=${encodeURIComponent(genre)}#explore`,
+      }))}
+      searchPlaceholder="Filter homepage genres"
+      className="mt-4 border-t border-[var(--color-line)] pt-5 md:mt-5 md:pt-6"
+    />
   );
 }
