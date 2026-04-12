@@ -9,7 +9,12 @@ import {
   WorkflowRunStatus,
 } from "@/generated/prisma/enums";
 import { type Prisma } from "@/generated/prisma/client";
-import { buildArchiveHref } from "@/lib/archive-links";
+import {
+  buildArchiveHref,
+  buildPlatformArchiveHref,
+  buildTrendingGenreHref,
+  type PlatformArchiveSlug,
+} from "@/lib/archive-links";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
 import { getQualityDashboardData } from "@/lib/quality-dashboard";
@@ -74,6 +79,7 @@ type GenreTrendingItem = {
 };
 
 type PublicPlatformLabel = "Bandcamp" | "YouTube" | "YouTube Music";
+const PLATFORM_ARCHIVE_PAGE_SIZE = 24;
 
 type SectionTrendLeaderItem = {
   section: ReleaseSectionKey;
@@ -202,6 +208,22 @@ export async function getAnalyticsOverview(hours = ANALYTICS_LOOKBACK_HOURS) {
 export async function getPublicAnalyticsInsights() {
   await ensureDatabase();
   return getCachedPublicAnalyticsInsights();
+}
+
+export async function getPlatformArchivePage(platform: PlatformArchiveSlug, requestedPage = 1) {
+  await ensureDatabase();
+  return getCachedPlatformArchivePage(platform, requestedPage);
+}
+
+export function getPlatformLabelFromSlug(platform: PlatformArchiveSlug): PublicPlatformLabel {
+  if (platform === "bandcamp") {
+    return "Bandcamp";
+  }
+  if (platform === "youtube-music") {
+    return "YouTube Music";
+  }
+
+  return "YouTube";
 }
 
 export type AlertDeliveryTestChannel = "discord" | "slack" | "email" | "all";
@@ -634,6 +656,83 @@ const getCachedPublicAnalyticsInsights = unstable_cache(
     tags: [ANALYTICS_TAG, "releases"],
   },
 );
+
+const getCachedPlatformArchivePage = unstable_cache(
+  async (platform: PlatformArchiveSlug, requestedPage: number) => {
+    const label = getPlatformLabelFromSlug(platform);
+    const now = new Date();
+    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const groups = await prisma.analyticsEvent.groupBy({
+      by: ["releaseId"],
+      where: {
+        action: AnalyticsEventType.LISTEN_CLICK,
+        createdAt: {
+          gte: weekStart,
+        },
+        platform: label,
+        releaseId: {
+          not: null,
+        },
+      },
+      _count: {
+        _all: true,
+      },
+      orderBy: {
+        _count: {
+          releaseId: "desc",
+        },
+      },
+      take: 120,
+    });
+
+    const releaseIds = groups
+      .map((entry) => entry.releaseId)
+      .filter((entry): entry is string => Boolean(entry));
+    const releaseMap = new Map(
+      (await getReleaseListingItemsByIds(releaseIds)).map((release) => [release.id, release]),
+    );
+    const entries = groups
+      .map((entry) => ({
+        releaseId: entry.releaseId || "",
+        count: entry._count._all,
+        release: entry.releaseId ? releaseMap.get(entry.releaseId) || null : null,
+      }))
+      .filter((entry) => entry.release);
+
+    const pageCount = Math.max(1, Math.ceil(entries.length / PLATFORM_ARCHIVE_PAGE_SIZE));
+    const page = clampPageNumber(requestedPage, pageCount);
+    const start = (page - 1) * PLATFORM_ARCHIVE_PAGE_SIZE;
+
+    return {
+      platform,
+      label,
+      title: `${label} trending`,
+      description: `The most clicked ${label} releases on MooSQA over the last 7 days.`,
+      page,
+      pageCount,
+      total: entries.length,
+      entries: entries.slice(start, start + PLATFORM_ARCHIVE_PAGE_SIZE),
+      canonicalHref: buildPlatformArchiveHref(platform, page),
+    };
+  },
+  ["platform-archive-page"],
+  {
+    revalidate: 300,
+    tags: [ANALYTICS_TAG, "releases"],
+  },
+);
+
+function clampPageNumber(value: number, pageCount: number) {
+  if (!Number.isFinite(value) || value < 1) {
+    return 1;
+  }
+
+  if (value > pageCount) {
+    return pageCount;
+  }
+
+  return Math.floor(value);
+}
 
 async function getTopAnalyticsInsightByAction(
   action: AnalyticsAction,
@@ -1615,10 +1714,7 @@ function buildTrendingGenreLinks(items: GenreTrendingItem[]) {
   return items.map((item) => ({
     title: item.genre,
     count: item.count,
-    href: buildArchiveHref("top-engaged", {
-      genre: item.genre,
-      view: "trending",
-    }),
+    href: buildTrendingGenreHref(item.genre),
   }));
 }
 

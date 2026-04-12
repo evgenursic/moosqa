@@ -42,7 +42,7 @@ export function AnalyticsInsightsStrip({
   }
 
   return (
-    <section className="border-t border-[var(--color-line)] py-10">
+    <section id="audience-pulse" className="border-t border-[var(--color-line)] py-10">
       <div className="mb-6">
         <p className="section-kicker text-black/43">Audience pulse</p>
       </div>

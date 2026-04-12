@@ -12,6 +12,7 @@ import { getQualityDashboardData } from "@/lib/quality-dashboard";
 import { getSyncStatusSummary } from "@/lib/sync-releases";
 
 const STALE_METADATA_DAYS = 10;
+const ALERT_DELIVERY_STATS_DAYS = 30;
 
 export async function getOpsDashboardData() {
   await ensureDatabase();
@@ -19,10 +20,16 @@ export async function getOpsDashboardData() {
   return getCachedOpsDashboardData();
 }
 
+export async function getPublicHealthSummary() {
+  await ensureDatabase();
+  return getCachedPublicHealthSummary();
+}
+
 const getCachedOpsDashboardData = unstable_cache(
   async () => {
     const staleCutoff = new Date(Date.now() - STALE_METADATA_DAYS * 24 * 60 * 60 * 1000);
-    const [sync, quality, analytics, staleMetadata, activeRateLimits, alerts, workflows, recentAlerts, alertDeliveries] = await Promise.all([
+    const alertStatsCutoff = new Date(Date.now() - ALERT_DELIVERY_STATS_DAYS * 24 * 60 * 60 * 1000);
+    const [sync, quality, analytics, staleMetadata, activeRateLimits, alerts, workflows, recentAlerts, alertDeliveries, alertChannelBreakdown] = await Promise.all([
       getSyncStatusSummary(),
       getQualityDashboardData(),
       getAnalyticsOverview(24),
@@ -90,6 +97,20 @@ const getCachedOpsDashboardData = unstable_cache(
           createdAt: true,
         },
       }),
+      prisma.alertDeliveryLog.findMany({
+        where: {
+          createdAt: {
+            gte: alertStatsCutoff,
+          },
+        },
+        orderBy: [{ createdAt: "desc" }],
+        select: {
+          channel: true,
+          success: true,
+          isTest: true,
+          createdAt: true,
+        },
+      }),
     ]);
 
     return {
@@ -107,6 +128,7 @@ const getCachedOpsDashboardData = unstable_cache(
       workflows,
       recentAlerts,
       alertDeliveries,
+      alertChannelStats: buildAlertChannelStats(alertChannelBreakdown),
     };
   },
   ["ops-dashboard"],
@@ -115,6 +137,98 @@ const getCachedOpsDashboardData = unstable_cache(
     tags: ["releases", "analytics", "quality-dashboard"],
   },
 );
+
+const getCachedPublicHealthSummary = unstable_cache(
+  async () => {
+    const [sync, openAlertCount, lastAlertDelivery] = await Promise.all([
+      getSyncStatusSummary(),
+      prisma.opsAlert.count({
+        where: {
+          status: "OPEN",
+        },
+      }),
+      prisma.alertDeliveryLog.findFirst({
+        orderBy: [{ createdAt: "desc" }],
+        select: {
+          channel: true,
+          success: true,
+          createdAt: true,
+          destination: true,
+        },
+      }),
+    ]);
+
+    return {
+      sync,
+      openAlertCount,
+      lastAlertDelivery,
+    };
+  },
+  ["public-health-summary"],
+  {
+    revalidate: 60,
+    tags: ["ops-dashboard", "analytics", "quality-dashboard", "releases"],
+  },
+);
+
+function buildAlertChannelStats(
+  rows: Array<{
+    channel: string;
+    success: boolean;
+    isTest: boolean;
+    createdAt: Date;
+  }>,
+) {
+  const channelMap = new Map<
+    string,
+    {
+      channel: string;
+      total: number;
+      success: number;
+      failed: number;
+      tests: number;
+      lastAttemptAt: Date | null;
+      lastSuccessAt: Date | null;
+    }
+  >();
+
+  for (const row of rows) {
+    const entry = channelMap.get(row.channel) || {
+      channel: row.channel,
+      total: 0,
+      success: 0,
+      failed: 0,
+      tests: 0,
+      lastAttemptAt: null,
+      lastSuccessAt: null,
+    };
+
+    entry.total += 1;
+    if (row.success) {
+      entry.success += 1;
+      if (!entry.lastSuccessAt || row.createdAt > entry.lastSuccessAt) {
+        entry.lastSuccessAt = row.createdAt;
+      }
+    } else {
+      entry.failed += 1;
+    }
+    if (row.isTest) {
+      entry.tests += 1;
+    }
+    if (!entry.lastAttemptAt || row.createdAt > entry.lastAttemptAt) {
+      entry.lastAttemptAt = row.createdAt;
+    }
+
+    channelMap.set(row.channel, entry);
+  }
+
+  return [...channelMap.values()]
+    .map((entry) => ({
+      ...entry,
+      successRate: entry.total > 0 ? Math.round((entry.success / entry.total) * 100) : 0,
+    }))
+    .sort((left, right) => right.total - left.total || left.channel.localeCompare(right.channel));
+}
 
 function redactRateLimitKey(value: string) {
   const [scope, ...rest] = value.split(":");

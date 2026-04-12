@@ -4,6 +4,10 @@ import { after, connection } from "next/server";
 import { Suspense } from "react";
 
 import { getPublicAnalyticsInsights } from "@/lib/analytics";
+import {
+  HomepageExploreSection,
+  buildHomepageQuickLinks,
+} from "@/components/homepage-explore-section";
 import { HomeOnboardingStrip } from "@/components/home-onboarding-strip";
 import { HomepageGenreFilter } from "@/components/homepage-genre-filter";
 import { PageScrollRestorer } from "@/components/page-scroll-restorer";
@@ -200,6 +204,21 @@ async function HomeContent({ searchParams }: HomePageProps) {
               release: entry.release,
             })),
           }))}
+        />
+      ) : null}
+
+      {analyticsInsights ? (
+        <HomepageExploreSection
+          quickLinks={buildHomepageQuickLinks()}
+          trendingArchiveLinks={analyticsInsights.trendingArchiveLinks}
+          audiencePulse={{
+            mostOpenedToday: analyticsInsights.mostOpenedToday,
+            mostSharedThisWeek: analyticsInsights.mostSharedThisWeek,
+            mostClickedToListen: analyticsInsights.mostClickedToListen,
+            platformHighlights: analyticsInsights.platformHighlights,
+          }}
+          trendingNow={analyticsInsights.trendingNow}
+          trendingByGenre={analyticsInsights.trendingByGenre}
         />
       ) : null}
     </>

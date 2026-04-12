@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { Headphones } from "lucide-react";
 
 import { ReleaseBrief } from "@/components/release-brief";
+import { buildPlatformArchiveHref, type PlatformArchiveSlug } from "@/lib/archive-links";
 import type { ReleaseListingItem } from "@/lib/release-sections";
 
 type PlatformLeaderboardSectionProps = {
@@ -38,9 +40,20 @@ export function PlatformLeaderboardSection({ items }: PlatformLeaderboardSection
           <div key={item.platform} className="border border-[var(--color-line)] bg-[var(--color-panel)] p-4">
             <div className="flex items-center justify-between gap-3">
               <p className="section-kicker text-black/43">{item.platform}</p>
-              <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-accent-strong)]">
-                This week
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-accent-strong)]">
+                  This week
+                </p>
+                {getPlatformArchiveSlug(item.platform) ? (
+                  <Link
+                    href={buildPlatformArchiveHref(getPlatformArchiveSlug(item.platform)!)}
+                    prefetch={false}
+                    className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:text-[var(--color-accent-strong)]"
+                  >
+                    Open full board
+                  </Link>
+                ) : null}
+              </div>
             </div>
             <div className="mt-4 grid gap-4">
               {item.entries.map((entry, index) => {
@@ -70,4 +83,18 @@ export function PlatformLeaderboardSection({ items }: PlatformLeaderboardSection
       </div>
     </section>
   );
+}
+
+function getPlatformArchiveSlug(platform: string): PlatformArchiveSlug | null {
+  if (platform === "Bandcamp") {
+    return "bandcamp";
+  }
+  if (platform === "YouTube Music") {
+    return "youtube-music";
+  }
+  if (platform === "YouTube") {
+    return "youtube";
+  }
+
+  return null;
 }

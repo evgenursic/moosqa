@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { ArchivePagination } from "@/components/archive-pagination";
 import { GenreFilterDrawer } from "@/components/genre-filter-drawer";
 import { PageScrollRestorer } from "@/components/page-scroll-restorer";
 import { ReleaseCard } from "@/components/release-card";
@@ -10,6 +11,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import {
   getSectionArchivePage,
+  releaseSectionDefinitions,
   isReleaseSectionKey,
 } from "@/lib/release-sections";
 import { buildArchiveHref, parseArchiveViewMode } from "@/lib/archive-links";
@@ -25,20 +27,52 @@ type BrowseSectionPageProps = {
 
 export const unstable_instant = false;
 
-export function generateMetadata(): Metadata {
-  const title = "Browse | MooSQA";
-  const description = "Explore the MooSQA archive of singles, albums, EPs and live sessions.";
+export async function generateMetadata({
+  params,
+  searchParams,
+}: BrowseSectionPageProps): Promise<Metadata> {
+  const { section } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  if (!isReleaseSectionKey(section)) {
+    return {
+      title: "Browse | MooSQA",
+      description: "Explore the MooSQA archive of singles, albums, EPs and live sessions.",
+    };
+  }
+
+  const view = parseArchiveViewMode(resolvedSearchParams.view);
+  const genre = parseGenreParam(resolvedSearchParams.genre) || null;
+  const page = parsePageParam(resolvedSearchParams.page);
+  const sectionDefinition = releaseSectionDefinitions[section];
+  const modePrefix = view === "trending" ? "Trending" : "Browse";
+  const genreSuffix = genre ? ` | ${genre}` : "";
+  const pageSuffix = page > 1 ? ` | Page ${page}` : "";
+  const title = `${modePrefix} ${sectionDefinition.title}${genreSuffix}${pageSuffix} | MooSQA`;
+  const description =
+    view === "trending"
+      ? genre
+        ? `Track the strongest ${genre} momentum inside MooSQA ${sectionDefinition.title.toLowerCase()}, ranked by audience opens, listening clicks, shares, and reactions.`
+        : `Track the strongest audience momentum inside MooSQA ${sectionDefinition.title.toLowerCase()}, ranked by opens, listening clicks, shares, and reactions.`
+      : genre
+        ? `Browse ${sectionDefinition.title.toLowerCase()} filtered to ${genre} on MooSQA, with fresh indie releases, direct listening links, and community signals.`
+        : sectionDefinition.description;
+  const canonicalPath = buildArchiveHref(section, {
+    page,
+    genre,
+    view,
+  });
+  const canonicalUrl = new URL(canonicalPath, getSiteUrl()).toString();
 
   return {
     title,
     description,
     alternates: {
-      canonical: new URL("/browse/latest", getSiteUrl()).toString(),
+      canonical: canonicalUrl,
     },
     openGraph: {
       title,
       description,
-      url: new URL("/browse/latest", getSiteUrl()).toString(),
+      url: canonicalUrl,
     },
     twitter: {
       card: "summary",
@@ -260,11 +294,15 @@ export default async function BrowseSectionPage({
           )}
 
           <ArchivePagination
-            section={section}
             page={archive.page}
             pageCount={archive.pageCount}
-            genre={archive.selectedGenre}
-            view={archive.archiveMode}
+            buildHref={(nextPage) =>
+              buildArchiveHref(section, {
+                page: nextPage,
+                genre: archive.selectedGenre,
+                view: archive.archiveMode,
+              })
+            }
           />
         </section>
 
@@ -272,94 +310,6 @@ export default async function BrowseSectionPage({
       </div>
     </main>
   );
-}
-
-function ArchivePagination({
-  section,
-  page,
-  pageCount,
-  genre,
-  view,
-}: {
-  section: string;
-  page: number;
-  pageCount: number;
-  genre: string | null;
-  view: "latest" | "trending";
-}) {
-  if (pageCount <= 1) {
-    return null;
-  }
-
-  const pageNumbers = getPaginationWindow(page, pageCount);
-
-  return (
-    <nav className="mt-10 flex flex-wrap items-center gap-3 border-t border-[var(--color-soft-line)] pt-6 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)]">
-      {page > 1 ? (
-        <Link
-          href={buildArchiveHref(section, { page: page - 1, genre, view })}
-          prefetch
-          scroll={false}
-          className="inline-flex items-center border border-[var(--color-line)] px-4 py-3 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
-        >
-          Previous
-        </Link>
-      ) : null}
-
-      {pageNumbers.map((value, index) =>
-        value === "ellipsis" ? (
-          <span key={`${section}-ellipsis-${index}`} className="px-1 text-black/45">
-            ...
-          </span>
-        ) : (
-          <Link
-            key={`${section}-${value}`}
-            href={buildArchiveHref(section, { page: value, genre, view })}
-            prefetch
-            scroll={false}
-            aria-current={value === page ? "page" : undefined}
-            className={
-              value === page
-                ? "inline-flex min-w-11 items-center justify-center border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-4 py-3 text-white"
-                : "inline-flex min-w-11 items-center justify-center border border-[var(--color-line)] px-4 py-3 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
-            }
-          >
-            {value}
-          </Link>
-        ),
-      )}
-
-      {page < pageCount ? (
-        <Link
-          href={buildArchiveHref(section, { page: page + 1, genre, view })}
-          prefetch
-          scroll={false}
-          className="inline-flex items-center border border-[var(--color-line)] px-4 py-3 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
-        >
-          Next
-        </Link>
-      ) : null}
-    </nav>
-  );
-}
-
-function getPaginationWindow(page: number, pageCount: number) {
-  const window = new Set<number>([1, pageCount, page - 1, page, page + 1]);
-  const pages = [...window].filter((value) => value >= 1 && value <= pageCount).sort((a, b) => a - b);
-  const result: Array<number | "ellipsis"> = [];
-
-  for (let index = 0; index < pages.length; index += 1) {
-    const current = pages[index];
-    const previous = pages[index - 1];
-
-    if (previous && current - previous > 1) {
-      result.push("ellipsis");
-    }
-
-    result.push(current);
-  }
-
-  return result;
 }
 
 function parsePageParam(value: string | string[] | undefined) {

@@ -211,6 +211,34 @@ async function OpsContent({ searchParams }: OpsPageProps) {
         </section>
 
         <section className="border-t border-[var(--color-line)] py-8">
+          <PanelCard title="Alert delivery channel success rate">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {dashboard.alertChannelStats.map((channel) => (
+                <div
+                  key={channel.channel}
+                  className="border border-[var(--color-line)] bg-[var(--color-paper)] p-4"
+                >
+                  <p className="section-kicker text-black/43">{channel.channel}</p>
+                  <p className="mt-3 text-4xl text-[var(--color-ink)] serif-display">
+                    {channel.successRate}%
+                  </p>
+                  <div className="mt-4 grid gap-1 text-xs uppercase tracking-[0.14em] text-black/50">
+                    <p>{channel.success} successful</p>
+                    <p>{channel.failed} failed</p>
+                    <p>{channel.tests} test sends</p>
+                    <p>{channel.total} total attempts</p>
+                    <p>
+                      Last attempt{" "}
+                      {channel.lastAttemptAt ? formatRelative(channel.lastAttemptAt) : "never"}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </PanelCard>
+        </section>
+
+        <section className="border-t border-[var(--color-line)] py-8">
           <OpsAlertTestControls secret={allowedSecret} />
         </section>
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { ReleaseBrief } from "@/components/release-brief";
 import { ShareFilterLink } from "@/components/share-filter-link";
+import { buildTrendingGenreHref } from "@/lib/archive-links";
 import type { ReleaseListingItem } from "@/lib/release-sections";
 
 type TrendingByGenreSectionProps = {
@@ -30,7 +31,7 @@ export function TrendingByGenreSection({ items }: TrendingByGenreSectionProps) {
 
       <div className="grid gap-6 lg:grid-cols-3 xl:grid-cols-5">
         {visibleItems.map((item) => {
-          const href = buildGenreTrendHref(item.genre);
+          const href = buildTrendingGenreHref(item.genre);
           return (
             <div
               key={item.genre}
@@ -60,8 +61,4 @@ export function TrendingByGenreSection({ items }: TrendingByGenreSectionProps) {
       </div>
     </section>
   );
-}
-
-function buildGenreTrendHref(genre: string) {
-  return `/browse/top-engaged?genre=${encodeURIComponent(genre)}`;
 }
