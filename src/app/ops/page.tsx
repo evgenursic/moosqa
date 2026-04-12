@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense, type ReactNode } from "react";
 
+import { OpsAlertTestControls } from "@/components/ops-alert-test-controls";
+import { OpsAnalyticsChart } from "@/components/ops-analytics-chart";
 import { getRequiredDebugSecret } from "@/lib/admin-auth";
 import { getOpsDashboardData } from "@/lib/ops-dashboard";
 import { formatPubDate, formatRelative } from "@/lib/utils";
@@ -206,6 +208,12 @@ async function OpsContent({ searchParams }: OpsPageProps) {
             </div>
           </PanelCard>
         </section>
+
+        <section className="border-t border-[var(--color-line)] py-8">
+          <OpsAlertTestControls secret={allowedSecret} />
+        </section>
+
+        <OpsAnalyticsChart daily={dashboard.analytics.daily} />
 
         <section className="border-t border-[var(--color-line)] py-8">
           <PanelCard title="Daily analytics growth">

@@ -11,7 +11,13 @@ import { type Prisma } from "@/generated/prisma/client";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
 import { getQualityDashboardData } from "@/lib/quality-dashboard";
-import { getReleaseListingItemsByIds, getSectionReleasesForInsights } from "@/lib/release-sections";
+import {
+  getReleaseListingItemsByIds,
+  getSectionReleasesForInsights,
+  releaseSectionDefinitions,
+  type ReleaseListingItem,
+  type ReleaseSectionKey,
+} from "@/lib/release-sections";
 import { getSyncStatusSummary } from "@/lib/sync-releases";
 
 export type AnalyticsAction =
@@ -64,6 +70,14 @@ type GenreTrendingItem = {
   release: Awaited<ReturnType<typeof getSectionReleasesForInsights>>[number] | null;
 };
 
+type PublicPlatformLabel = "Bandcamp" | "YouTube" | "YouTube Music";
+
+type SectionTrendLeaderItem = {
+  section: ReleaseSectionKey;
+  title: string;
+  entries: AnalyticsInsightItem[];
+};
+
 type DailyAnalyticsBucket = {
   dateKey: string;
   label: string;
@@ -77,7 +91,14 @@ const REPAIR_QUEUE_ALERT_THRESHOLD = 28;
 const STALE_METADATA_ALERT_THRESHOLD = 34;
 const ANALYTICS_TAG = "analytics";
 const ALERT_NOTIFICATION_COOLDOWN_MS = 1000 * 60 * 30;
-const PUBLIC_PLATFORM_LABELS = ["Bandcamp", "YouTube", "YouTube Music"] as const;
+const PUBLIC_PLATFORM_LABELS: readonly PublicPlatformLabel[] = ["Bandcamp", "YouTube", "YouTube Music"] as const;
+const TREND_SECTION_KEYS: ReleaseSectionKey[] = [
+  "latest",
+  "top-engaged",
+  "albums",
+  "eps",
+  "live",
+] as const;
 
 const ANALYTICS_DEBOUNCE_WINDOWS: Record<AnalyticsAction, number> = {
   OPEN: 1000 * 60 * 30,
@@ -171,6 +192,61 @@ export async function getAnalyticsOverview(hours = ANALYTICS_LOOKBACK_HOURS) {
 export async function getPublicAnalyticsInsights() {
   await ensureDatabase();
   return getCachedPublicAnalyticsInsights();
+}
+
+export type AlertDeliveryTestChannel = "discord" | "slack" | "email" | "all";
+
+export async function sendProductionAlertTest(channel: AlertDeliveryTestChannel) {
+  const webhookTargets = getAlertWebhookTargets();
+  const emailTarget = getAlertEmailTarget();
+  const testAlert = {
+    key: `manual-alert-test-${Date.now()}`,
+    severity: "INFO",
+    title: "Manual alert delivery test",
+    message: "This is a private MooSQA alert delivery test from the ops flow.",
+    metricValue: null,
+    contextJson: JSON.stringify({
+      source: "ops-debug",
+      triggeredAt: new Date().toISOString(),
+    }),
+    lastTriggeredAt: new Date(),
+  };
+
+  const requestedWebhookTargets =
+    channel === "all"
+      ? webhookTargets
+      : webhookTargets.filter((target) => target.type === channel);
+  const webhookResults = await Promise.all(
+    requestedWebhookTargets.map(async (target) => ({
+      channel: target.type,
+      configured: true,
+      delivered: await sendAlertNotification(testAlert, [target]),
+    })),
+  );
+  const missingWebhookResults =
+    channel === "discord" || channel === "slack"
+      ? !webhookTargets.some((target) => target.type === channel)
+        ? [{ channel, configured: false, delivered: false }]
+        : []
+      : [];
+
+  const emailResults =
+    channel === "email" || channel === "all"
+      ? [
+          {
+            channel: "email" as const,
+            configured: Boolean(emailTarget),
+            delivered: emailTarget ? await sendAlertSummaryEmail([testAlert], emailTarget) : false,
+          },
+        ]
+      : [];
+
+  const results = [...webhookResults, ...missingWebhookResults, ...emailResults];
+
+  return {
+    ok: results.some((entry) => entry.delivered),
+    results,
+  };
 }
 
 export async function updateWorkflowRunState(payload: WorkflowStatusPayload) {
@@ -451,28 +527,43 @@ const getCachedPublicAnalyticsInsights = unstable_cache(
     todayStart.setHours(0, 0, 0, 0);
     const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const [openedToday, sharedThisWeek, listenedThisWeek, platformHighlights, latestReleases, trendingNow, trendingByGenre] = await Promise.all([
+    const [
+      openedToday,
+      sharedThisWeek,
+      listenedThisWeek,
+      platformLeaderboards,
+      latestReleases,
+      trendingNow,
+      trendingByGenre,
+      sectionTrendLeaders,
+    ] = await Promise.all([
       getTopAnalyticsInsightByAction("OPEN", todayStart, 1),
       getTopAnalyticsInsightByAction("SHARE", weekStart, 1),
       getTopAnalyticsInsightByAction("LISTEN_CLICK", weekStart, 1),
       Promise.all(
         PUBLIC_PLATFORM_LABELS.map(async (platform) => ({
           platform,
-          entry: (await getTopAnalyticsInsightByAction("LISTEN_CLICK", weekStart, 1, platform))[0] || null,
+          entries: await getTopAnalyticsInsightByAction("LISTEN_CLICK", weekStart, 3, platform),
         })),
       ),
       getSectionReleasesForInsights("latest"),
       getTrendingAnalyticsReleases(6),
       getTrendingGenres(5),
+      getSectionTrendLeaders(2),
     ]);
 
     return {
       mostOpenedToday: openedToday[0] || null,
       mostSharedThisWeek: sharedThisWeek[0] || null,
       mostClickedToListen: listenedThisWeek[0] || null,
-      platformHighlights,
+      platformHighlights: platformLeaderboards.map((item) => ({
+        platform: item.platform,
+        entry: item.entries[0] || null,
+      })),
+      platformLeaderboards,
       trendingNow,
       trendingByGenre,
+      sectionTrendLeaders,
       fallbackLatest: latestReleases.slice(0, 3),
     };
   },
@@ -979,9 +1070,40 @@ async function getTrendingGenres(limit: number): Promise<GenreTrendingItem[]> {
   }));
 }
 
+async function getSectionTrendLeaders(limit: number): Promise<SectionTrendLeaderItem[]> {
+  const sections = await Promise.all(
+    TREND_SECTION_KEYS.map(async (section) => {
+      const releases = await getSectionReleasesForInsights(section);
+      const entries = releases
+        .slice(0, 96)
+        .map((release) => ({
+          releaseId: release.id,
+          count: computeTrendingScore(release),
+          release,
+        }))
+        .filter((entry) => entry.count > 0)
+        .sort((left, right) => right.count - left.count)
+        .slice(0, limit)
+        .map((entry) => ({
+          releaseId: entry.releaseId,
+          count: Math.round(entry.count),
+          release: entry.release as ReleaseListingItem,
+        }));
+
+      return {
+        section,
+        title: releaseSectionDefinitions[section].title,
+        entries,
+      };
+    }),
+  );
+
+  return sections.filter((section) => section.entries.length > 0);
+}
+
 function computeTrendingScore(release: {
   publishedAt: Date;
-  analyticsUpdatedAt: Date | null;
+  analyticsUpdatedAt?: Date | null;
   openCount: number;
   listenClickCount: number;
   shareCount: number;

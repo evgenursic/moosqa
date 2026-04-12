@@ -8,6 +8,7 @@ import { AnalyticsInsightsStrip } from "@/components/analytics-insights-strip";
 import { HomeOnboardingStrip } from "@/components/home-onboarding-strip";
 import { HomepageGenreFilter } from "@/components/homepage-genre-filter";
 import { PageScrollRestorer } from "@/components/page-scroll-restorer";
+import { PlatformLeaderboardSection } from "@/components/platform-leaderboard-section";
 import { ReleaseCard } from "@/components/release-card";
 import { ReleaseExplorer } from "@/components/release-explorer";
 import { SiteFooter } from "@/components/site-footer";
@@ -208,6 +209,18 @@ async function HomeContent({ searchParams }: HomePageProps) {
             genre: item.genre,
             count: item.count,
             release: item.release,
+          }))}
+        />
+      ) : null}
+
+      {analyticsInsights?.platformLeaderboards?.some((item) => item.entries.some((entry) => entry.release)) ? (
+        <PlatformLeaderboardSection
+          items={analyticsInsights.platformLeaderboards.map((item) => ({
+            platform: item.platform,
+            entries: item.entries.map((entry) => ({
+              count: entry.count,
+              release: entry.release,
+            })),
           }))}
         />
       ) : null}

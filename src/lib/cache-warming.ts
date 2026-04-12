@@ -28,18 +28,28 @@ export async function warmCriticalCaches() {
     ...homepage.latest.slice(0, 8).map((release) => release.id),
     ...analyticsInsights.trendingNow.map((entry) => entry.release?.id).filter((value): value is string => Boolean(value)),
     ...analyticsInsights.platformHighlights.map((entry) => entry.entry?.release?.id).filter((value): value is string => Boolean(value)),
+    ...analyticsInsights.platformLeaderboards.flatMap((item) =>
+      item.entries.map((entry) => entry.release?.id).filter((value): value is string => Boolean(value)),
+    ),
+    ...analyticsInsights.sectionTrendLeaders.flatMap((item) =>
+      item.entries.map((entry) => entry.release?.id).filter((value): value is string => Boolean(value)),
+    ),
     ...searchHotReleaseIds,
   ];
+  const trendingGenreArchives = analyticsInsights.trendingByGenre.slice(0, 4).map((item) =>
+    getSectionArchivePage("top-engaged", 1, item.genre)
+  );
 
   await Promise.all([
     getSearchOverlayPayload(),
     getSearchReleases(),
     ...CRITICAL_SECTIONS.map((section) => getSectionArchivePage(section, 1)),
+    ...trendingGenreArchives,
     ...[...new Set(highlightedReleaseIds)].map((releaseId) => warmReleaseCachesById(releaseId)),
   ]);
 
   return {
-    warmedSections: CRITICAL_SECTIONS.length,
+    warmedSections: CRITICAL_SECTIONS.length + trendingGenreArchives.length,
     warmedReleases: [...new Set(highlightedReleaseIds)].length,
   };
 }
