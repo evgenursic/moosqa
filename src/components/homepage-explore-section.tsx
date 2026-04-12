@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AnalyticsInsightsStrip } from "@/components/analytics-insights-strip";
 import { TrendingByGenreSection } from "@/components/trending-by-genre-section";
 import { TrendingNowSection } from "@/components/trending-now-section";
+import { buildSignalArchiveHref } from "@/lib/archive-links";
 import type { ReleaseListingItem, ReleaseSectionKey } from "@/lib/release-sections";
 
 type InsightEntry = {
@@ -72,6 +73,7 @@ export function HomepageExploreSection({
         <div className="grid gap-4 md:grid-cols-2">
           <ExploreGroup title="Radar sections" items={quickLinks} />
           <ExploreGroup title="Trending archives" items={trendingArchiveLinks} showScore />
+          <ExploreGroup title="Signal archives" items={buildHomepageSignalLinks()} />
         </div>
       </div>
 
@@ -142,4 +144,12 @@ export function buildHomepageQuickLinks() {
   ];
 
   return items;
+}
+
+function buildHomepageSignalLinks() {
+  return [
+    { title: "Most opened today", href: buildSignalArchiveHref("opened") },
+    { title: "Most shared this week", href: buildSignalArchiveHref("shared") },
+    { title: "Most clicked to listen", href: buildSignalArchiveHref("listened") },
+  ];
 }

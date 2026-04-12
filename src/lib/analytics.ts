@@ -12,8 +12,10 @@ import { type Prisma } from "@/generated/prisma/client";
 import {
   buildArchiveHref,
   buildPlatformArchiveHref,
+  buildSignalArchiveHref,
   buildTrendingGenreHref,
   type PlatformArchiveSlug,
+  type SignalArchiveSlug,
 } from "@/lib/archive-links";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
@@ -80,6 +82,7 @@ type GenreTrendingItem = {
 
 type PublicPlatformLabel = "Bandcamp" | "YouTube" | "YouTube Music";
 const PLATFORM_ARCHIVE_PAGE_SIZE = 24;
+const SIGNAL_ARCHIVE_PAGE_SIZE = 24;
 
 type SectionTrendLeaderItem = {
   section: ReleaseSectionKey;
@@ -213,6 +216,11 @@ export async function getPublicAnalyticsInsights() {
 export async function getPlatformArchivePage(platform: PlatformArchiveSlug, requestedPage = 1) {
   await ensureDatabase();
   return getCachedPlatformArchivePage(platform, requestedPage);
+}
+
+export async function getSignalArchivePage(signal: SignalArchiveSlug, requestedPage = 1) {
+  await ensureDatabase();
+  return getCachedSignalArchivePage(signal, requestedPage);
 }
 
 export function getPlatformLabelFromSlug(platform: PlatformArchiveSlug): PublicPlatformLabel {
@@ -716,6 +724,68 @@ const getCachedPlatformArchivePage = unstable_cache(
     };
   },
   ["platform-archive-page"],
+  {
+    revalidate: 300,
+    tags: [ANALYTICS_TAG, "releases"],
+  },
+);
+
+const getCachedSignalArchivePage = unstable_cache(
+  async (signal: SignalArchiveSlug, requestedPage: number) => {
+    const config = getSignalArchiveConfig(signal);
+    const groups = await prisma.analyticsEvent.groupBy({
+      by: ["releaseId"],
+      where: {
+        action: config.action,
+        createdAt: {
+          gte: config.since,
+        },
+        releaseId: {
+          not: null,
+        },
+      },
+      _count: {
+        _all: true,
+      },
+      orderBy: {
+        _count: {
+          releaseId: "desc",
+        },
+      },
+      take: 140,
+    });
+
+    const releaseIds = groups
+      .map((entry) => entry.releaseId)
+      .filter((entry): entry is string => Boolean(entry));
+    const releaseMap = new Map(
+      (await getReleaseListingItemsByIds(releaseIds)).map((release) => [release.id, release]),
+    );
+    const entries = groups
+      .map((entry) => ({
+        releaseId: entry.releaseId || "",
+        count: entry._count._all,
+        release: entry.releaseId ? releaseMap.get(entry.releaseId) || null : null,
+      }))
+      .filter((entry) => entry.release);
+
+    const pageCount = Math.max(1, Math.ceil(entries.length / SIGNAL_ARCHIVE_PAGE_SIZE));
+    const page = clampPageNumber(requestedPage, pageCount);
+    const start = (page - 1) * SIGNAL_ARCHIVE_PAGE_SIZE;
+
+    return {
+      signal,
+      title: config.title,
+      kicker: config.kicker,
+      description: config.description,
+      page,
+      pageCount,
+      total: entries.length,
+      entries: entries.slice(start, start + SIGNAL_ARCHIVE_PAGE_SIZE),
+      canonicalHref: buildSignalArchiveHref(signal, page),
+    };
+  },
+  ["signal-archive-page"],
   {
     revalidate: 300,
     tags: [ANALYTICS_TAG, "releases"],
@@ -1727,4 +1797,38 @@ function buildSectionTrendLinks(items: SectionTrendLeaderItem[]) {
     }),
     count: item.entries.reduce((sum, entry) => sum + entry.count, 0),
   }));
+}
+
+function getSignalArchiveConfig(signal: SignalArchiveSlug) {
+  if (signal === "shared") {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    return {
+      action: AnalyticsEventType.SHARE,
+      since,
+      title: "Most shared this week",
+      kicker: "Public share signal",
+      description: "The releases listeners share most often across the last 7 days.",
+    };
+  }
+
+  if (signal === "listened") {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    return {
+      action: AnalyticsEventType.LISTEN_CLICK,
+      since,
+      title: "Most clicked to listen",
+      kicker: "Public listening signal",
+      description: "The releases that generate the most direct listening clicks this week.",
+    };
+  }
+
+  const since = new Date();
+  since.setHours(0, 0, 0, 0);
+  return {
+    action: AnalyticsEventType.OPEN,
+    since,
+    title: "Most opened today",
+    kicker: "Public open signal",
+    description: "The releases opened most often today across the MooSQA feed.",
+  };
 }

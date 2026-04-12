@@ -2,6 +2,7 @@ import type { ReleaseSectionKey } from "@/lib/release-sections";
 
 export type ArchiveViewMode = "latest" | "trending";
 export type PlatformArchiveSlug = "bandcamp" | "youtube" | "youtube-music";
+export type SignalArchiveSlug = "opened" | "shared" | "listened";
 
 export function buildArchiveHref(
   section: ReleaseSectionKey | string,
@@ -46,6 +47,16 @@ export function buildPlatformArchiveHref(platform: PlatformArchiveSlug, page?: n
 
   const query = params.toString();
   return query ? `/platform/${platform}?${query}` : `/platform/${platform}`;
+}
+
+export function buildSignalArchiveHref(signal: SignalArchiveSlug, page?: number) {
+  const params = new URLSearchParams();
+  if (page && page > 1) {
+    params.set("page", String(page));
+  }
+
+  const query = params.toString();
+  return query ? `/signals/${signal}?${query}` : `/signals/${signal}`;
 }
 
 export function slugifyGenre(value: string) {

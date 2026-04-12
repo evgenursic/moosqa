@@ -1,4 +1,7 @@
+import Link from "next/link";
+
 import { ReleaseBrief } from "@/components/release-brief";
+import { buildSignalArchiveHref } from "@/lib/archive-links";
 import type { ReleaseListingItem } from "@/lib/release-sections";
 
 type InsightRelease = ReleaseListingItem | null;
@@ -24,18 +27,21 @@ export function AnalyticsInsightsStrip({
       title: "Most opened today",
       entry: mostOpenedToday,
       suffix: "opens",
+      href: buildSignalArchiveHref("opened"),
     },
     {
       title: "Most shared this week",
       entry: mostSharedThisWeek,
       suffix: "shares",
+      href: buildSignalArchiveHref("shared"),
     },
     {
       title: "Most clicked to listen",
       entry: mostClickedToListen,
       suffix: "listen clicks",
+      href: buildSignalArchiveHref("listened"),
     },
-  ];
+  ] as const;
 
   if (!cards.some((card) => card.entry?.release)) {
     return null;
@@ -60,6 +66,15 @@ export function AnalyticsInsightsStrip({
               </p>
               <div className="mt-4">
                 <ReleaseBrief release={card.entry.release} fromHref="/#audience-pulse" />
+              </div>
+              <div className="mt-4">
+                <Link
+                  href={card.href}
+                  prefetch={false}
+                  className="inline-flex items-center border border-[var(--color-line)] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+                >
+                  Open full signal
+                </Link>
               </div>
             </div>
           );

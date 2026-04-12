@@ -1,5 +1,5 @@
 import { getSearchOverlayPayload } from "@/lib/search-overlay";
-import { getPublicAnalyticsInsights } from "@/lib/analytics";
+import { getPublicAnalyticsInsights, getSignalArchivePage } from "@/lib/analytics";
 import { AnalyticsEventType } from "@/generated/prisma/enums";
 import {
   getHomepageSectionsData,
@@ -42,6 +42,9 @@ export async function warmCriticalCaches() {
   const trendingSectionArchives = analyticsInsights.sectionTrendLeaders.map((item) =>
     getSectionArchivePage(item.section, 1, null, "trending")
   );
+  const signalArchives = ["opened", "shared", "listened"].map((signal) =>
+    getSignalArchivePage(signal as "opened" | "shared" | "listened", 1)
+  );
 
   await Promise.all([
     getSearchOverlayPayload(),
@@ -49,11 +52,16 @@ export async function warmCriticalCaches() {
     ...CRITICAL_SECTIONS.map((section) => getSectionArchivePage(section, 1)),
     ...trendingGenreArchives,
     ...trendingSectionArchives,
+    ...signalArchives,
     ...[...new Set(highlightedReleaseIds)].map((releaseId) => warmReleaseCachesById(releaseId)),
   ]);
 
   return {
-    warmedSections: CRITICAL_SECTIONS.length + trendingGenreArchives.length + trendingSectionArchives.length,
+    warmedSections:
+      CRITICAL_SECTIONS.length +
+      trendingGenreArchives.length +
+      trendingSectionArchives.length +
+      signalArchives.length,
     warmedReleases: [...new Set(highlightedReleaseIds)].length,
   };
 }
