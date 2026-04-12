@@ -37,7 +37,10 @@ export async function warmCriticalCaches() {
     ...searchHotReleaseIds,
   ];
   const trendingGenreArchives = analyticsInsights.trendingByGenre.slice(0, 4).map((item) =>
-    getSectionArchivePage("top-engaged", 1, item.genre)
+    getSectionArchivePage("top-engaged", 1, item.genre, "trending")
+  );
+  const trendingSectionArchives = analyticsInsights.sectionTrendLeaders.map((item) =>
+    getSectionArchivePage(item.section, 1, null, "trending")
   );
 
   await Promise.all([
@@ -45,11 +48,12 @@ export async function warmCriticalCaches() {
     getSearchReleases(),
     ...CRITICAL_SECTIONS.map((section) => getSectionArchivePage(section, 1)),
     ...trendingGenreArchives,
+    ...trendingSectionArchives,
     ...[...new Set(highlightedReleaseIds)].map((releaseId) => warmReleaseCachesById(releaseId)),
   ]);
 
   return {
-    warmedSections: CRITICAL_SECTIONS.length + trendingGenreArchives.length,
+    warmedSections: CRITICAL_SECTIONS.length + trendingGenreArchives.length + trendingSectionArchives.length,
     warmedReleases: [...new Set(highlightedReleaseIds)].length,
   };
 }

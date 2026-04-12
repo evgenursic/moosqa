@@ -5,6 +5,7 @@ import { Suspense, type ReactNode } from "react";
 
 import { OpsAlertTestControls } from "@/components/ops-alert-test-controls";
 import { OpsAnalyticsChart } from "@/components/ops-analytics-chart";
+import { OpsPlatformHistoryChart } from "@/components/ops-platform-history-chart";
 import { getRequiredDebugSecret } from "@/lib/admin-auth";
 import { getOpsDashboardData } from "@/lib/ops-dashboard";
 import { formatPubDate, formatRelative } from "@/lib/utils";
@@ -214,6 +215,7 @@ async function OpsContent({ searchParams }: OpsPageProps) {
         </section>
 
         <OpsAnalyticsChart daily={dashboard.analytics.daily} />
+        <OpsPlatformHistoryChart daily={dashboard.analytics.platformDaily} />
 
         <section className="border-t border-[var(--color-line)] py-8">
           <PanelCard title="Daily analytics growth">
@@ -243,6 +245,51 @@ async function OpsContent({ searchParams }: OpsPageProps) {
           <StatCard label="Retry queue" value={String(dashboard.quality.totals.retryQueue)} />
           <StatCard label="Low quality cards" value={String(dashboard.quality.totals.lowQuality)} />
           <StatCard label="Missing release date" value={String(dashboard.quality.totals.missingReleaseDate)} />
+        </section>
+
+        <section className="border-t border-[var(--color-line)] py-8">
+          <PanelCard title="Alert delivery log">
+            <div className="grid gap-3">
+              {dashboard.alertDeliveries.map((delivery) => (
+                <div
+                  key={delivery.id}
+                  className="grid gap-3 border-t border-[var(--color-soft-line)] pt-3 first:border-t-0 first:pt-0 md:grid-cols-[minmax(0,1fr)_auto]"
+                >
+                  <div className="min-w-0">
+                    <p className="section-kicker text-black/43">
+                      {delivery.channel} / {delivery.success ? "Delivered" : "Failed"}
+                      {delivery.isTest ? " / Test" : ""}
+                    </p>
+                    <p className="mt-2 text-xl leading-tight text-[var(--color-ink)] serif-display">
+                      {delivery.destination || "Unknown destination"}
+                    </p>
+                    <p className="mt-2 text-sm leading-7 text-black/62">
+                      {delivery.message || (delivery.success ? "Delivered" : "Delivery failed")}
+                    </p>
+                  </div>
+                  <div className="border border-[var(--color-line)] bg-[var(--color-paper)] px-4 py-3 text-right">
+                    <p className="section-kicker text-black/43">Time</p>
+                    <p className="mt-2 text-sm uppercase tracking-[0.14em] text-[var(--color-ink)]">
+                      {formatRelative(delivery.createdAt)}
+                    </p>
+                    <p className="mt-1 text-xs leading-6 text-black/48">
+                      {formatPubDate(delivery.createdAt)}
+                    </p>
+                    <p className="mt-3 section-kicker text-black/43">Alert key</p>
+                    <p className="mt-2 text-xs leading-6 text-black/48">
+                      {delivery.alertKey || "manual-test"}
+                    </p>
+                    {typeof delivery.responseStatus === "number" ? (
+                      <>
+                        <p className="mt-3 section-kicker text-black/43">HTTP</p>
+                        <p className="mt-2 text-xs leading-6 text-black/48">{delivery.responseStatus}</p>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </PanelCard>
         </section>
     </OpsShell>
   );

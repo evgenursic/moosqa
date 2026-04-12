@@ -22,6 +22,7 @@ const PUBLIC_TABLES = [
   '"AnalyticsActionLock"',
   '"WorkflowRunState"',
   '"OpsAlert"',
+  '"AlertDeliveryLog"',
 ];
 
 async function main() {

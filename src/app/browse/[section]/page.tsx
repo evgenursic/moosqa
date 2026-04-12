@@ -12,6 +12,7 @@ import {
   getSectionArchivePage,
   isReleaseSectionKey,
 } from "@/lib/release-sections";
+import { buildArchiveHref, parseArchiveViewMode } from "@/lib/archive-links";
 import { getSiteUrl } from "@/lib/site";
 import { refreshHomepageData, shouldBlockForHomepageRefresh } from "@/lib/sync-releases";
 
@@ -59,6 +60,7 @@ export default async function BrowseSectionPage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const page = parsePageParam(resolvedSearchParams.page);
   const genre = parseGenreParam(resolvedSearchParams.genre);
+  const view = parseArchiveViewMode(resolvedSearchParams.view);
   let archive: Awaited<ReturnType<typeof getSectionArchivePage>> | null = null;
   let archiveLoadError = false;
 
@@ -69,7 +71,7 @@ export default async function BrowseSectionPage({
       await refreshHomepageData();
     }
 
-    archive = await getSectionArchivePage(section, page, genre);
+    archive = await getSectionArchivePage(section, page, genre, view);
   } catch (error) {
     archiveLoadError = true;
     console.error(`Archive page failed to load for section ${section}.`, error);
@@ -94,10 +96,15 @@ export default async function BrowseSectionPage({
     );
   }
 
-  const archiveHref = `${buildArchiveHref(section, { page: archive.page, genre: archive.selectedGenre })}#archive`;
+  const archiveHref = `${buildArchiveHref(section, {
+    page: archive.page,
+    genre: archive.selectedGenre,
+    view: archive.archiveMode,
+  })}#archive`;
   const canonicalArchiveHref = buildArchiveHref(section, {
     page: archive.page,
     genre: archive.selectedGenre,
+    view: archive.archiveMode,
   });
   const sectionJsonLd = {
     "@context": "https://schema.org",
@@ -162,6 +169,9 @@ export default async function BrowseSectionPage({
               <span className="border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2">
                 Page {archive.page} / {archive.pageCount}
               </span>
+              <span className="border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2">
+                {archive.archiveMode === "trending" ? "Trending mode" : "Latest mode"}
+              </span>
               <Link
                 href={`/#${archive.homeId}`}
                 scroll={false}
@@ -178,15 +188,51 @@ export default async function BrowseSectionPage({
             </div>
           </div>
 
+          <div className="mt-6 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)]">
+            <Link
+              href={buildArchiveHref(section, {
+                genre: archive.selectedGenre,
+                view: "latest",
+              })}
+              scroll={false}
+              className={
+                archive.archiveMode === "latest"
+                  ? "inline-flex items-center border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-4 py-3 text-white"
+                  : "inline-flex items-center border border-[var(--color-line)] px-4 py-3 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+              }
+            >
+              Latest order
+            </Link>
+            <Link
+              href={buildArchiveHref(section, {
+                genre: archive.selectedGenre,
+                view: "trending",
+              })}
+              scroll={false}
+              className={
+                archive.archiveMode === "trending"
+                  ? "inline-flex items-center border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-4 py-3 text-white"
+                  : "inline-flex items-center border border-[var(--color-line)] px-4 py-3 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+              }
+            >
+              Trending
+            </Link>
+          </div>
+
           {archive.genres.length > 0 ? (
             <GenreFilterDrawer
               title="Genre filter"
               description={`Filter ${archive.title.toLowerCase()} without leaving the ${archive.title.toLowerCase()} archive.`}
               selectedGenre={archive.selectedGenre || ""}
-              allHref={buildArchiveHref(section)}
+              allHref={buildArchiveHref(section, {
+                view: archive.archiveMode,
+              })}
               options={archive.genres.map((genreOption) => ({
                 label: genreOption,
-                href: buildArchiveHref(section, { genre: genreOption }),
+                href: buildArchiveHref(section, {
+                  genre: genreOption,
+                  view: archive.archiveMode,
+                }),
               }))}
               searchPlaceholder={`Filter ${archive.title.toLowerCase()} genres`}
               className="mt-6 border-b border-[var(--color-soft-line)] pb-6"
@@ -218,6 +264,7 @@ export default async function BrowseSectionPage({
             page={archive.page}
             pageCount={archive.pageCount}
             genre={archive.selectedGenre}
+            view={archive.archiveMode}
           />
         </section>
 
@@ -232,11 +279,13 @@ function ArchivePagination({
   page,
   pageCount,
   genre,
+  view,
 }: {
   section: string;
   page: number;
   pageCount: number;
   genre: string | null;
+  view: "latest" | "trending";
 }) {
   if (pageCount <= 1) {
     return null;
@@ -248,7 +297,7 @@ function ArchivePagination({
     <nav className="mt-10 flex flex-wrap items-center gap-3 border-t border-[var(--color-soft-line)] pt-6 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)]">
       {page > 1 ? (
         <Link
-          href={buildArchiveHref(section, { page: page - 1, genre })}
+          href={buildArchiveHref(section, { page: page - 1, genre, view })}
           prefetch
           scroll={false}
           className="inline-flex items-center border border-[var(--color-line)] px-4 py-3 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
@@ -265,7 +314,7 @@ function ArchivePagination({
         ) : (
           <Link
             key={`${section}-${value}`}
-            href={buildArchiveHref(section, { page: value, genre })}
+            href={buildArchiveHref(section, { page: value, genre, view })}
             prefetch
             scroll={false}
             aria-current={value === page ? "page" : undefined}
@@ -282,7 +331,7 @@ function ArchivePagination({
 
       {page < pageCount ? (
         <Link
-          href={buildArchiveHref(section, { page: page + 1, genre })}
+          href={buildArchiveHref(section, { page: page + 1, genre, view })}
           prefetch
           scroll={false}
           className="inline-flex items-center border border-[var(--color-line)] px-4 py-3 transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
@@ -322,27 +371,6 @@ function parsePageParam(value: string | string[] | undefined) {
 function parseGenreParam(value: string | string[] | undefined) {
   const raw = Array.isArray(value) ? value[0] : value;
   return raw?.trim() || "";
-}
-
-function buildArchiveHref(
-  section: string,
-  options?: {
-    page?: number;
-    genre?: string | null;
-  },
-) {
-  const params = new URLSearchParams();
-
-  if (options?.page && options.page > 1) {
-    params.set("page", String(options.page));
-  }
-
-  if (options?.genre) {
-    params.set("genre", options.genre);
-  }
-
-  const query = params.toString();
-  return query ? `/browse/${section}?${query}` : `/browse/${section}`;
 }
 
 function getReleaseCardContext(section: string) {

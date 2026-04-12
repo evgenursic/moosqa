@@ -1,4 +1,8 @@
+import { computeTrendingScore } from "@/lib/trending-score";
+
 type ReleasePublicCountersProps = {
+  publishedAt?: Date;
+  analyticsUpdatedAt?: Date | null;
   openCount: number;
   listenClickCount: number;
   shareCount: number;
@@ -7,21 +11,24 @@ type ReleasePublicCountersProps = {
 };
 
 export function ReleasePublicCounters({
+  publishedAt = new Date(),
+  analyticsUpdatedAt = null,
   openCount,
   listenClickCount,
   shareCount,
   positiveReactionCount,
   negativeReactionCount,
 }: ReleasePublicCountersProps) {
-  const trendScore = Math.max(
-    0,
-    Math.round(
-      openCount * 1.1 +
-        listenClickCount * 1.7 +
-        shareCount * 2.4 +
-        positiveReactionCount * 1.9 -
-        negativeReactionCount * 0.6,
-    ),
+  const trendScore = Math.round(
+    computeTrendingScore({
+      publishedAt,
+      analyticsUpdatedAt,
+      openCount,
+      listenClickCount,
+      shareCount,
+      positiveReactionCount,
+      negativeReactionCount,
+    }),
   );
   const audienceActions =
     openCount +

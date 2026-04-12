@@ -3,11 +3,13 @@ import { unstable_cache } from "next/cache";
 import { revalidateTag } from "next/cache";
 
 import {
+  AlertDeliveryChannel,
   AnalyticsEventType,
   ReleaseReactionValue,
   WorkflowRunStatus,
 } from "@/generated/prisma/enums";
 import { type Prisma } from "@/generated/prisma/client";
+import { buildArchiveHref } from "@/lib/archive-links";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
 import { getQualityDashboardData } from "@/lib/quality-dashboard";
@@ -19,6 +21,7 @@ import {
   type ReleaseSectionKey,
 } from "@/lib/release-sections";
 import { getSyncStatusSummary } from "@/lib/sync-releases";
+import { computeTrendingScore } from "@/lib/trending-score";
 
 export type AnalyticsAction =
   | "OPEN"
@@ -83,6 +86,13 @@ type DailyAnalyticsBucket = {
   label: string;
   total: number;
   counts: Record<AnalyticsAction, number>;
+};
+
+type DailyPlatformBucket = {
+  dateKey: string;
+  label: string;
+  total: number;
+  counts: Record<PublicPlatformLabel, number>;
 };
 
 const ANALYTICS_LOOKBACK_HOURS = 24;
@@ -220,7 +230,7 @@ export async function sendProductionAlertTest(channel: AlertDeliveryTestChannel)
     requestedWebhookTargets.map(async (target) => ({
       channel: target.type,
       configured: true,
-      delivered: await sendAlertNotification(testAlert, [target]),
+      delivered: await sendAlertNotification(testAlert, [target], { isTest: true }),
     })),
   );
   const missingWebhookResults =
@@ -236,12 +246,37 @@ export async function sendProductionAlertTest(channel: AlertDeliveryTestChannel)
           {
             channel: "email" as const,
             configured: Boolean(emailTarget),
-            delivered: emailTarget ? await sendAlertSummaryEmail([testAlert], emailTarget) : false,
+            delivered: emailTarget ? await sendAlertSummaryEmail([testAlert], emailTarget, { isTest: true }) : false,
           },
         ]
       : [];
 
   const results = [...webhookResults, ...missingWebhookResults, ...emailResults];
+
+  await Promise.all(
+    missingWebhookResults.map((entry) =>
+      logAlertDeliveryAttempt({
+        alertKey: testAlert.key,
+        channel: entry.channel === "discord" ? AlertDeliveryChannel.DISCORD : AlertDeliveryChannel.SLACK,
+        destination: null,
+        success: false,
+        responseStatus: null,
+        message: "Channel not configured",
+        isTest: true,
+      }),
+    ),
+  );
+  if ((channel === "email" || channel === "all") && !emailTarget) {
+    await logAlertDeliveryAttempt({
+      alertKey: testAlert.key,
+      channel: AlertDeliveryChannel.EMAIL,
+      destination: null,
+      success: false,
+      responseStatus: null,
+      message: "Channel not configured",
+      isTest: true,
+    });
+  }
 
   return {
     ok: results.some((entry) => entry.delivered),
@@ -376,7 +411,7 @@ const getCachedAnalyticsOverview = unstable_cache(
   async (hours: number) => {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
     const dailySince = new Date(Date.now() - ANALYTICS_DAILY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-    const [counts, topReleases, platformCounts, aggregatedTopReleases, recentDailyEvents] = await Promise.all([
+    const [counts, topReleases, platformCounts, aggregatedTopReleases, recentDailyEvents, recentPlatformEvents] = await Promise.all([
       prisma.analyticsEvent.groupBy({
         by: ["action"],
         where: {
@@ -467,6 +502,24 @@ const getCachedAnalyticsOverview = unstable_cache(
           createdAt: true,
         },
       }),
+      prisma.analyticsEvent.findMany({
+        where: {
+          createdAt: {
+            gte: dailySince,
+          },
+          action: AnalyticsEventType.LISTEN_CLICK,
+          platform: {
+            in: [...PUBLIC_PLATFORM_LABELS],
+          },
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+        select: {
+          platform: true,
+          createdAt: true,
+        },
+      }),
     ]);
 
     const releaseIds = topReleases
@@ -511,6 +564,7 @@ const getCachedAnalyticsOverview = unstable_cache(
       })),
       aggregateTopReleases: aggregatedTopReleases,
       daily: buildDailyAnalyticsBuckets(recentDailyEvents, ANALYTICS_DAILY_WINDOW_DAYS),
+      platformDaily: buildDailyPlatformBuckets(recentPlatformEvents, ANALYTICS_DAILY_WINDOW_DAYS),
     };
   },
   ["analytics-overview"],
@@ -564,6 +618,13 @@ const getCachedPublicAnalyticsInsights = unstable_cache(
       trendingNow,
       trendingByGenre,
       sectionTrendLeaders,
+      audiencePulseLinks: buildAudiencePulseLinks({
+        mostOpenedToday: openedToday[0] || null,
+        mostSharedThisWeek: sharedThisWeek[0] || null,
+        mostClickedToListen: listenedThisWeek[0] || null,
+      }),
+      trendingGenreLinks: buildTrendingGenreLinks(trendingByGenre),
+      trendingArchiveLinks: buildSectionTrendLinks(sectionTrendLeaders),
       fallbackLatest: latestReleases.slice(0, 3),
     };
   },
@@ -1101,31 +1162,6 @@ async function getSectionTrendLeaders(limit: number): Promise<SectionTrendLeader
   return sections.filter((section) => section.entries.length > 0);
 }
 
-function computeTrendingScore(release: {
-  publishedAt: Date;
-  analyticsUpdatedAt?: Date | null;
-  openCount: number;
-  listenClickCount: number;
-  shareCount: number;
-  positiveReactionCount: number;
-  negativeReactionCount: number;
-}) {
-  const ageHours = Math.max(1, (Date.now() - release.publishedAt.getTime()) / (1000 * 60 * 60));
-  const freshnessHours = release.analyticsUpdatedAt
-    ? Math.max(1, (Date.now() - release.analyticsUpdatedAt.getTime()) / (1000 * 60 * 60))
-    : ageHours;
-  const interactionBase =
-    release.openCount * 1.1 +
-    release.listenClickCount * 1.7 +
-    release.shareCount * 2.4 +
-    release.positiveReactionCount * 1.9 -
-    release.negativeReactionCount * 0.6;
-  const freshnessBoost = 24 / Math.pow(freshnessHours + 2, 0.52);
-  const recencyPenalty = 1 / Math.pow(ageHours + 4, 0.14);
-
-  return Math.max(0, interactionBase * recencyPenalty + freshnessBoost);
-}
-
 function buildDailyAnalyticsBuckets(
   events: Array<{ action: AnalyticsEventType; createdAt: Date }>,
   days: number,
@@ -1179,6 +1215,43 @@ function buildDailyAnalyticsBuckets(
   return [...buckets.values()];
 }
 
+function buildDailyPlatformBuckets(
+  events: Array<{ platform: string | null; createdAt: Date }>,
+  days: number,
+) {
+  const buckets = new Map<string, DailyPlatformBucket>();
+
+  for (let index = days - 1; index >= 0; index -= 1) {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - index);
+    const key = date.toISOString().slice(0, 10);
+    buckets.set(key, {
+      dateKey: key,
+      label: date.toLocaleDateString("en-GB", { month: "short", day: "numeric" }),
+      total: 0,
+      counts: {
+        Bandcamp: 0,
+        YouTube: 0,
+        "YouTube Music": 0,
+      },
+    });
+  }
+
+  for (const event of events) {
+    const key = event.createdAt.toISOString().slice(0, 10);
+    const bucket = buckets.get(key);
+    if (!bucket || !event.platform || !isPublicPlatformLabel(event.platform)) {
+      continue;
+    }
+
+    bucket.counts[event.platform] += 1;
+    bucket.total += 1;
+  }
+
+  return [...buckets.values()];
+}
+
 async function sendAlertNotification(
   alert: {
     key: string;
@@ -1190,6 +1263,9 @@ async function sendAlertNotification(
     lastTriggeredAt: Date;
   },
   webhookTargets: Array<{ type: "discord" | "slack"; url: string }>,
+  options?: {
+    isTest?: boolean;
+  },
 ) {
   const context = parseAlertContext(alert.contextJson);
   const detailLines = [
@@ -1228,8 +1304,26 @@ async function sendAlertNotification(
           body: JSON.stringify(payload),
           cache: "no-store",
         });
+        await logAlertDeliveryAttempt({
+          alertKey: alert.key,
+          channel: target.type === "discord" ? AlertDeliveryChannel.DISCORD : AlertDeliveryChannel.SLACK,
+          destination: sanitizeDeliveryDestination(target.url),
+          success: response.ok,
+          responseStatus: response.status,
+          message: response.ok ? "Delivered" : `HTTP ${response.status}`,
+          isTest: Boolean(options?.isTest),
+        });
         return response.ok;
       } catch {
+        await logAlertDeliveryAttempt({
+          alertKey: alert.key,
+          channel: target.type === "discord" ? AlertDeliveryChannel.DISCORD : AlertDeliveryChannel.SLACK,
+          destination: sanitizeDeliveryDestination(target.url),
+          success: false,
+          responseStatus: null,
+          message: "Network error",
+          isTest: Boolean(options?.isTest),
+        });
         return false;
       }
     }),
@@ -1284,6 +1378,9 @@ async function sendAlertSummaryEmail(
     apiKey: string;
     to: string;
     from: string;
+  },
+  options?: {
+    isTest?: boolean;
   },
 ) {
   if (alerts.length === 0) {
@@ -1356,9 +1453,62 @@ async function sendAlertSummaryEmail(
       cache: "no-store",
     });
 
+    await logAlertDeliveryAttempt({
+      alertKey: alerts[0]?.key || null,
+      channel: AlertDeliveryChannel.EMAIL,
+      destination: target.to,
+      success: response.ok,
+      responseStatus: response.status,
+      message: response.ok ? "Delivered" : `HTTP ${response.status}`,
+      isTest: Boolean(options?.isTest),
+    });
     return response.ok;
   } catch {
+    await logAlertDeliveryAttempt({
+      alertKey: alerts[0]?.key || null,
+      channel: AlertDeliveryChannel.EMAIL,
+      destination: target.to,
+      success: false,
+      responseStatus: null,
+      message: "Network error",
+      isTest: Boolean(options?.isTest),
+    });
     return false;
+  }
+}
+
+async function logAlertDeliveryAttempt(input: {
+  alertKey: string | null;
+  channel: AlertDeliveryChannel;
+  destination: string | null;
+  success: boolean;
+  responseStatus: number | null;
+  message: string | null;
+  isTest: boolean;
+}) {
+  try {
+    await prisma.alertDeliveryLog.create({
+      data: {
+        alertKey: input.alertKey,
+        channel: input.channel,
+        destination: input.destination,
+        success: input.success,
+        responseStatus: input.responseStatus,
+        message: input.message,
+        isTest: input.isTest,
+      },
+    });
+    revalidateTag("ops-dashboard", "max");
+  } catch {
+    // ignore logging failures to avoid blocking primary alert delivery
+  }
+}
+
+function sanitizeDeliveryDestination(value: string) {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return null;
   }
 }
 
@@ -1431,4 +1581,54 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function isPublicPlatformLabel(value: string): value is PublicPlatformLabel {
+  return PUBLIC_PLATFORM_LABELS.includes(value as PublicPlatformLabel);
+}
+
+function buildAudiencePulseLinks(input: {
+  mostOpenedToday: AnalyticsInsightItem | null;
+  mostSharedThisWeek: AnalyticsInsightItem | null;
+  mostClickedToListen: AnalyticsInsightItem | null;
+}) {
+  return [
+    {
+      title: "Most opened today",
+      count: input.mostOpenedToday?.count ?? 0,
+      release: input.mostOpenedToday?.release || null,
+    },
+    {
+      title: "Most shared this week",
+      count: input.mostSharedThisWeek?.count ?? 0,
+      release: input.mostSharedThisWeek?.release || null,
+    },
+    {
+      title: "Most clicked to listen",
+      count: input.mostClickedToListen?.count ?? 0,
+      release: input.mostClickedToListen?.release || null,
+    },
+  ].filter((item) => item.release);
+}
+
+function buildTrendingGenreLinks(items: GenreTrendingItem[]) {
+  return items.map((item) => ({
+    title: item.genre,
+    count: item.count,
+    href: buildArchiveHref("top-engaged", {
+      genre: item.genre,
+      view: "trending",
+    }),
+  }));
+}
+
+function buildSectionTrendLinks(items: SectionTrendLeaderItem[]) {
+  return items.map((item) => ({
+    section: item.section,
+    title: `${item.title} trending`,
+    href: buildArchiveHref(item.section, {
+      view: "trending",
+    }),
+    count: item.entries.reduce((sum, entry) => sum + entry.count, 0),
+  }));
 }

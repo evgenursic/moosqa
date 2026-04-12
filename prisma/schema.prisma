@@ -77,6 +77,12 @@ enum AlertStatus {
   RESOLVED
 }
 
+enum AlertDeliveryChannel {
+  DISCORD
+  SLACK
+  EMAIL
+}
+
 model Release {
   id              String        @id @default(cuid())
   source          ReleaseSource @default(REDDIT)
@@ -244,4 +250,19 @@ model OpsAlert {
   updatedAt       DateTime      @updatedAt
 
   @@index([status, severity, updatedAt(sort: Desc)])
+}
+
+model AlertDeliveryLog {
+  id            String               @id @default(cuid())
+  alertKey      String?
+  channel       AlertDeliveryChannel
+  destination   String?
+  success       Boolean              @default(false)
+  isTest        Boolean              @default(false)
+  responseStatus Int?
+  message       String?
+  createdAt     DateTime             @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([channel, createdAt(sort: Desc)])
 }

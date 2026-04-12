@@ -4,7 +4,6 @@ import { after, connection } from "next/server";
 import { Suspense } from "react";
 
 import { getPublicAnalyticsInsights } from "@/lib/analytics";
-import { AnalyticsInsightsStrip } from "@/components/analytics-insights-strip";
 import { HomeOnboardingStrip } from "@/components/home-onboarding-strip";
 import { HomepageGenreFilter } from "@/components/homepage-genre-filter";
 import { PageScrollRestorer } from "@/components/page-scroll-restorer";
@@ -13,8 +12,6 @@ import { ReleaseCard } from "@/components/release-card";
 import { ReleaseExplorer } from "@/components/release-explorer";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { TrendingNowSection } from "@/components/trending-now-section";
-import { TrendingByGenreSection } from "@/components/trending-by-genre-section";
 import {
   getHomepageSectionsData,
   getSearchReleases,
@@ -194,25 +191,6 @@ async function HomeContent({ searchParams }: HomePageProps) {
       <ReleaseCardSection section="eps" releases={sections.eps} />
       <ReleaseCardSection section="live" releases={sections.live} />
 
-      {analyticsInsights?.trendingNow?.length ? (
-        <TrendingNowSection
-          items={analyticsInsights.trendingNow.map((item) => ({
-            count: item.count,
-            release: item.release,
-          }))}
-        />
-      ) : null}
-
-      {analyticsInsights?.trendingByGenre?.length ? (
-        <TrendingByGenreSection
-          items={analyticsInsights.trendingByGenre.map((item) => ({
-            genre: item.genre,
-            count: item.count,
-            release: item.release,
-          }))}
-        />
-      ) : null}
-
       {analyticsInsights?.platformLeaderboards?.some((item) => item.entries.some((entry) => entry.release)) ? (
         <PlatformLeaderboardSection
           items={analyticsInsights.platformLeaderboards.map((item) => ({
@@ -224,40 +202,8 @@ async function HomeContent({ searchParams }: HomePageProps) {
           }))}
         />
       ) : null}
-
-      {analyticsInsights ? (
-        <div id="audience-pulse">
-          <AnalyticsInsightsStrip
-            mostOpenedToday={toInsightRelease(analyticsInsights.mostOpenedToday)}
-            mostSharedThisWeek={toInsightRelease(analyticsInsights.mostSharedThisWeek)}
-            mostClickedToListen={toInsightRelease(analyticsInsights.mostClickedToListen)}
-            platformHighlights={analyticsInsights.platformHighlights.map((item) => ({
-              platform: item.platform,
-              entry: toInsightRelease(item.entry),
-            }))}
-          />
-        </div>
-      ) : null}
     </>
   );
-}
-
-function toInsightRelease(
-  entry:
-    | {
-        count: number;
-        release: ReleaseListingItem | null;
-      }
-    | null,
-) {
-  if (!entry?.release) {
-    return null;
-  }
-
-  return {
-    count: entry.count,
-    release: entry.release,
-  };
 }
 
 function createEmptyHomepageSections() {

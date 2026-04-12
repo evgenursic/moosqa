@@ -224,6 +224,8 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
             />
 
             <ReleasePublicCounters
+              publishedAt={release.publishedAt}
+              analyticsUpdatedAt={release.analyticsUpdatedAt}
               openCount={release.openCount}
               listenClickCount={release.listenClickCount}
               shareCount={release.shareCount}

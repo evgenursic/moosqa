@@ -8,6 +8,8 @@ import { getGenreOverride } from "@/lib/genre-overrides";
 import { prisma } from "@/lib/prisma";
 import { resolveBestGenreProfile } from "@/lib/genre-resolution";
 import { normalizeSearchText } from "@/lib/release-search";
+import { computeTrendingScore } from "@/lib/trending-score";
+import type { ArchiveViewMode } from "@/lib/archive-links";
 
 export type ReleaseSectionKey =
   | "latest"
@@ -435,15 +437,27 @@ export async function getSectionArchivePage(
   section: ReleaseSectionKey,
   requestedPage = 1,
   requestedGenre?: string | null,
+  requestedView: ArchiveViewMode = "latest",
 ) {
   await ensureDatabase();
 
   const releases = await getSectionReleases(section);
   const genres = buildSectionGenreFacets(releases);
   const matchedGenre = matchRequestedGenre(requestedGenre || null, genres);
-  const filteredReleases = matchedGenre
+  const filteredBaseReleases = matchedGenre
     ? releases.filter((release) => releaseMatchesGenre(release, matchedGenre))
     : releases;
+  const filteredReleases =
+    requestedView === "trending"
+      ? [...filteredBaseReleases].sort((left, right) => {
+          const trendingDelta = computeTrendingScore(right) - computeTrendingScore(left);
+          if (trendingDelta !== 0) {
+            return trendingDelta;
+          }
+
+          return right.publishedAt.getTime() - left.publishedAt.getTime();
+        })
+      : filteredBaseReleases;
   const total = filteredReleases.length;
   const pageCount = Math.max(1, Math.ceil(total / ARCHIVE_PAGE_SIZE));
   const page = clampPageNumber(requestedPage, pageCount);
@@ -452,6 +466,11 @@ export async function getSectionArchivePage(
 
   return {
     ...releaseSectionDefinitions[section],
+    archiveMode: requestedView,
+    title: requestedView === "trending"
+      ? `${releaseSectionDefinitions[section].title} trending`
+      : releaseSectionDefinitions[section].title,
+    description: buildArchiveDescription(section, requestedView, matchedGenre),
     genres,
     overallTotal: releases.length,
     page,
@@ -800,6 +819,27 @@ function getTopEngagedWhere(): Prisma.ReleaseWhereInput {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function buildArchiveDescription(
+  section: ReleaseSectionKey,
+  view: ArchiveViewMode,
+  genre: string | null,
+) {
+  const baseDescription = releaseSectionDefinitions[section].description;
+  if (view !== "trending" && !genre) {
+    return baseDescription;
+  }
+
+  const parts = [baseDescription];
+  if (view === "trending") {
+    parts.push("Sorted by current audience momentum instead of standard chronology.");
+  }
+  if (genre) {
+    parts.push(`Filtered to ${genre}.`);
+  }
+
+  return parts.join(" ");
 }
 
 function mergeReleasePools(...pools: ReleaseListingItem[][]) {
