@@ -798,10 +798,7 @@ async function deliverPendingAlertNotifications() {
   }
 
   if (emailTarget) {
-    const emailDelivered = await sendAlertSummaryEmail(
-      alerts.filter((alert) => !deliveredKeys.has(alert.key)),
-      emailTarget,
-    );
+    const emailDelivered = await sendAlertSummaryEmail(alerts, emailTarget);
     if (emailDelivered) {
       for (const alert of alerts) {
         deliveredKeys.add(alert.key);
