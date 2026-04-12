@@ -58,6 +58,12 @@ type AnalyticsInsightItem = {
   release: Awaited<ReturnType<typeof getSectionReleasesForInsights>>[number] | null;
 };
 
+type GenreTrendingItem = {
+  genre: string;
+  count: number;
+  release: Awaited<ReturnType<typeof getSectionReleasesForInsights>>[number] | null;
+};
+
 type DailyAnalyticsBucket = {
   dateKey: string;
   label: string;
@@ -445,7 +451,7 @@ const getCachedPublicAnalyticsInsights = unstable_cache(
     todayStart.setHours(0, 0, 0, 0);
     const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const [openedToday, sharedThisWeek, listenedThisWeek, platformHighlights, latestReleases, trendingNow] = await Promise.all([
+    const [openedToday, sharedThisWeek, listenedThisWeek, platformHighlights, latestReleases, trendingNow, trendingByGenre] = await Promise.all([
       getTopAnalyticsInsightByAction("OPEN", todayStart, 1),
       getTopAnalyticsInsightByAction("SHARE", weekStart, 1),
       getTopAnalyticsInsightByAction("LISTEN_CLICK", weekStart, 1),
@@ -457,6 +463,7 @@ const getCachedPublicAnalyticsInsights = unstable_cache(
       ),
       getSectionReleasesForInsights("latest"),
       getTrendingAnalyticsReleases(6),
+      getTrendingGenres(5),
     ]);
 
     return {
@@ -465,6 +472,7 @@ const getCachedPublicAnalyticsInsights = unstable_cache(
       mostClickedToListen: listenedThisWeek[0] || null,
       platformHighlights,
       trendingNow,
+      trendingByGenre,
       fallbackLatest: latestReleases.slice(0, 3),
     };
   },
@@ -880,6 +888,92 @@ async function getTrendingAnalyticsReleases(limit: number) {
 
   return ranked.map((entry) => ({
     releaseId: entry.releaseId,
+    count: Math.round(entry.count),
+    release: releaseMap.get(entry.releaseId) || null,
+  }));
+}
+
+async function getTrendingGenres(limit: number): Promise<GenreTrendingItem[]> {
+  const recentCutoff = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000);
+  const releases = await prisma.release.findMany({
+    where: {
+      publishedAt: {
+        gte: recentCutoff,
+      },
+      genreName: {
+        not: null,
+      },
+      OR: [
+        { openCount: { gt: 0 } },
+        { listenClickCount: { gt: 0 } },
+        { shareCount: { gt: 0 } },
+        { positiveReactionCount: { gt: 0 } },
+      ],
+    },
+    orderBy: [{ analyticsUpdatedAt: "desc" }, { publishedAt: "desc" }],
+    take: 120,
+    select: {
+      id: true,
+      genreName: true,
+      publishedAt: true,
+      analyticsUpdatedAt: true,
+      openCount: true,
+      listenClickCount: true,
+      shareCount: true,
+      positiveReactionCount: true,
+      negativeReactionCount: true,
+    },
+  });
+
+  const genreMap = new Map<
+    string,
+    {
+      genre: string;
+      count: number;
+      releaseId: string;
+      releaseScore: number;
+    }
+  >();
+
+  for (const release of releases) {
+    const genre = release.genreName?.trim();
+    if (!genre) {
+      continue;
+    }
+
+    const score = computeTrendingScore(release);
+    if (score <= 0) {
+      continue;
+    }
+
+    const current = genreMap.get(genre);
+    if (!current) {
+      genreMap.set(genre, {
+        genre,
+        count: score,
+        releaseId: release.id,
+        releaseScore: score,
+      });
+      continue;
+    }
+
+    current.count += score;
+    if (score > current.releaseScore) {
+      current.releaseId = release.id;
+      current.releaseScore = score;
+    }
+  }
+
+  const ranked = [...genreMap.values()]
+    .sort((left, right) => right.count - left.count)
+    .slice(0, limit);
+
+  const releaseMap = new Map(
+    (await getReleaseListingItemsByIds(ranked.map((entry) => entry.releaseId))).map((release) => [release.id, release]),
+  );
+
+  return ranked.map((entry) => ({
+    genre: entry.genre,
     count: Math.round(entry.count),
     release: releaseMap.get(entry.releaseId) || null,
   }));

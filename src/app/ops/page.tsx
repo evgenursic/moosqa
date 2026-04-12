@@ -169,6 +169,45 @@ async function OpsContent({ searchParams }: OpsPageProps) {
         </section>
 
         <section className="border-t border-[var(--color-line)] py-8">
+          <PanelCard title="Alert digest history">
+            <div className="grid gap-3">
+              {dashboard.recentAlerts.map((alert) => (
+                <div
+                  key={`${alert.key}-${alert.lastTriggeredAt.toISOString()}`}
+                  className="grid gap-3 border-t border-[var(--color-soft-line)] pt-3 first:border-t-0 first:pt-0 md:grid-cols-[minmax(0,1fr)_auto]"
+                >
+                  <div className="min-w-0">
+                    <p className="section-kicker text-black/43">
+                      {alert.severity} / {alert.status}
+                    </p>
+                    <p className="mt-2 text-2xl leading-tight text-[var(--color-ink)] serif-display">
+                      {alert.title}
+                    </p>
+                    <p className="mt-2 text-sm leading-7 text-black/62">{alert.message}</p>
+                  </div>
+                  <div className="border border-[var(--color-line)] bg-[var(--color-paper)] px-4 py-3 text-right">
+                    <p className="section-kicker text-black/43">Triggered</p>
+                    <p className="mt-2 text-sm uppercase tracking-[0.14em] text-[var(--color-ink)]">
+                      {formatRelative(alert.lastTriggeredAt)}
+                    </p>
+                    <p className="mt-1 text-xs leading-6 text-black/48">
+                      {formatPubDate(alert.lastTriggeredAt)}
+                    </p>
+                    <p className="mt-3 section-kicker text-black/43">Delivered</p>
+                    <p className="mt-2 text-sm uppercase tracking-[0.14em] text-[var(--color-ink)]">
+                      {alert.lastNotifiedAt ? formatRelative(alert.lastNotifiedAt) : "Not yet"}
+                    </p>
+                    <p className="mt-1 text-xs leading-6 text-black/48">
+                      {alert.notificationCount} notification{alert.notificationCount === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </PanelCard>
+        </section>
+
+        <section className="border-t border-[var(--color-line)] py-8">
           <PanelCard title="Daily analytics growth">
             <div className="grid gap-3">
               {dashboard.analytics.daily.map((entry) => (

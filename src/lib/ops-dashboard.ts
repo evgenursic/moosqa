@@ -22,7 +22,7 @@ export async function getOpsDashboardData() {
 const getCachedOpsDashboardData = unstable_cache(
   async () => {
     const staleCutoff = new Date(Date.now() - STALE_METADATA_DAYS * 24 * 60 * 60 * 1000);
-    const [sync, quality, analytics, staleMetadata, activeRateLimits, alerts, workflows] = await Promise.all([
+    const [sync, quality, analytics, staleMetadata, activeRateLimits, alerts, workflows, recentAlerts] = await Promise.all([
       getSyncStatusSummary(),
       getQualityDashboardData(),
       getAnalyticsOverview(24),
@@ -59,6 +59,22 @@ const getCachedOpsDashboardData = unstable_cache(
       }),
       getActiveProductionAlerts(),
       getWorkflowRunSummary(),
+      prisma.opsAlert.findMany({
+        orderBy: [{ lastTriggeredAt: "desc" }],
+        take: 14,
+        select: {
+          key: true,
+          severity: true,
+          status: true,
+          title: true,
+          message: true,
+          metricValue: true,
+          lastTriggeredAt: true,
+          lastNotifiedAt: true,
+          notificationCount: true,
+          resolvedAt: true,
+        },
+      }),
     ]);
 
     return {
@@ -74,6 +90,7 @@ const getCachedOpsDashboardData = unstable_cache(
       })),
       alerts,
       workflows,
+      recentAlerts,
     };
   },
   ["ops-dashboard"],
