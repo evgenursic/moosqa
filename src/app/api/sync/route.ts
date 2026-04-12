@@ -1,8 +1,10 @@
+import { after } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { readRequestSecret } from "@/lib/admin-auth";
 import { evaluateProductionAlerts } from "@/lib/analytics";
+import { warmCriticalCaches } from "@/lib/cache-warming";
 import {
   createRateLimitResponse,
   getRateLimitIdentity,
@@ -51,6 +53,11 @@ export async function GET(request: Request) {
       await evaluateProductionAlerts();
       revalidateTag("ops-dashboard", "max");
       revalidateTag("quality-dashboard", "max");
+      after(async () => {
+        await warmCriticalCaches().catch((error) => {
+          console.error("Cache warming after quality sync failed.", error);
+        });
+      });
 
       return withRateLimitHeaders(NextResponse.json({
         ok: true,
@@ -68,6 +75,11 @@ export async function GET(request: Request) {
       await evaluateProductionAlerts();
       revalidateTag("ops-dashboard", "max");
       revalidateTag("quality-dashboard", "max");
+      after(async () => {
+        await warmCriticalCaches().catch((error) => {
+          console.error("Cache warming after repair sync failed.", error);
+        });
+      });
 
       return withRateLimitHeaders(NextResponse.json({
         ok: true,
@@ -86,6 +98,11 @@ export async function GET(request: Request) {
     await evaluateProductionAlerts();
     revalidateTag("ops-dashboard", "max");
     revalidateTag("quality-dashboard", "max");
+    after(async () => {
+      await warmCriticalCaches().catch((error) => {
+        console.error("Cache warming after sync failed.", error);
+      });
+    });
 
     return withRateLimitHeaders(NextResponse.json({
       ok: true,

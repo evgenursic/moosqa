@@ -238,6 +238,8 @@ model OpsAlert {
   contextJson     String?
   firstTriggeredAt DateTime     @default(now())
   lastTriggeredAt DateTime      @default(now())
+  lastNotifiedAt  DateTime?
+  notificationCount Int         @default(0)
   resolvedAt      DateTime?
   updatedAt       DateTime      @updatedAt
 

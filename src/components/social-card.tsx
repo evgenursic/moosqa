@@ -3,6 +3,7 @@ type SocialCardProps = {
   title?: string;
   description?: string;
   footer?: string;
+  imageSrc?: string | null;
 };
 
 export function SocialCard({
@@ -10,6 +11,7 @@ export function SocialCard({
   title = "New releases first.",
   description = "Fresh indie songs, albums, EPs and live sessions in one fast editorial feed.",
   footer = "moosqa-ci4e.vercel.app",
+  imageSrc = null,
 }: SocialCardProps) {
   return (
     <div
@@ -34,6 +36,33 @@ export function SocialCard({
           inset: 0,
           background:
             "radial-gradient(circle at top left, rgba(255,255,255,0.95), transparent 34%), radial-gradient(circle at top right, rgba(143,167,212,0.22), transparent 28%)",
+        }}
+      />
+
+      {imageSrc ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={imageSrc}
+          alt=""
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            opacity: 0.22,
+            filter: "blur(2px) saturate(0.92)",
+          }}
+        />
+      ) : null}
+
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: imageSrc
+            ? "linear-gradient(180deg, rgba(233,238,247,0.78) 0%, rgba(214,224,239,0.92) 100%)"
+            : "transparent",
         }}
       />
 

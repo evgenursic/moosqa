@@ -148,6 +148,10 @@ async function HomeContent({ searchParams }: HomePageProps) {
             mostOpenedToday={toInsightRelease(analyticsInsights.mostOpenedToday)}
             mostSharedThisWeek={toInsightRelease(analyticsInsights.mostSharedThisWeek)}
             mostClickedToListen={toInsightRelease(analyticsInsights.mostClickedToListen)}
+            platformHighlights={analyticsInsights.platformHighlights.map((item) => ({
+              platform: item.platform,
+              entry: toInsightRelease(item.entry),
+            }))}
           />
         </div>
       ) : null}

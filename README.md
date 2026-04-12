@@ -41,6 +41,8 @@ copy .env.example .env
 - `DATABASE_RUNTIME_URL`: pooled Postgres connection string for the deployed app
 - `CRON_SECRET`: long random secret
 - `DEBUG_SECRET`: separate long random secret for private debug and reprocess endpoints
+- `DISCORD_ALERT_WEBHOOK_URL`: optional Discord webhook for production alerts
+- `SLACK_ALERT_WEBHOOK_URL`: optional Slack webhook for production alerts
 - `NEXT_PUBLIC_SITE_URL`: local or deployed site URL
 
 4. Push the schema and generate Prisma client:
@@ -84,6 +86,8 @@ Import this GitHub repository into Vercel and add these environment variables:
 - `DATABASE_RUNTIME_URL`
 - `CRON_SECRET`
 - `DEBUG_SECRET`
+- `DISCORD_ALERT_WEBHOOK_URL` (optional)
+- `SLACK_ALERT_WEBHOOK_URL` (optional)
 - `NEXT_PUBLIC_SITE_URL`
 - `OPENAI_API_KEY` (optional)
 - `OPENAI_MODEL` (optional, defaults to `gpt-5-nano`)
@@ -108,6 +112,8 @@ Add the same `CRON_SECRET` as a GitHub Actions repository secret. The repository
 
 - a frequent Reddit sync workflow
 - a separate quality enrichment workflow
+- a repair workflow for weak cards
+- workflow status reporting back into the app ops page
 
 ## Notes on hosting choice
 

@@ -7,12 +7,17 @@ type AnalyticsInsightsStripProps = {
   mostOpenedToday: { release: InsightRelease; count: number } | null;
   mostSharedThisWeek: { release: InsightRelease; count: number } | null;
   mostClickedToListen: { release: InsightRelease; count: number } | null;
+  platformHighlights?: Array<{
+    platform: string;
+    entry: { release: InsightRelease; count: number } | null;
+  }>;
 };
 
 export function AnalyticsInsightsStrip({
   mostOpenedToday,
   mostSharedThisWeek,
   mostClickedToListen,
+  platformHighlights = [],
 }: AnalyticsInsightsStripProps) {
   const cards = [
     {
@@ -60,6 +65,28 @@ export function AnalyticsInsightsStrip({
           );
         })}
       </div>
+
+      {platformHighlights.some((item) => item.entry?.release) ? (
+        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {platformHighlights.map((item) => {
+            if (!item.entry?.release) {
+              return null;
+            }
+
+            return (
+              <div key={item.platform} className="border border-[var(--color-line)] bg-[var(--color-panel)] p-4">
+                <p className="section-kicker text-black/43">{item.platform}</p>
+                <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-[var(--color-accent-strong)]">
+                  {item.entry.count} clicks this week
+                </p>
+                <div className="mt-4">
+                  <ReleaseBrief release={item.entry.release} emphasis="listen" fromHref="/#audience-pulse" />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
     </section>
   );
 }

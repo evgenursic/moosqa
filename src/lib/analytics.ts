@@ -62,6 +62,8 @@ const ANALYTICS_LOOKBACK_HOURS = 24;
 const REPAIR_QUEUE_ALERT_THRESHOLD = 28;
 const STALE_METADATA_ALERT_THRESHOLD = 34;
 const ANALYTICS_TAG = "analytics";
+const ALERT_NOTIFICATION_COOLDOWN_MS = 1000 * 60 * 30;
+const PUBLIC_PLATFORM_LABELS = ["Bandcamp", "YouTube", "YouTube Music"] as const;
 
 const ANALYTICS_DEBOUNCE_WINDOWS: Record<AnalyticsAction, number> = {
   OPEN: 1000 * 60 * 30,
@@ -265,6 +267,7 @@ export async function evaluateProductionAlerts() {
   }
 
   await persistProductionAlerts(alerts);
+  await deliverPendingAlertNotifications();
   return getActiveProductionAlerts();
 }
 
@@ -418,10 +421,16 @@ const getCachedPublicAnalyticsInsights = unstable_cache(
     todayStart.setHours(0, 0, 0, 0);
     const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const [openedToday, sharedThisWeek, listenedThisWeek, latestReleases] = await Promise.all([
+    const [openedToday, sharedThisWeek, listenedThisWeek, platformHighlights, latestReleases] = await Promise.all([
       getTopAnalyticsInsightByAction("OPEN", todayStart, 1),
       getTopAnalyticsInsightByAction("SHARE", weekStart, 1),
       getTopAnalyticsInsightByAction("LISTEN_CLICK", weekStart, 1),
+      Promise.all(
+        PUBLIC_PLATFORM_LABELS.map(async (platform) => ({
+          platform,
+          entry: (await getTopAnalyticsInsightByAction("LISTEN_CLICK", weekStart, 1, platform))[0] || null,
+        })),
+      ),
       getSectionReleasesForInsights("latest"),
     ]);
 
@@ -429,6 +438,7 @@ const getCachedPublicAnalyticsInsights = unstable_cache(
       mostOpenedToday: openedToday[0] || null,
       mostSharedThisWeek: sharedThisWeek[0] || null,
       mostClickedToListen: listenedThisWeek[0] || null,
+      platformHighlights,
       fallbackLatest: latestReleases.slice(0, 3),
     };
   },
@@ -443,6 +453,7 @@ async function getTopAnalyticsInsightByAction(
   action: AnalyticsAction,
   since: Date,
   take = 3,
+  platform?: string,
 ): Promise<AnalyticsInsightItem[]> {
   const groups = await prisma.analyticsEvent.groupBy({
     by: ["releaseId"],
@@ -454,6 +465,7 @@ async function getTopAnalyticsInsightByAction(
       releaseId: {
         not: null,
       },
+      ...(platform ? { platform } : {}),
     },
     _count: {
       _all: true,
@@ -665,6 +677,11 @@ async function persistProductionAlerts(alerts: ProductionAlert[]) {
       key: true,
       status: true,
       firstTriggeredAt: true,
+      severity: true,
+      title: true,
+      message: true,
+      metricValue: true,
+      contextJson: true,
     },
   });
   const existingMap = new Map(existing.map((item) => [item.key, item]));
@@ -672,6 +689,16 @@ async function persistProductionAlerts(alerts: ProductionAlert[]) {
 
   for (const alert of alerts) {
     const current = existingMap.get(alert.key);
+    const nextContextJson = alert.context ? JSON.stringify(alert.context) : null;
+    const hasMaterialChange =
+      !current ||
+      current.status !== "OPEN" ||
+      current.severity !== alert.severity ||
+      current.title !== alert.title ||
+      current.message !== alert.message ||
+      current.metricValue !== (alert.metricValue ?? null) ||
+      current.contextJson !== nextContextJson;
+
     await prisma.opsAlert.upsert({
       where: { key: alert.key },
       update: {
@@ -680,8 +707,8 @@ async function persistProductionAlerts(alerts: ProductionAlert[]) {
         title: alert.title,
         message: alert.message,
         metricValue: alert.metricValue ?? null,
-        contextJson: alert.context ? JSON.stringify(alert.context) : null,
-        lastTriggeredAt: now,
+        contextJson: nextContextJson,
+        ...(hasMaterialChange ? { lastTriggeredAt: now } : {}),
         resolvedAt: null,
       },
       create: {
@@ -691,7 +718,7 @@ async function persistProductionAlerts(alerts: ProductionAlert[]) {
         title: alert.title,
         message: alert.message,
         metricValue: alert.metricValue ?? null,
-        contextJson: alert.context ? JSON.stringify(alert.context) : null,
+        contextJson: nextContextJson,
         firstTriggeredAt: current?.firstTriggeredAt || now,
         lastTriggeredAt: now,
       },
@@ -710,6 +737,138 @@ async function persistProductionAlerts(alerts: ProductionAlert[]) {
         resolvedAt: now,
       },
     });
+  }
+}
+
+async function deliverPendingAlertNotifications() {
+  const webhookTargets = getAlertWebhookTargets();
+  if (webhookTargets.length === 0) {
+    return;
+  }
+
+  const now = Date.now();
+  const alerts = await prisma.opsAlert.findMany({
+    where: {
+      status: "OPEN",
+      OR: [
+        { lastNotifiedAt: null },
+        { lastNotifiedAt: { lt: new Date(now - ALERT_NOTIFICATION_COOLDOWN_MS) } },
+      ],
+    },
+    orderBy: [{ severity: "desc" }, { lastTriggeredAt: "desc" }],
+    take: 8,
+  });
+
+  for (const alert of alerts) {
+    if (alert.lastNotifiedAt && alert.lastNotifiedAt.getTime() >= alert.lastTriggeredAt.getTime()) {
+      continue;
+    }
+
+    const delivered = await sendAlertNotification(alert, webhookTargets);
+    if (!delivered) {
+      continue;
+    }
+
+    await prisma.opsAlert.update({
+      where: { key: alert.key },
+      data: {
+        lastNotifiedAt: new Date(),
+        notificationCount: {
+          increment: 1,
+        },
+      },
+    });
+  }
+}
+
+async function sendAlertNotification(
+  alert: {
+    key: string;
+    severity: string;
+    title: string;
+    message: string;
+    metricValue: number | null;
+    contextJson: string | null;
+    lastTriggeredAt: Date;
+  },
+  webhookTargets: Array<{ type: "discord" | "slack"; url: string }>,
+) {
+  const context = parseAlertContext(alert.contextJson);
+  const detailLines = [
+    alert.message,
+    alert.metricValue !== null ? `Metric: ${alert.metricValue}` : null,
+    context?.runUrl ? `Run: ${context.runUrl}` : null,
+    context?.lastFailureAt ? `Failure: ${context.lastFailureAt}` : null,
+    context?.lastError ? `Error: ${String(context.lastError).slice(0, 280)}` : null,
+  ].filter((item): item is string => Boolean(item));
+
+  const results = await Promise.all(
+    webhookTargets.map(async (target) => {
+      const payload =
+        target.type === "discord"
+          ? {
+              username: "MooSQA Ops",
+              embeds: [
+                {
+                  title: `${alert.severity}: ${alert.title}`,
+                  description: detailLines.join("\n"),
+                  color: alert.severity === "CRITICAL" ? 15158332 : 16098851,
+                  timestamp: alert.lastTriggeredAt.toISOString(),
+                },
+              ],
+            }
+          : {
+              text: `MooSQA alert: ${alert.severity} - ${alert.title}\n${detailLines.join("\n")}`,
+            };
+
+      try {
+        const response = await fetch(target.url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+          cache: "no-store",
+        });
+        return response.ok;
+      } catch {
+        return false;
+      }
+    }),
+  );
+
+  return results.some(Boolean);
+}
+
+function getAlertWebhookTargets() {
+  const targets: Array<{ type: "discord" | "slack"; url: string }> = [];
+
+  if (process.env.DISCORD_ALERT_WEBHOOK_URL) {
+    targets.push({
+      type: "discord",
+      url: process.env.DISCORD_ALERT_WEBHOOK_URL,
+    });
+  }
+
+  if (process.env.SLACK_ALERT_WEBHOOK_URL) {
+    targets.push({
+      type: "slack",
+      url: process.env.SLACK_ALERT_WEBHOOK_URL,
+    });
+  }
+
+  return targets;
+}
+
+function parseAlertContext(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value) as Record<string, unknown>;
+  } catch {
+    return null;
   }
 }
 

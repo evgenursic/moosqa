@@ -38,6 +38,7 @@ export default async function ReleaseOpenGraphImage({ params }: ReleaseOgProps) 
     releaseType: release.releaseType,
     genreName: release.genreName,
   });
+  const imageSrc = await resolveSocialImageDataUrl(release.imageUrl || release.thumbnailUrl || null);
 
   return new ImageResponse(
     (
@@ -46,8 +47,35 @@ export default async function ReleaseOpenGraphImage({ params }: ReleaseOgProps) 
         title={title}
         description={description}
         footer={`MooSQA / ${release.outletName || "indieheads radar"}`}
+        imageSrc={imageSrc}
       />
     ),
     size,
   );
+}
+
+async function resolveSocialImageDataUrl(sourceUrl: string | null) {
+  if (!sourceUrl) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(sourceUrl, {
+      cache: "force-cache",
+      headers: {
+        "user-agent": "MooSQA/1.0 (+https://moosqa-ci4e.vercel.app)",
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const contentType = response.headers.get("content-type") || "image/jpeg";
+    const arrayBuffer = await response.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString("base64");
+    return `data:${contentType};base64,${base64}`;
+  } catch {
+    return null;
+  }
 }

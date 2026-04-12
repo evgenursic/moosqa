@@ -5,6 +5,7 @@ import { ListeningLinks } from "@/components/listening-links";
 import { RatingMeter } from "@/components/rating-meter";
 import { BackToHomeButton } from "@/components/back-to-home-button";
 import { MobileReleaseNav } from "@/components/mobile-release-nav";
+import { ReleasePublicCounters } from "@/components/release-public-counters";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { TopEngagedVisual } from "@/components/top-engaged-visual";
 import { getSiteUrl } from "@/lib/site";
@@ -220,6 +221,14 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
             <TopEngagedVisual
               score={release.score}
               commentCount={release.commentCount}
+            />
+
+            <ReleasePublicCounters
+              openCount={release.openCount}
+              listenClickCount={release.listenClickCount}
+              shareCount={release.shareCount}
+              positiveReactionCount={release.positiveReactionCount}
+              negativeReactionCount={release.negativeReactionCount}
             />
 
             <ListeningLinks
