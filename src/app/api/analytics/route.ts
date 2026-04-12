@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { warmReleaseCachesById } from "@/lib/cache-warming";
 import { recordAnalyticsEvent } from "@/lib/analytics";
 import {
   createRateLimitResponse,
@@ -84,9 +85,38 @@ export async function POST(request: Request) {
       ...body.data,
       request,
     });
+
+    if (
+      result?.recorded &&
+      body.data.releaseId &&
+      shouldWarmReleaseCache(body.data.action, result?.releaseCounters)
+    ) {
+      after(async () => {
+        await warmReleaseCachesById(body.data.releaseId as string).catch((error) => {
+          console.error("Per-release cache warming failed.", error);
+        });
+      });
+    }
+
     return withRateLimitHeaders(NextResponse.json(result), rateLimit);
   } catch (error) {
     console.error("Analytics event could not be recorded.", error);
     return NextResponse.json({ error: "Analytics write failed." }, { status: 500 });
   }
+}
+
+function shouldWarmReleaseCache(
+  action: z.infer<typeof analyticsSchema>["action"],
+  counters: Record<string, unknown> | null | undefined,
+) {
+  if (action !== "OPEN") {
+    return false;
+  }
+
+  const openCount = typeof counters?.openCount === "number" ? counters.openCount : 0;
+  if (openCount <= 0) {
+    return false;
+  }
+
+  return openCount === 1 || openCount === 5 || openCount === 10 || openCount % 25 === 0;
 }

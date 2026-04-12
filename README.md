@@ -43,6 +43,9 @@ copy .env.example .env
 - `DEBUG_SECRET`: separate long random secret for private debug and reprocess endpoints
 - `DISCORD_ALERT_WEBHOOK_URL`: optional Discord webhook for production alerts
 - `SLACK_ALERT_WEBHOOK_URL`: optional Slack webhook for production alerts
+- `RESEND_API_KEY`: optional Resend API key for alert summary email delivery
+- `ALERT_EMAIL_FROM`: sender email address used for production alert summaries
+- `ALERT_EMAIL_TO`: recipient email address for production alert summaries
 - `NEXT_PUBLIC_SITE_URL`: local or deployed site URL
 
 4. Push the schema and generate Prisma client:
@@ -88,6 +91,9 @@ Import this GitHub repository into Vercel and add these environment variables:
 - `DEBUG_SECRET`
 - `DISCORD_ALERT_WEBHOOK_URL` (optional)
 - `SLACK_ALERT_WEBHOOK_URL` (optional)
+- `RESEND_API_KEY` (optional)
+- `ALERT_EMAIL_FROM` (optional)
+- `ALERT_EMAIL_TO` (optional)
 - `NEXT_PUBLIC_SITE_URL`
 - `OPENAI_API_KEY` (optional)
 - `OPENAI_MODEL` (optional, defaults to `gpt-5-nano`)

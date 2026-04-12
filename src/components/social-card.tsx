@@ -94,125 +94,201 @@ export function SocialCard({
         style={{
           position: "relative",
           display: "flex",
-          flexDirection: "column",
-          gap: 22,
+          gap: 34,
+          alignItems: "stretch",
         }}
       >
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 24,
+            flexDirection: "column",
+            flex: imageSrc ? "1 1 0%" : "1 1 auto",
+            gap: 22,
           }}
         >
           <div
             style={{
               display: "flex",
-              flexDirection: "column",
-              gap: 10,
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 24,
             }}
           >
             <div
               style={{
                 display: "flex",
-                fontSize: 24,
-                letterSpacing: "0.28em",
-                textTransform: "uppercase",
-                color: "rgba(29,34,48,0.58)",
+                flexDirection: "column",
+                gap: 10,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 24,
+                  letterSpacing: "0.28em",
+                  textTransform: "uppercase",
+                  color: "rgba(29,34,48,0.58)",
+                  fontFamily: "'Courier New', monospace",
+                }}
+              >
+                {eyebrow}
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 92,
+                  lineHeight: 0.9,
+                  fontWeight: 600,
+                }}
+              >
+                MooSQA
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                gap: 10,
+                marginTop: 8,
                 fontFamily: "'Courier New', monospace",
               }}
             >
-              {eyebrow}
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                fontSize: 92,
-                lineHeight: 0.9,
-                fontWeight: 600,
-              }}
-            >
-              MooSQA
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 22,
+                  letterSpacing: "0.46em",
+                  textTransform: "uppercase",
+                  color: "rgba(29,34,48,0.6)",
+                }}
+              >
+                Music Radar
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 18,
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  color: "rgba(29,34,48,0.38)",
+                }}
+              >
+                Fresh indie discovery
+              </div>
             </div>
           </div>
+
+          <div
+            style={{
+              display: "flex",
+              width: "100%",
+              height: 1,
+              background: "rgba(29,34,48,0.16)",
+            }}
+          />
 
           <div
             style={{
               display: "flex",
               flexDirection: "column",
-              alignItems: "flex-end",
-              gap: 10,
-              marginTop: 8,
-              fontFamily: "'Courier New', monospace",
+              gap: 18,
+              maxWidth: imageSrc ? 620 : 960,
             }}
           >
             <div
               style={{
                 display: "flex",
-                fontSize: 22,
-                letterSpacing: "0.46em",
-                textTransform: "uppercase",
-                color: "rgba(29,34,48,0.6)",
+                fontSize: 72,
+                lineHeight: 0.95,
+                fontWeight: 500,
               }}
             >
-              Music Radar
+              {title}
             </div>
+
             <div
               style={{
                 display: "flex",
-                fontSize: 18,
-                letterSpacing: "0.16em",
-                textTransform: "uppercase",
-                color: "rgba(29,34,48,0.38)",
+                fontSize: 34,
+                lineHeight: 1.28,
+                color: "rgba(29,34,48,0.76)",
+                fontFamily: "'Courier New', monospace",
               }}
             >
-              Fresh indie discovery
+              {description}
             </div>
           </div>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            width: "100%",
-            height: 1,
-            background: "rgba(29,34,48,0.16)",
-          }}
-        />
-
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 18,
-            maxWidth: 960,
-          }}
-        >
+        {imageSrc ? (
           <div
             style={{
               display: "flex",
-              fontSize: 72,
-              lineHeight: 0.95,
-              fontWeight: 500,
+              position: "relative",
+              width: 360,
+              minWidth: 360,
+              overflow: "hidden",
+              border: "1px solid rgba(29,34,48,0.14)",
+              boxShadow: "0 16px 40px rgba(20,28,40,0.18)",
             }}
           >
-            {title}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imageSrc}
+              alt=""
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background: "linear-gradient(180deg, rgba(12,18,28,0.08) 0%, rgba(12,18,28,0.82) 100%)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                left: 22,
+                right: 22,
+                bottom: 22,
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+                color: "#ffffff",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 18,
+                  letterSpacing: "0.24em",
+                  textTransform: "uppercase",
+                  fontFamily: "'Courier New', monospace",
+                  color: "rgba(255,255,255,0.82)",
+                }}
+              >
+                {eyebrow}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 28,
+                  lineHeight: 1.05,
+                  fontWeight: 600,
+                }}
+              >
+                {title}
+              </div>
+            </div>
           </div>
-
-          <div
-            style={{
-              display: "flex",
-              fontSize: 34,
-              lineHeight: 1.28,
-              color: "rgba(29,34,48,0.76)",
-              fontFamily: "'Courier New', monospace",
-            }}
-          >
-            {description}
-          </div>
-        </div>
+        ) : null}
       </div>
 
       <div

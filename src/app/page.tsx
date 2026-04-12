@@ -11,6 +11,7 @@ import { ReleaseCard } from "@/components/release-card";
 import { ReleaseExplorer } from "@/components/release-explorer";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { TrendingNowSection } from "@/components/trending-now-section";
 import {
   getHomepageSectionsData,
   getSearchReleases,
@@ -142,18 +143,13 @@ async function HomeContent({ searchParams }: HomePageProps) {
         />
       ) : null}
 
-      {analyticsInsights ? (
-        <div id="audience-pulse">
-          <AnalyticsInsightsStrip
-            mostOpenedToday={toInsightRelease(analyticsInsights.mostOpenedToday)}
-            mostSharedThisWeek={toInsightRelease(analyticsInsights.mostSharedThisWeek)}
-            mostClickedToListen={toInsightRelease(analyticsInsights.mostClickedToListen)}
-            platformHighlights={analyticsInsights.platformHighlights.map((item) => ({
-              platform: item.platform,
-              entry: toInsightRelease(item.entry),
-            }))}
-          />
-        </div>
+      {analyticsInsights?.trendingNow?.length ? (
+        <TrendingNowSection
+          items={analyticsInsights.trendingNow.map((item) => ({
+            count: item.count,
+            release: item.release,
+          }))}
+        />
       ) : null}
 
       <section id="latest" className="scroll-mt-32 py-10 md:scroll-mt-40 lg:scroll-mt-52">
@@ -202,6 +198,20 @@ async function HomeContent({ searchParams }: HomePageProps) {
       <ReleaseCardSection section="albums" releases={sections.albums} />
       <ReleaseCardSection section="eps" releases={sections.eps} />
       <ReleaseCardSection section="live" releases={sections.live} />
+
+      {analyticsInsights ? (
+        <div id="audience-pulse">
+          <AnalyticsInsightsStrip
+            mostOpenedToday={toInsightRelease(analyticsInsights.mostOpenedToday)}
+            mostSharedThisWeek={toInsightRelease(analyticsInsights.mostSharedThisWeek)}
+            mostClickedToListen={toInsightRelease(analyticsInsights.mostClickedToListen)}
+            platformHighlights={analyticsInsights.platformHighlights.map((item) => ({
+              platform: item.platform,
+              entry: toInsightRelease(item.entry),
+            }))}
+          />
+        </div>
+      ) : null}
     </>
   );
 }

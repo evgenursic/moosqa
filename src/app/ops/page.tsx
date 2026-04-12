@@ -168,12 +168,51 @@ async function OpsContent({ searchParams }: OpsPageProps) {
           </PanelCard>
         </section>
 
+        <section className="border-t border-[var(--color-line)] py-8">
+          <PanelCard title="Daily analytics growth">
+            <div className="grid gap-3">
+              {dashboard.analytics.daily.map((entry) => (
+                <div
+                  key={entry.dateKey}
+                  className="grid gap-3 border-t border-[var(--color-soft-line)] pt-3 first:border-t-0 first:pt-0 md:grid-cols-[8rem_repeat(6,minmax(0,1fr))]"
+                >
+                  <div>
+                    <p className="text-sm uppercase tracking-[0.16em] text-black/52">{entry.label}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.14em] text-black/42">{entry.total} total</p>
+                  </div>
+                  <DailyMetric label="Opens" value={entry.counts.OPEN} />
+                  <DailyMetric label="Listen" value={entry.counts.LISTEN_CLICK} />
+                  <DailyMetric label="Shares" value={entry.counts.SHARE} />
+                  <DailyMetric label="Votes" value={entry.counts.VOTE} />
+                  <DailyMetric label="Likes" value={entry.counts.REACTION_POSITIVE} />
+                  <DailyMetric label="Dislikes" value={entry.counts.REACTION_NEGATIVE} />
+                </div>
+              ))}
+            </div>
+          </PanelCard>
+        </section>
+
         <section className="grid gap-4 border-t border-[var(--color-line)] py-8 lg:grid-cols-3">
           <StatCard label="Retry queue" value={String(dashboard.quality.totals.retryQueue)} />
           <StatCard label="Low quality cards" value={String(dashboard.quality.totals.lowQuality)} />
           <StatCard label="Missing release date" value={String(dashboard.quality.totals.missingReleaseDate)} />
         </section>
     </OpsShell>
+  );
+}
+
+function DailyMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="border border-[var(--color-line)] bg-[var(--color-paper)] px-3 py-3">
+      <p className="section-kicker text-black/43">{label}</p>
+      <p className="mt-2 text-xl text-[var(--color-ink)] serif-display">{value}</p>
+    </div>
   );
 }
 

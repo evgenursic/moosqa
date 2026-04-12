@@ -467,6 +467,26 @@ export async function getSectionReleasesForInsights(section: ReleaseSectionKey) 
   return getSectionReleases(section);
 }
 
+export async function getReleaseListingItemsByIds(releaseIds: string[]) {
+  await ensureDatabase();
+
+  const uniqueIds = [...new Set(releaseIds.filter(Boolean))];
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+
+  const releases = await prisma.release.findMany({
+    where: {
+      id: {
+        in: uniqueIds,
+      },
+    },
+    select: releaseListingSelect,
+  });
+
+  return prepareDisplayReleases(releases);
+}
+
 export function isReleaseSectionKey(value: string): value is ReleaseSectionKey {
   return value in releaseSectionDefinitions;
 }

@@ -11,7 +11,7 @@ import { type Prisma } from "@/generated/prisma/client";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
 import { getQualityDashboardData } from "@/lib/quality-dashboard";
-import { getSectionReleasesForInsights } from "@/lib/release-sections";
+import { getReleaseListingItemsByIds, getSectionReleasesForInsights } from "@/lib/release-sections";
 import { getSyncStatusSummary } from "@/lib/sync-releases";
 
 export type AnalyticsAction =
@@ -58,7 +58,15 @@ type AnalyticsInsightItem = {
   release: Awaited<ReturnType<typeof getSectionReleasesForInsights>>[number] | null;
 };
 
+type DailyAnalyticsBucket = {
+  dateKey: string;
+  label: string;
+  total: number;
+  counts: Record<AnalyticsAction, number>;
+};
+
 const ANALYTICS_LOOKBACK_HOURS = 24;
+const ANALYTICS_DAILY_WINDOW_DAYS = 14;
 const REPAIR_QUEUE_ALERT_THRESHOLD = 28;
 const STALE_METADATA_ALERT_THRESHOLD = 34;
 const ANALYTICS_TAG = "analytics";
@@ -285,7 +293,8 @@ export async function getActiveProductionAlerts() {
 const getCachedAnalyticsOverview = unstable_cache(
   async (hours: number) => {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-    const [counts, topReleases, platformCounts, aggregatedTopReleases] = await Promise.all([
+    const dailySince = new Date(Date.now() - ANALYTICS_DAILY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const [counts, topReleases, platformCounts, aggregatedTopReleases, recentDailyEvents] = await Promise.all([
       prisma.analyticsEvent.groupBy({
         by: ["action"],
         where: {
@@ -362,6 +371,20 @@ const getCachedAnalyticsOverview = unstable_cache(
           analyticsUpdatedAt: true,
         },
       }),
+      prisma.analyticsEvent.findMany({
+        where: {
+          createdAt: {
+            gte: dailySince,
+          },
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+        select: {
+          action: true,
+          createdAt: true,
+        },
+      }),
     ]);
 
     const releaseIds = topReleases
@@ -405,6 +428,7 @@ const getCachedAnalyticsOverview = unstable_cache(
         release: entry.releaseId ? releaseMap.get(entry.releaseId) || null : null,
       })),
       aggregateTopReleases: aggregatedTopReleases,
+      daily: buildDailyAnalyticsBuckets(recentDailyEvents, ANALYTICS_DAILY_WINDOW_DAYS),
     };
   },
   ["analytics-overview"],
@@ -421,7 +445,7 @@ const getCachedPublicAnalyticsInsights = unstable_cache(
     todayStart.setHours(0, 0, 0, 0);
     const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const [openedToday, sharedThisWeek, listenedThisWeek, platformHighlights, latestReleases] = await Promise.all([
+    const [openedToday, sharedThisWeek, listenedThisWeek, platformHighlights, latestReleases, trendingNow] = await Promise.all([
       getTopAnalyticsInsightByAction("OPEN", todayStart, 1),
       getTopAnalyticsInsightByAction("SHARE", weekStart, 1),
       getTopAnalyticsInsightByAction("LISTEN_CLICK", weekStart, 1),
@@ -432,6 +456,7 @@ const getCachedPublicAnalyticsInsights = unstable_cache(
         })),
       ),
       getSectionReleasesForInsights("latest"),
+      getTrendingAnalyticsReleases(6),
     ]);
 
     return {
@@ -439,6 +464,7 @@ const getCachedPublicAnalyticsInsights = unstable_cache(
       mostSharedThisWeek: sharedThisWeek[0] || null,
       mostClickedToListen: listenedThisWeek[0] || null,
       platformHighlights,
+      trendingNow,
       fallbackLatest: latestReleases.slice(0, 3),
     };
   },
@@ -485,12 +511,8 @@ async function getTopAnalyticsInsightByAction(
     return [];
   }
 
-  const latestReleases = await getSectionReleasesForInsights("latest");
-  const releaseMap = new Map(
-    latestReleases
-      .filter((release) => releaseIds.includes(release.id))
-      .map((release) => [release.id, release]),
-  );
+  const releases = await getReleaseListingItemsByIds(releaseIds);
+  const releaseMap = new Map(releases.map((release) => [release.id, release]));
 
   return groups.map((entry) => ({
     releaseId: entry.releaseId || "",
@@ -742,7 +764,8 @@ async function persistProductionAlerts(alerts: ProductionAlert[]) {
 
 async function deliverPendingAlertNotifications() {
   const webhookTargets = getAlertWebhookTargets();
-  if (webhookTargets.length === 0) {
+  const emailTarget = getAlertEmailTarget();
+  if (webhookTargets.length === 0 && !emailTarget) {
     return;
   }
 
@@ -759,6 +782,8 @@ async function deliverPendingAlertNotifications() {
     take: 8,
   });
 
+  const deliveredKeys = new Set<string>();
+
   for (const alert of alerts) {
     if (alert.lastNotifiedAt && alert.lastNotifiedAt.getTime() >= alert.lastTriggeredAt.getTime()) {
       continue;
@@ -769,16 +794,176 @@ async function deliverPendingAlertNotifications() {
       continue;
     }
 
-    await prisma.opsAlert.update({
-      where: { key: alert.key },
-      data: {
-        lastNotifiedAt: new Date(),
-        notificationCount: {
-          increment: 1,
+    deliveredKeys.add(alert.key);
+  }
+
+  if (emailTarget) {
+    const emailDelivered = await sendAlertSummaryEmail(
+      alerts.filter((alert) => !deliveredKeys.has(alert.key)),
+      emailTarget,
+    );
+    if (emailDelivered) {
+      for (const alert of alerts) {
+        deliveredKeys.add(alert.key);
+      }
+    }
+  }
+
+  if (deliveredKeys.size === 0) {
+    return;
+  }
+
+  await prisma.opsAlert.updateMany({
+    where: {
+      key: {
+        in: [...deliveredKeys],
+      },
+    },
+    data: {
+      lastNotifiedAt: new Date(),
+    },
+  });
+
+  await Promise.all(
+    [...deliveredKeys].map((key) =>
+      prisma.opsAlert.update({
+        where: { key },
+        data: {
+          notificationCount: {
+            increment: 1,
+          },
         },
+      })),
+  );
+}
+
+async function getTrendingAnalyticsReleases(limit: number) {
+  const recentCutoff = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000);
+  const releases = await prisma.release.findMany({
+    where: {
+      OR: [
+        { analyticsUpdatedAt: { gte: recentCutoff } },
+        { openCount: { gt: 0 } },
+        { listenClickCount: { gt: 0 } },
+        { shareCount: { gt: 0 } },
+        { positiveReactionCount: { gt: 0 } },
+      ],
+    },
+    orderBy: [
+      { analyticsUpdatedAt: "desc" },
+      { openCount: "desc" },
+      { listenClickCount: "desc" },
+      { shareCount: "desc" },
+    ],
+    take: 40,
+    select: {
+      id: true,
+      publishedAt: true,
+      analyticsUpdatedAt: true,
+      openCount: true,
+      listenClickCount: true,
+      shareCount: true,
+      positiveReactionCount: true,
+      negativeReactionCount: true,
+    },
+  });
+
+  const ranked = releases
+    .map((release) => ({
+      releaseId: release.id,
+      count: computeTrendingScore(release),
+    }))
+    .filter((entry) => entry.count > 0)
+    .sort((left, right) => right.count - left.count)
+    .slice(0, limit);
+
+  const releaseMap = new Map(
+    (await getReleaseListingItemsByIds(ranked.map((entry) => entry.releaseId))).map((release) => [release.id, release]),
+  );
+
+  return ranked.map((entry) => ({
+    releaseId: entry.releaseId,
+    count: Math.round(entry.count),
+    release: releaseMap.get(entry.releaseId) || null,
+  }));
+}
+
+function computeTrendingScore(release: {
+  publishedAt: Date;
+  analyticsUpdatedAt: Date | null;
+  openCount: number;
+  listenClickCount: number;
+  shareCount: number;
+  positiveReactionCount: number;
+  negativeReactionCount: number;
+}) {
+  const ageHours = Math.max(1, (Date.now() - release.publishedAt.getTime()) / (1000 * 60 * 60));
+  const freshnessHours = release.analyticsUpdatedAt
+    ? Math.max(1, (Date.now() - release.analyticsUpdatedAt.getTime()) / (1000 * 60 * 60))
+    : ageHours;
+  const interactionBase =
+    release.openCount * 1.1 +
+    release.listenClickCount * 1.7 +
+    release.shareCount * 2.4 +
+    release.positiveReactionCount * 1.9 -
+    release.negativeReactionCount * 0.6;
+  const freshnessBoost = 24 / Math.pow(freshnessHours + 2, 0.52);
+  const recencyPenalty = 1 / Math.pow(ageHours + 4, 0.14);
+
+  return Math.max(0, interactionBase * recencyPenalty + freshnessBoost);
+}
+
+function buildDailyAnalyticsBuckets(
+  events: Array<{ action: AnalyticsEventType; createdAt: Date }>,
+  days: number,
+) {
+  const actionKeys: AnalyticsAction[] = [
+    "OPEN",
+    "LISTEN_CLICK",
+    "VOTE",
+    "SHARE",
+    "REACTION_POSITIVE",
+    "REACTION_NEGATIVE",
+  ];
+  const buckets = new Map<string, DailyAnalyticsBucket>();
+
+  for (let index = days - 1; index >= 0; index -= 1) {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - index);
+    const key = date.toISOString().slice(0, 10);
+    buckets.set(key, {
+      dateKey: key,
+      label: date.toLocaleDateString("en-GB", { month: "short", day: "numeric" }),
+      total: 0,
+      counts: {
+        OPEN: 0,
+        LISTEN_CLICK: 0,
+        VOTE: 0,
+        SHARE: 0,
+        REACTION_POSITIVE: 0,
+        REACTION_NEGATIVE: 0,
       },
     });
   }
+
+  for (const event of events) {
+    const key = event.createdAt.toISOString().slice(0, 10);
+    const bucket = buckets.get(key);
+    if (!bucket) {
+      continue;
+    }
+
+    const action = event.action as AnalyticsAction;
+    if (!actionKeys.includes(action)) {
+      continue;
+    }
+
+    bucket.counts[action] += 1;
+    bucket.total += 1;
+  }
+
+  return [...buckets.values()];
 }
 
 async function sendAlertNotification(
@@ -860,6 +1045,110 @@ function getAlertWebhookTargets() {
   return targets;
 }
 
+function getAlertEmailTarget() {
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  const to = process.env.ALERT_EMAIL_TO?.trim();
+  const from = process.env.ALERT_EMAIL_FROM?.trim();
+
+  if (!apiKey || !to || !from) {
+    return null;
+  }
+
+  return { apiKey, to, from };
+}
+
+async function sendAlertSummaryEmail(
+  alerts: Array<{
+    key: string;
+    severity: string;
+    title: string;
+    message: string;
+    metricValue: number | null;
+    contextJson: string | null;
+    lastTriggeredAt: Date;
+  }>,
+  target: {
+    apiKey: string;
+    to: string;
+    from: string;
+  },
+) {
+  if (alerts.length === 0) {
+    return false;
+  }
+
+  const subject = `[MooSQA] ${alerts.length} active production alert${alerts.length === 1 ? "" : "s"}`;
+  const lines = alerts.map((alert) => {
+    const context = parseAlertContext(alert.contextJson);
+    return [
+      `${alert.severity}: ${alert.title}`,
+      alert.message,
+      alert.metricValue !== null ? `Metric: ${alert.metricValue}` : null,
+      context?.runUrl ? `Run: ${context.runUrl}` : null,
+      context?.lastFailureAt ? `Failure: ${context.lastFailureAt}` : null,
+      context?.lastError ? `Error: ${String(context.lastError).slice(0, 320)}` : null,
+    ]
+      .filter((item): item is string => Boolean(item))
+      .join("\n");
+  });
+
+  const text = `MooSQA production alerts\n\n${lines.join("\n\n---\n\n")}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #182131;">
+      <h2 style="margin:0 0 16px;">MooSQA production alerts</h2>
+      ${alerts
+        .map((alert) => {
+          const context = parseAlertContext(alert.contextJson);
+          const detailLines = [
+            alert.message,
+            alert.metricValue !== null ? `Metric: ${alert.metricValue}` : null,
+            context?.runUrl ? `Run: ${context.runUrl}` : null,
+            context?.lastFailureAt ? `Failure: ${context.lastFailureAt}` : null,
+            context?.lastError ? `Error: ${String(context.lastError).slice(0, 320)}` : null,
+          ]
+            .filter((item): item is string => Boolean(item))
+            .map((line) => `<div>${escapeHtml(line)}</div>`)
+            .join("");
+
+          return `
+            <div style="border:1px solid #d8deea; padding:14px 16px; margin:0 0 14px;">
+              <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.16em; color:#6b7386;">${escapeHtml(alert.severity)}</div>
+              <div style="font-size:20px; margin-top:8px;">${escapeHtml(alert.title)}</div>
+              <div style="margin-top:10px; color:#354055;">${detailLines}</div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+
+  try {
+    const idempotencyKey = createHash("sha256")
+      .update(`ops-alert:${alerts.map((alert) => `${alert.key}:${alert.lastTriggeredAt.toISOString()}`).join("|")}`)
+      .digest("hex");
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${target.apiKey}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+      },
+      body: JSON.stringify({
+        from: target.from,
+        to: [target.to],
+        subject,
+        text,
+        html,
+      }),
+      cache: "no-store",
+    });
+
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 function parseAlertContext(value: string | null) {
   if (!value) {
     return null;
@@ -920,4 +1209,13 @@ function sanitizeSourcePath(value: string | null | undefined) {
   }
 
   return normalized.slice(0, 280);
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
