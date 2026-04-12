@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 
 import { SocialCard } from "@/components/social-card";
+import { resolveSocialImageDataUrl } from "@/lib/social-image";
 import { getReleaseBySlug } from "@/lib/sync-releases";
 import { getDisplayGenre, getDisplaySummary } from "@/lib/utils";
 
@@ -52,30 +53,4 @@ export default async function ReleaseOpenGraphImage({ params }: ReleaseOgProps) 
     ),
     size,
   );
-}
-
-async function resolveSocialImageDataUrl(sourceUrl: string | null) {
-  if (!sourceUrl) {
-    return null;
-  }
-
-  try {
-    const response = await fetch(sourceUrl, {
-      cache: "force-cache",
-      headers: {
-        "user-agent": "MooSQA/1.0 (+https://moosqa-ci4e.vercel.app)",
-      },
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const contentType = response.headers.get("content-type") || "image/jpeg";
-    const arrayBuffer = await response.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString("base64");
-    return `data:${contentType};base64,${base64}`;
-  } catch {
-    return null;
-  }
 }

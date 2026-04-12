@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
@@ -11,7 +12,9 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import {
   buildSignalArchiveHref,
+  parseSignalArchiveTimeframe,
   type SignalArchiveSlug,
+  type SignalArchiveTimeframe,
 } from "@/lib/archive-links";
 import { getSignalArchivePage } from "@/lib/analytics";
 import { getSiteUrl } from "@/lib/site";
@@ -36,7 +39,8 @@ export async function generateMetadata({
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const page = parsePageParam(resolvedSearchParams.page);
-  const archive = await getSignalArchivePage(signal, page);
+  const timeframe = parseTimeframeParam(resolvedSearchParams.window, signal);
+  const archive = await getSignalArchivePage(signal, page, timeframe);
   const canonicalUrl = new URL(archive.canonicalHref, getSiteUrl()).toString();
 
   return {
@@ -81,7 +85,8 @@ async function SignalArchiveContent({
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const page = parsePageParam(resolvedSearchParams.page);
-  const archive = await getSignalArchivePage(signal, page);
+  const timeframe = parseTimeframeParam(resolvedSearchParams.window, signal);
+  const archive = await getSignalArchivePage(signal, page, timeframe);
 
   return (
     <main className="editorial-shell flex-1 px-4 pb-10 pt-4 md:px-8">
@@ -108,8 +113,29 @@ async function SignalArchiveContent({
               <span className="border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2">
                 Page {archive.page} / {archive.pageCount}
               </span>
+              <span className="border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2">
+                Window {archive.timeframe}
+              </span>
               <ShareFilterLink href={archive.canonicalHref} label={archive.title} />
             </div>
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-3 border-b border-[var(--color-soft-line)] pb-6 text-[11px] uppercase tracking-[0.18em]">
+            {(["today", "7d", "30d"] as SignalArchiveTimeframe[]).map((windowValue) => (
+              <Link
+                key={windowValue}
+                href={buildSignalArchiveHref(signal, 1, windowValue)}
+                prefetch
+                scroll={false}
+                className={
+                  windowValue === archive.timeframe
+                    ? "inline-flex items-center border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-3 py-2 text-white"
+                    : "inline-flex items-center border border-[var(--color-line)] px-3 py-2 text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+                }
+              >
+                {windowValue}
+              </Link>
+            ))}
           </div>
 
           {archive.entries.length > 0 ? (
@@ -120,7 +146,7 @@ async function SignalArchiveContent({
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <p className="section-kicker text-black/43">#{index + 1}</p>
                       <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-accent-strong)]">
-                        {entry.count} actions
+                        {entry.count} {archive.countLabel}
                       </p>
                     </div>
                     <ReleaseCard
@@ -142,7 +168,7 @@ async function SignalArchiveContent({
           <ArchivePagination
             page={archive.page}
             pageCount={archive.pageCount}
-            buildHref={(nextPage) => buildSignalArchiveHref(signal, nextPage)}
+            buildHref={(nextPage) => buildSignalArchiveHref(signal, nextPage, archive.timeframe)}
           />
         </section>
 
@@ -165,11 +191,25 @@ function SignalArchiveShell() {
 }
 
 function isSignalArchiveSlug(value: string): value is SignalArchiveSlug {
-  return value === "opened" || value === "shared" || value === "listened";
+  return (
+    value === "opened" ||
+    value === "shared" ||
+    value === "listened" ||
+    value === "liked" ||
+    value === "disliked" ||
+    value === "discussed"
+  );
 }
 
 function parsePageParam(value: string | string[] | undefined) {
   const raw = Array.isArray(value) ? value[0] : value;
   const parsed = Number(raw || "1");
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function parseTimeframeParam(
+  value: string | string[] | undefined,
+  signal: SignalArchiveSlug,
+) {
+  return parseSignalArchiveTimeframe(value, signal === "opened" ? "today" : "7d");
 }

@@ -228,9 +228,25 @@ async function OpsContent({ searchParams }: OpsPageProps) {
                     <p>{channel.tests} test sends</p>
                     <p>{channel.total} total attempts</p>
                     <p>
+                      Avg latency{" "}
+                      {typeof channel.averageLatencyMs === "number"
+                        ? `${channel.averageLatencyMs} ms`
+                        : "n/a"}
+                    </p>
+                    <p>
                       Last attempt{" "}
                       {channel.lastAttemptAt ? formatRelative(channel.lastAttemptAt) : "never"}
                     </p>
+                    <p>
+                      Last failure{" "}
+                      {channel.lastFailureAt ? formatRelative(channel.lastFailureAt) : "none"}
+                    </p>
+                    {channel.topFailureReasons[0] ? (
+                      <p>
+                        Top failure {channel.topFailureReasons[0].reason} (
+                        {channel.topFailureReasons[0].count})
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -311,6 +327,12 @@ async function OpsContent({ searchParams }: OpsPageProps) {
                       <>
                         <p className="mt-3 section-kicker text-black/43">HTTP</p>
                         <p className="mt-2 text-xs leading-6 text-black/48">{delivery.responseStatus}</p>
+                      </>
+                    ) : null}
+                    {typeof delivery.latencyMs === "number" ? (
+                      <>
+                        <p className="mt-3 section-kicker text-black/43">Latency</p>
+                        <p className="mt-2 text-xs leading-6 text-black/48">{delivery.latencyMs} ms</p>
                       </>
                     ) : null}
                   </div>

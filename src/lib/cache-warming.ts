@@ -42,9 +42,18 @@ export async function warmCriticalCaches() {
   const trendingSectionArchives = analyticsInsights.sectionTrendLeaders.map((item) =>
     getSectionArchivePage(item.section, 1, null, "trending")
   );
-  const signalArchives = ["opened", "shared", "listened"].map((signal) =>
-    getSignalArchivePage(signal as "opened" | "shared" | "listened", 1)
-  );
+  const signalArchives = [
+    getSignalArchivePage("opened", 1, "today"),
+    getSignalArchivePage("opened", 1, "7d"),
+    getSignalArchivePage("shared", 1, "7d"),
+    getSignalArchivePage("shared", 1, "30d"),
+    getSignalArchivePage("listened", 1, "7d"),
+    getSignalArchivePage("listened", 1, "30d"),
+    getSignalArchivePage("liked", 1, "7d"),
+    getSignalArchivePage("disliked", 1, "7d"),
+    getSignalArchivePage("discussed", 1, "7d"),
+    getSignalArchivePage("discussed", 1, "30d"),
+  ];
 
   await Promise.all([
     getSearchOverlayPayload(),

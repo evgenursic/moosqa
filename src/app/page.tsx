@@ -219,6 +219,7 @@ async function HomeContent({ searchParams }: HomePageProps) {
           }}
           trendingNow={analyticsInsights.trendingNow}
           trendingByGenre={analyticsInsights.trendingByGenre}
+          discoveryScenes={analyticsInsights.discoveryScenes}
         />
       ) : null}
     </>

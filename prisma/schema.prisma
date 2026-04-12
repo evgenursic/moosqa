@@ -260,6 +260,7 @@ model AlertDeliveryLog {
   success       Boolean              @default(false)
   isTest        Boolean              @default(false)
   responseStatus Int?
+  latencyMs     Int?
   message       String?
   createdAt     DateTime             @default(now())
 

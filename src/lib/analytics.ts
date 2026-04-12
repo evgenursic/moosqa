@@ -16,6 +16,7 @@ import {
   buildTrendingGenreHref,
   type PlatformArchiveSlug,
   type SignalArchiveSlug,
+  type SignalArchiveTimeframe,
 } from "@/lib/archive-links";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
@@ -80,6 +81,15 @@ type GenreTrendingItem = {
   release: Awaited<ReturnType<typeof getSectionReleasesForInsights>>[number] | null;
 };
 
+type SceneDiscoveryItem = {
+  slug: string;
+  title: string;
+  description: string;
+  leadGenre: string;
+  count: number;
+  release: Awaited<ReturnType<typeof getSectionReleasesForInsights>>[number] | null;
+};
+
 type PublicPlatformLabel = "Bandcamp" | "YouTube" | "YouTube Music";
 const PLATFORM_ARCHIVE_PAGE_SIZE = 24;
 const SIGNAL_ARCHIVE_PAGE_SIZE = 24;
@@ -104,6 +114,12 @@ type DailyPlatformBucket = {
   counts: Record<PublicPlatformLabel, number>;
 };
 
+type SignalArchiveEntry = {
+  releaseId: string;
+  count: number;
+  release: Awaited<ReturnType<typeof getSectionReleasesForInsights>>[number] | null;
+};
+
 const ANALYTICS_LOOKBACK_HOURS = 24;
 const ANALYTICS_DAILY_WINDOW_DAYS = 14;
 const REPAIR_QUEUE_ALERT_THRESHOLD = 28;
@@ -118,6 +134,14 @@ const TREND_SECTION_KEYS: ReleaseSectionKey[] = [
   "eps",
   "live",
 ] as const;
+const SIGNAL_ARCHIVE_DEFAULT_TIMEFRAME: Record<SignalArchiveSlug, SignalArchiveTimeframe> = {
+  opened: "today",
+  shared: "7d",
+  listened: "7d",
+  liked: "7d",
+  disliked: "7d",
+  discussed: "7d",
+} as const;
 
 const ANALYTICS_DEBOUNCE_WINDOWS: Record<AnalyticsAction, number> = {
   OPEN: 1000 * 60 * 30,
@@ -218,9 +242,13 @@ export async function getPlatformArchivePage(platform: PlatformArchiveSlug, requ
   return getCachedPlatformArchivePage(platform, requestedPage);
 }
 
-export async function getSignalArchivePage(signal: SignalArchiveSlug, requestedPage = 1) {
+export async function getSignalArchivePage(
+  signal: SignalArchiveSlug,
+  requestedPage = 1,
+  timeframe?: SignalArchiveTimeframe,
+) {
   await ensureDatabase();
-  return getCachedSignalArchivePage(signal, requestedPage);
+  return getCachedSignalArchivePage(signal, requestedPage, timeframe || SIGNAL_ARCHIVE_DEFAULT_TIMEFRAME[signal]);
 }
 
 export function getPlatformLabelFromSlug(platform: PlatformArchiveSlug): PublicPlatformLabel {
@@ -291,6 +319,7 @@ export async function sendProductionAlertTest(channel: AlertDeliveryTestChannel)
         destination: null,
         success: false,
         responseStatus: null,
+        latencyMs: null,
         message: "Channel not configured",
         isTest: true,
       }),
@@ -303,6 +332,7 @@ export async function sendProductionAlertTest(channel: AlertDeliveryTestChannel)
       destination: null,
       success: false,
       responseStatus: null,
+      latencyMs: null,
       message: "Channel not configured",
       isTest: true,
     });
@@ -647,6 +677,7 @@ const getCachedPublicAnalyticsInsights = unstable_cache(
       platformLeaderboards,
       trendingNow,
       trendingByGenre,
+      discoveryScenes: buildSceneDiscoveryItems(trendingByGenre),
       sectionTrendLeaders,
       audiencePulseLinks: buildAudiencePulseLinks({
         mostOpenedToday: openedToday[0] || null,
@@ -731,58 +762,39 @@ const getCachedPlatformArchivePage = unstable_cache(
 );
 
 const getCachedSignalArchivePage = unstable_cache(
-  async (signal: SignalArchiveSlug, requestedPage: number) => {
-    const config = getSignalArchiveConfig(signal);
-    const groups = await prisma.analyticsEvent.groupBy({
-      by: ["releaseId"],
-      where: {
-        action: config.action,
-        createdAt: {
-          gte: config.since,
-        },
-        releaseId: {
-          not: null,
-        },
-      },
-      _count: {
-        _all: true,
-      },
-      orderBy: {
-        _count: {
-          releaseId: "desc",
-        },
-      },
-      take: 140,
-    });
-
-    const releaseIds = groups
+  async (signal: SignalArchiveSlug, requestedPage: number, timeframe: SignalArchiveTimeframe) => {
+    const config = getSignalArchiveConfig(signal, timeframe);
+    const entries = await getSignalArchiveEntries(config);
+    const releaseIds = entries
       .map((entry) => entry.releaseId)
       .filter((entry): entry is string => Boolean(entry));
     const releaseMap = new Map(
       (await getReleaseListingItemsByIds(releaseIds)).map((release) => [release.id, release]),
     );
-    const entries = groups
+    const hydratedEntries = entries
       .map((entry) => ({
-        releaseId: entry.releaseId || "",
-        count: entry._count._all,
-        release: entry.releaseId ? releaseMap.get(entry.releaseId) || null : null,
+        releaseId: entry.releaseId,
+        count: entry.count,
+        release: releaseMap.get(entry.releaseId) || null,
       }))
       .filter((entry) => entry.release);
 
-    const pageCount = Math.max(1, Math.ceil(entries.length / SIGNAL_ARCHIVE_PAGE_SIZE));
+    const pageCount = Math.max(1, Math.ceil(hydratedEntries.length / SIGNAL_ARCHIVE_PAGE_SIZE));
     const page = clampPageNumber(requestedPage, pageCount);
     const start = (page - 1) * SIGNAL_ARCHIVE_PAGE_SIZE;
 
     return {
       signal,
+      timeframe,
       title: config.title,
       kicker: config.kicker,
       description: config.description,
+      countLabel: config.countLabel,
       page,
       pageCount,
-      total: entries.length,
-      entries: entries.slice(start, start + SIGNAL_ARCHIVE_PAGE_SIZE),
-      canonicalHref: buildSignalArchiveHref(signal, page),
+      total: hydratedEntries.length,
+      entries: hydratedEntries.slice(start, start + SIGNAL_ARCHIVE_PAGE_SIZE),
+      canonicalHref: buildSignalArchiveHref(signal, page, timeframe),
     };
   },
   ["signal-archive-page"],
@@ -1465,6 +1477,7 @@ async function sendAlertNotification(
             };
 
       try {
+        const startedAt = Date.now();
         const response = await fetch(target.url, {
           method: "POST",
           headers: {
@@ -1479,6 +1492,7 @@ async function sendAlertNotification(
           destination: sanitizeDeliveryDestination(target.url),
           success: response.ok,
           responseStatus: response.status,
+          latencyMs: Date.now() - startedAt,
           message: response.ok ? "Delivered" : `HTTP ${response.status}`,
           isTest: Boolean(options?.isTest),
         });
@@ -1490,6 +1504,7 @@ async function sendAlertNotification(
           destination: sanitizeDeliveryDestination(target.url),
           success: false,
           responseStatus: null,
+          latencyMs: 0,
           message: "Network error",
           isTest: Boolean(options?.isTest),
         });
@@ -1602,6 +1617,7 @@ async function sendAlertSummaryEmail(
   `;
 
   try {
+    const startedAt = Date.now();
     const idempotencyKey = createHash("sha256")
       .update(`ops-alert:${alerts.map((alert) => `${alert.key}:${alert.lastTriggeredAt.toISOString()}`).join("|")}`)
       .digest("hex");
@@ -1628,6 +1644,7 @@ async function sendAlertSummaryEmail(
       destination: target.to,
       success: response.ok,
       responseStatus: response.status,
+      latencyMs: Date.now() - startedAt,
       message: response.ok ? "Delivered" : `HTTP ${response.status}`,
       isTest: Boolean(options?.isTest),
     });
@@ -1639,6 +1656,7 @@ async function sendAlertSummaryEmail(
       destination: target.to,
       success: false,
       responseStatus: null,
+      latencyMs: 0,
       message: "Network error",
       isTest: Boolean(options?.isTest),
     });
@@ -1652,6 +1670,7 @@ async function logAlertDeliveryAttempt(input: {
   destination: string | null;
   success: boolean;
   responseStatus: number | null;
+  latencyMs: number | null;
   message: string | null;
   isTest: boolean;
 }) {
@@ -1663,6 +1682,7 @@ async function logAlertDeliveryAttempt(input: {
         destination: input.destination,
         success: input.success,
         responseStatus: input.responseStatus,
+        latencyMs: input.latencyMs,
         message: input.message,
         isTest: input.isTest,
       },
@@ -1799,36 +1819,278 @@ function buildSectionTrendLinks(items: SectionTrendLeaderItem[]) {
   }));
 }
 
-function getSignalArchiveConfig(signal: SignalArchiveSlug) {
+function getSignalArchiveEntries(config: ReturnType<typeof getSignalArchiveConfig>): Promise<SignalArchiveEntry[]> {
+  if (config.source === "reddit-comments") {
+    return getMostDiscussedArchiveEntries(config.since);
+  }
+
+  return getAnalyticsArchiveEntries(config.action, config.since);
+}
+
+async function getAnalyticsArchiveEntries(
+  action: AnalyticsEventType,
+  since: Date,
+): Promise<SignalArchiveEntry[]> {
+  const groups = await prisma.analyticsEvent.groupBy({
+    by: ["releaseId"],
+    where: {
+      action,
+      createdAt: {
+        gte: since,
+      },
+      releaseId: {
+        not: null,
+      },
+    },
+    _count: {
+      _all: true,
+    },
+    orderBy: {
+      _count: {
+        releaseId: "desc",
+      },
+    },
+    take: 160,
+  });
+
+  return groups
+    .map((entry) => ({
+      releaseId: entry.releaseId || "",
+      count: entry._count._all,
+      release: null,
+    }))
+    .filter((entry) => Boolean(entry.releaseId));
+}
+
+async function getMostDiscussedArchiveEntries(since: Date): Promise<SignalArchiveEntry[]> {
+  const releases = await prisma.release.findMany({
+    where: {
+      publishedAt: {
+        gte: since,
+      },
+      commentCount: {
+        gt: 0,
+      },
+    },
+    orderBy: [{ commentCount: "desc" }, { score: "desc" }, { publishedAt: "desc" }],
+    take: 160,
+    select: {
+      id: true,
+      commentCount: true,
+    },
+  });
+
+  return releases.map((release) => ({
+    releaseId: release.id,
+    count: Math.max(release.commentCount || 0, 0),
+    release: null,
+  }));
+}
+
+function getSignalArchiveConfig(signal: SignalArchiveSlug, timeframe: SignalArchiveTimeframe) {
+  const since = getSignalSince(timeframe);
+  const windowLabel = getSignalTimeframeLabel(timeframe);
+
   if (signal === "shared") {
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     return {
+      source: "analytics" as const,
       action: AnalyticsEventType.SHARE,
       since,
-      title: "Most shared this week",
+      title: `Most shared ${windowLabel}`,
       kicker: "Public share signal",
-      description: "The releases listeners share most often across the last 7 days.",
+      description: `The releases listeners share most often across ${getSignalTimeframeDescription(timeframe)}.`,
+      countLabel: "shares",
     };
   }
 
   if (signal === "listened") {
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     return {
+      source: "analytics" as const,
       action: AnalyticsEventType.LISTEN_CLICK,
       since,
-      title: "Most clicked to listen",
+      title: `Most clicked to listen ${windowLabel}`,
       kicker: "Public listening signal",
-      description: "The releases that generate the most direct listening clicks this week.",
+      description: `The releases that generate the most direct listening clicks across ${getSignalTimeframeDescription(timeframe)}.`,
+      countLabel: "listen clicks",
     };
   }
 
-  const since = new Date();
-  since.setHours(0, 0, 0, 0);
+  if (signal === "liked") {
+    return {
+      source: "analytics" as const,
+      action: AnalyticsEventType.REACTION_POSITIVE,
+      since,
+      title: `Most liked ${windowLabel}`,
+      kicker: "Public positive signal",
+      description: `The releases listeners approve most often across ${getSignalTimeframeDescription(timeframe)}.`,
+      countLabel: "likes",
+    };
+  }
+
+  if (signal === "disliked") {
+    return {
+      source: "analytics" as const,
+      action: AnalyticsEventType.REACTION_NEGATIVE,
+      since,
+      title: `Most disliked ${windowLabel}`,
+      kicker: "Public negative signal",
+      description: `The releases drawing the strongest negative reactions across ${getSignalTimeframeDescription(timeframe)}.`,
+      countLabel: "dislikes",
+    };
+  }
+
+  if (signal === "discussed") {
+    return {
+      source: "reddit-comments" as const,
+      since,
+      title: `Most discussed ${windowLabel}`,
+      kicker: "Public discussion signal",
+      description: `The releases with the strongest Reddit comment activity across ${getSignalTimeframeDescription(timeframe)}.`,
+      countLabel: "comments",
+    };
+  }
+
   return {
+    source: "analytics" as const,
     action: AnalyticsEventType.OPEN,
     since,
-    title: "Most opened today",
+    title: timeframe === "today" ? "Most opened today" : `Most opened ${windowLabel}`,
     kicker: "Public open signal",
-    description: "The releases opened most often today across the MooSQA feed.",
+    description:
+      timeframe === "today"
+        ? "The releases opened most often today across the MooSQA feed."
+        : `The releases opened most often across ${getSignalTimeframeDescription(timeframe)}.`,
+    countLabel: "opens",
   };
+}
+
+function getSignalSince(timeframe: SignalArchiveTimeframe) {
+  const now = new Date();
+
+  if (timeframe === "today") {
+    now.setHours(0, 0, 0, 0);
+    return now;
+  }
+
+  const days = timeframe === "30d" ? 30 : 7;
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+}
+
+function getSignalTimeframeLabel(timeframe: SignalArchiveTimeframe) {
+  if (timeframe === "today") {
+    return "today";
+  }
+  if (timeframe === "30d") {
+    return "in the last 30 days";
+  }
+
+  return "this week";
+}
+
+function getSignalTimeframeDescription(timeframe: SignalArchiveTimeframe) {
+  if (timeframe === "today") {
+    return "today";
+  }
+  if (timeframe === "30d") {
+    return "the last 30 days";
+  }
+
+  return "the last 7 days";
+}
+
+function buildSceneDiscoveryItems(items: GenreTrendingItem[]): SceneDiscoveryItem[] {
+  const sceneMap = new Map<
+    string,
+    {
+      slug: string;
+      title: string;
+      description: string;
+      count: number;
+      leadGenre: string;
+      leadCount: number;
+      release: ReleaseListingItem | null;
+    }
+  >();
+
+  for (const item of items) {
+    const scene = matchSceneForGenre(item.genre);
+    if (!scene) {
+      continue;
+    }
+
+    const existing = sceneMap.get(scene.slug);
+    if (!existing) {
+      sceneMap.set(scene.slug, {
+        slug: scene.slug,
+        title: scene.title,
+        description: scene.description,
+        count: item.count,
+        leadGenre: item.genre,
+        leadCount: item.count,
+        release: item.release,
+      });
+      continue;
+    }
+
+    existing.count += item.count;
+    if (item.count > existing.leadCount) {
+      existing.leadGenre = item.genre;
+      existing.leadCount = item.count;
+      existing.release = item.release;
+    }
+  }
+
+  return [...sceneMap.values()]
+    .sort((left, right) => right.count - left.count)
+    .slice(0, 4)
+    .map((entry) => ({
+      slug: entry.slug,
+      title: entry.title,
+      description: entry.description,
+      leadGenre: entry.leadGenre,
+      count: entry.count,
+      release: entry.release,
+    }));
+}
+
+const SCENE_DISCOVERY_RULES = [
+  {
+    slug: "soft-focus",
+    title: "Soft focus",
+    description: "Dream-pop, shoegaze and blurred melodic releases with softer edges.",
+    keywords: ["dream pop", "shoegaze", "ethereal", "slowcore", "bedroom pop"],
+  },
+  {
+    slug: "night-drive",
+    title: "Night drive",
+    description: "Dark post-punk, synth-led and nocturnal guitar records with momentum.",
+    keywords: ["post-punk", "darkwave", "synth-pop", "new wave", "gothic rock"],
+  },
+  {
+    slug: "nervy-guitars",
+    title: "Nervy guitars",
+    description: "Math rock, emo and wiry indie bands built around tension and movement.",
+    keywords: ["math rock", "emo", "midwest emo", "post-hardcore", "art rock"],
+  },
+  {
+    slug: "quiet-drift",
+    title: "Quiet drift",
+    description: "Ambient folk, intimate songwriting and low-lit slower records.",
+    keywords: ["folk", "ambient", "singer-songwriter", "chamber pop", "indie folk"],
+  },
+  {
+    slug: "high-tension",
+    title: "High tension",
+    description: "Noise, punk and heavier guitar releases pushing harder energy.",
+    keywords: ["noise rock", "punk", "hardcore", "grunge", "noise pop"],
+  },
+] as const;
+
+function matchSceneForGenre(genre: string) {
+  const normalized = genre.toLowerCase();
+  return (
+    SCENE_DISCOVERY_RULES.find((rule) =>
+      rule.keywords.some((keyword) => normalized.includes(keyword.toLowerCase())),
+    ) || null
+  );
 }

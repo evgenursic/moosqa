@@ -27,19 +27,19 @@ export function AnalyticsInsightsStrip({
       title: "Most opened today",
       entry: mostOpenedToday,
       suffix: "opens",
-      href: buildSignalArchiveHref("opened"),
+      href: buildSignalArchiveHref("opened", 1, "today"),
     },
     {
       title: "Most shared this week",
       entry: mostSharedThisWeek,
       suffix: "shares",
-      href: buildSignalArchiveHref("shared"),
+      href: buildSignalArchiveHref("shared", 1, "7d"),
     },
     {
       title: "Most clicked to listen",
       entry: mostClickedToListen,
       suffix: "listen clicks",
-      href: buildSignalArchiveHref("listened"),
+      href: buildSignalArchiveHref("listened", 1, "7d"),
     },
   ] as const;
 

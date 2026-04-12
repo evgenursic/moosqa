@@ -2,7 +2,14 @@ import type { ReleaseSectionKey } from "@/lib/release-sections";
 
 export type ArchiveViewMode = "latest" | "trending";
 export type PlatformArchiveSlug = "bandcamp" | "youtube" | "youtube-music";
-export type SignalArchiveSlug = "opened" | "shared" | "listened";
+export type SignalArchiveSlug =
+  | "opened"
+  | "shared"
+  | "listened"
+  | "liked"
+  | "disliked"
+  | "discussed";
+export type SignalArchiveTimeframe = "today" | "7d" | "30d";
 
 export function buildArchiveHref(
   section: ReleaseSectionKey | string,
@@ -49,14 +56,33 @@ export function buildPlatformArchiveHref(platform: PlatformArchiveSlug, page?: n
   return query ? `/platform/${platform}?${query}` : `/platform/${platform}`;
 }
 
-export function buildSignalArchiveHref(signal: SignalArchiveSlug, page?: number) {
+export function buildSignalArchiveHref(
+  signal: SignalArchiveSlug,
+  page?: number,
+  timeframe?: SignalArchiveTimeframe | null,
+) {
   const params = new URLSearchParams();
   if (page && page > 1) {
     params.set("page", String(page));
   }
+  if (timeframe && timeframe !== "7d") {
+    params.set("window", timeframe);
+  }
 
   const query = params.toString();
   return query ? `/signals/${signal}?${query}` : `/signals/${signal}`;
+}
+
+export function parseSignalArchiveTimeframe(
+  value: string | string[] | undefined,
+  fallback: SignalArchiveTimeframe = "7d",
+): SignalArchiveTimeframe {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === "today" || raw === "7d" || raw === "30d") {
+    return raw;
+  }
+
+  return fallback;
 }
 
 export function slugifyGenre(value: string) {

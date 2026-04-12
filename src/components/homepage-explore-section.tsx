@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AnalyticsInsightsStrip } from "@/components/analytics-insights-strip";
+import { DiscoveryBySceneSection } from "@/components/discovery-by-scene-section";
 import { TrendingByGenreSection } from "@/components/trending-by-genre-section";
 import { TrendingNowSection } from "@/components/trending-now-section";
 import { buildSignalArchiveHref } from "@/lib/archive-links";
@@ -36,6 +37,14 @@ type HomepageExploreSectionProps = {
     count: number;
     release: ReleaseListingItem | null;
   }>;
+  discoveryScenes: Array<{
+    slug: string;
+    title: string;
+    description: string;
+    leadGenre: string;
+    count: number;
+    release: ReleaseListingItem | null;
+  }>;
 };
 
 export function HomepageExploreSection({
@@ -44,6 +53,7 @@ export function HomepageExploreSection({
   audiencePulse,
   trendingNow,
   trendingByGenre,
+  discoveryScenes,
 }: HomepageExploreSectionProps) {
   const hasSignals =
     Boolean(audiencePulse.mostOpenedToday?.release) ||
@@ -87,6 +97,7 @@ export function HomepageExploreSection({
       </div>
 
       <TrendingNowSection items={trendingNow} />
+      <DiscoveryBySceneSection items={discoveryScenes} />
       <TrendingByGenreSection items={trendingByGenre} />
     </section>
   );
@@ -148,8 +159,11 @@ export function buildHomepageQuickLinks() {
 
 function buildHomepageSignalLinks() {
   return [
-    { title: "Most opened today", href: buildSignalArchiveHref("opened") },
-    { title: "Most shared this week", href: buildSignalArchiveHref("shared") },
-    { title: "Most clicked to listen", href: buildSignalArchiveHref("listened") },
+    { title: "Most opened today", href: buildSignalArchiveHref("opened", 1, "today") },
+    { title: "Most shared this week", href: buildSignalArchiveHref("shared", 1, "7d") },
+    { title: "Most clicked to listen", href: buildSignalArchiveHref("listened", 1, "7d") },
+    { title: "Most liked", href: buildSignalArchiveHref("liked", 1, "7d") },
+    { title: "Most disliked", href: buildSignalArchiveHref("disliked", 1, "7d") },
+    { title: "Most discussed", href: buildSignalArchiveHref("discussed", 1, "7d") },
   ];
 }

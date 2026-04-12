@@ -93,6 +93,7 @@ const getCachedOpsDashboardData = unstable_cache(
           success: true,
           isTest: true,
           responseStatus: true,
+          latencyMs: true,
           message: true,
           createdAt: true,
         },
@@ -108,6 +109,9 @@ const getCachedOpsDashboardData = unstable_cache(
           channel: true,
           success: true,
           isTest: true,
+          responseStatus: true,
+          latencyMs: true,
+          message: true,
           createdAt: true,
         },
       }),
@@ -176,6 +180,9 @@ function buildAlertChannelStats(
     channel: string;
     success: boolean;
     isTest: boolean;
+    responseStatus: number | null;
+    latencyMs: number | null;
+    message: string | null;
     createdAt: Date;
   }>,
 ) {
@@ -189,6 +196,10 @@ function buildAlertChannelStats(
       tests: number;
       lastAttemptAt: Date | null;
       lastSuccessAt: Date | null;
+      lastFailureAt: Date | null;
+      latencyTotalMs: number;
+      latencySamples: number;
+      failureReasons: Map<string, number>;
     }
   >();
 
@@ -201,6 +212,10 @@ function buildAlertChannelStats(
       tests: 0,
       lastAttemptAt: null,
       lastSuccessAt: null,
+      lastFailureAt: null,
+      latencyTotalMs: 0,
+      latencySamples: 0,
+      failureReasons: new Map<string, number>(),
     };
 
     entry.total += 1;
@@ -211,9 +226,18 @@ function buildAlertChannelStats(
       }
     } else {
       entry.failed += 1;
+      if (!entry.lastFailureAt || row.createdAt > entry.lastFailureAt) {
+        entry.lastFailureAt = row.createdAt;
+      }
+      const failureReason = normalizeAlertFailureReason(row.message, row.responseStatus);
+      entry.failureReasons.set(failureReason, (entry.failureReasons.get(failureReason) || 0) + 1);
     }
     if (row.isTest) {
       entry.tests += 1;
+    }
+    if (typeof row.latencyMs === "number" && row.latencyMs >= 0) {
+      entry.latencyTotalMs += row.latencyMs;
+      entry.latencySamples += 1;
     }
     if (!entry.lastAttemptAt || row.createdAt > entry.lastAttemptAt) {
       entry.lastAttemptAt = row.createdAt;
@@ -226,8 +250,39 @@ function buildAlertChannelStats(
     .map((entry) => ({
       ...entry,
       successRate: entry.total > 0 ? Math.round((entry.success / entry.total) * 100) : 0,
+      averageLatencyMs:
+        entry.latencySamples > 0 ? Math.round(entry.latencyTotalMs / entry.latencySamples) : null,
+      topFailureReasons: [...entry.failureReasons.entries()]
+        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+        .slice(0, 3)
+        .map(([reason, count]) => ({ reason, count })),
     }))
     .sort((left, right) => right.total - left.total || left.channel.localeCompare(right.channel));
+}
+
+function normalizeAlertFailureReason(message: string | null, responseStatus: number | null) {
+  if (typeof responseStatus === "number" && responseStatus >= 500) {
+    return `HTTP ${responseStatus}`;
+  }
+  if (typeof responseStatus === "number" && responseStatus >= 400) {
+    return `HTTP ${responseStatus}`;
+  }
+  if (!message) {
+    return "Unknown failure";
+  }
+
+  const normalized = message.toLowerCase();
+  if (normalized.includes("network")) {
+    return "Network error";
+  }
+  if (normalized.includes("not configured")) {
+    return "Channel not configured";
+  }
+  if (normalized.startsWith("http ")) {
+    return message.toUpperCase();
+  }
+
+  return message.length > 48 ? `${message.slice(0, 45)}...` : message;
 }
 
 function redactRateLimitKey(value: string) {
