@@ -97,14 +97,25 @@ export default async function BrowseSectionPage({
   const view = parseArchiveViewMode(resolvedSearchParams.view);
   let archive: Awaited<ReturnType<typeof getSectionArchivePage>> | null = null;
   let archiveLoadError = false;
+  let refreshFailed = false;
 
   try {
     const shouldWaitForRefresh = await shouldBlockForHomepageRefresh();
 
     if (shouldWaitForRefresh) {
-      await refreshHomepageData();
+      try {
+        await refreshHomepageData();
+      } catch (error) {
+        refreshFailed = true;
+        console.error(`Archive refresh failed for section ${section}. Continuing with cached archive.`, error);
+      }
     }
+  } catch (error) {
+    refreshFailed = true;
+    console.error(`Archive refresh gate failed for section ${section}. Continuing with cached archive.`, error);
+  }
 
+  try {
     archive = await getSectionArchivePage(section, page, genre, view);
   } catch (error) {
     archiveLoadError = true;
@@ -191,10 +202,15 @@ export default async function BrowseSectionPage({
 
             <div className="flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.18em] text-black/55">
               <span className="border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2">
-                {archive.selectedGenre
+              {archive.selectedGenre
                   ? `${archive.total} matching posts`
                   : `${archive.total} total posts`}
               </span>
+              {refreshFailed ? (
+                <span className="border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2">
+                  Cached view
+                </span>
+              ) : null}
               {archive.selectedGenre && archive.overallTotal !== archive.total ? (
                 <span className="border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2">
                   {archive.overallTotal} overall

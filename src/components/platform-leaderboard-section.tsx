@@ -44,17 +44,22 @@ export function PlatformLeaderboardSection({ items }: PlatformLeaderboardSection
                 <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-accent-strong)]">
                   This week
                 </p>
-                {getPlatformArchiveSlug(item.platform) ? (
-                  <Link
-                    href={buildPlatformArchiveHref(getPlatformArchiveSlug(item.platform)!)}
-                    prefetch={false}
-                    className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:text-[var(--color-accent-strong)]"
-                  >
-                    Open full board
-                  </Link>
-                ) : null}
               </div>
             </div>
+            {getPlatformArchiveSlug(item.platform) ? (
+              <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em]">
+                {(["today", "7d", "30d"] as const).map((windowValue) => (
+                  <Link
+                    key={`${item.platform}-${windowValue}`}
+                    href={buildPlatformArchiveHref(getPlatformArchiveSlug(item.platform)!, 1, windowValue)}
+                    prefetch={false}
+                    className="inline-flex items-center border border-[var(--color-line)] px-3 py-2 text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+                  >
+                    {windowValue}
+                  </Link>
+                ))}
+              </div>
+            ) : null}
             <div className="mt-4 grid gap-4">
               {item.entries.map((entry, index) => {
                 if (!entry.release) {

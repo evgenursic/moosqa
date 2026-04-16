@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { Suspense, type ReactNode } from "react";
 
 import { OpsAlertTestControls } from "@/components/ops-alert-test-controls";
+import { OpsAlertLatencyChart } from "@/components/ops-alert-latency-chart";
 import { OpsAnalyticsChart } from "@/components/ops-analytics-chart";
 import { OpsPlatformHistoryChart } from "@/components/ops-platform-history-chart";
 import { getRequiredDebugSecret } from "@/lib/admin-auth";
@@ -260,6 +261,7 @@ async function OpsContent({ searchParams }: OpsPageProps) {
 
         <OpsAnalyticsChart daily={dashboard.analytics.daily} />
         <OpsPlatformHistoryChart daily={dashboard.analytics.platformDaily} />
+        <OpsAlertLatencyChart daily={dashboard.alertLatencyDaily} />
 
         <section className="border-t border-[var(--color-line)] py-8">
           <PanelCard title="Daily analytics growth">

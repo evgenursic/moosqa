@@ -2,6 +2,7 @@ import type { ReleaseSectionKey } from "@/lib/release-sections";
 
 export type ArchiveViewMode = "latest" | "trending";
 export type PlatformArchiveSlug = "bandcamp" | "youtube" | "youtube-music";
+export type ArchiveTimeframe = "today" | "7d" | "30d";
 export type SignalArchiveSlug =
   | "opened"
   | "shared"
@@ -9,7 +10,8 @@ export type SignalArchiveSlug =
   | "liked"
   | "disliked"
   | "discussed";
-export type SignalArchiveTimeframe = "today" | "7d" | "30d";
+export type SignalArchiveTimeframe = ArchiveTimeframe;
+export type PlatformArchiveTimeframe = ArchiveTimeframe;
 
 export function buildArchiveHref(
   section: ReleaseSectionKey | string,
@@ -46,10 +48,17 @@ export function buildTrendingGenreHref(genre: string) {
   return `/trending/${slugifyGenre(genre)}`;
 }
 
-export function buildPlatformArchiveHref(platform: PlatformArchiveSlug, page?: number) {
+export function buildPlatformArchiveHref(
+  platform: PlatformArchiveSlug,
+  page?: number,
+  timeframe?: PlatformArchiveTimeframe | null,
+) {
   const params = new URLSearchParams();
   if (page && page > 1) {
     params.set("page", String(page));
+  }
+  if (timeframe && timeframe !== "7d") {
+    params.set("window", timeframe);
   }
 
   const query = params.toString();
@@ -83,6 +92,23 @@ export function parseSignalArchiveTimeframe(
   }
 
   return fallback;
+}
+
+export function parsePlatformArchiveTimeframe(
+  value: string | string[] | undefined,
+  fallback: PlatformArchiveTimeframe = "7d",
+): PlatformArchiveTimeframe {
+  return parseSignalArchiveTimeframe(value, fallback);
+}
+
+export function buildSceneArchiveHref(scene: string, page?: number) {
+  const params = new URLSearchParams();
+  if (page && page > 1) {
+    params.set("page", String(page));
+  }
+
+  const query = params.toString();
+  return query ? `/scene/${scene}?${query}` : `/scene/${scene}`;
 }
 
 export function slugifyGenre(value: string) {

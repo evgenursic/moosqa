@@ -133,6 +133,7 @@ const getCachedOpsDashboardData = unstable_cache(
       recentAlerts,
       alertDeliveries,
       alertChannelStats: buildAlertChannelStats(alertChannelBreakdown),
+      alertLatencyDaily: buildAlertLatencyDaily(alertChannelBreakdown),
     };
   },
   ["ops-dashboard"],
@@ -258,6 +259,74 @@ function buildAlertChannelStats(
         .map(([reason, count]) => ({ reason, count })),
     }))
     .sort((left, right) => right.total - left.total || left.channel.localeCompare(right.channel));
+}
+
+function buildAlertLatencyDaily(
+  rows: Array<{
+    channel: string;
+    success: boolean;
+    isTest: boolean;
+    responseStatus: number | null;
+    latencyMs: number | null;
+    message: string | null;
+    createdAt: Date;
+  }>,
+) {
+  const bucketMap = new Map<
+    string,
+    {
+      dateKey: string;
+      label: string;
+      counts: Record<string, { totalLatency: number; samples: number }>;
+    }
+  >();
+
+  for (const row of rows) {
+    if (typeof row.latencyMs !== "number" || row.latencyMs < 0) {
+      continue;
+    }
+
+    const dateKey = row.createdAt.toISOString().slice(0, 10);
+    const label = row.createdAt.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+    const bucket = bucketMap.get(dateKey) || {
+      dateKey,
+      label,
+      counts: {},
+    };
+    const channelEntry = bucket.counts[row.channel] || {
+      totalLatency: 0,
+      samples: 0,
+    };
+
+    channelEntry.totalLatency += row.latencyMs;
+    channelEntry.samples += 1;
+    bucket.counts[row.channel] = channelEntry;
+    bucketMap.set(dateKey, bucket);
+  }
+
+  return [...bucketMap.values()]
+    .sort((left, right) => left.dateKey.localeCompare(right.dateKey))
+    .map((bucket) => ({
+      dateKey: bucket.dateKey,
+      label: bucket.label,
+      latencies: {
+        discord: averageLatency(bucket.counts.discord),
+        slack: averageLatency(bucket.counts.slack),
+        email: averageLatency(bucket.counts.email),
+      },
+    }));
+}
+
+function averageLatency(entry?: { totalLatency: number; samples: number }) {
+  if (!entry || entry.samples === 0) {
+    return 0;
+  }
+
+  return Math.round(entry.totalLatency / entry.samples);
 }
 
 function normalizeAlertFailureReason(message: string | null, responseStatus: number | null) {

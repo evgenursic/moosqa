@@ -83,7 +83,11 @@ async function TrendingGenreContent({
   ]);
 
   if (shouldWaitForRefresh) {
-    await refreshHomepageData();
+    try {
+      await refreshHomepageData();
+    } catch (error) {
+      console.error(`Trending genre refresh failed for ${genreSlug}. Continuing with cached data.`, error);
+    }
   }
 
   const matchedGenre =

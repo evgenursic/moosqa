@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
@@ -11,6 +12,8 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import {
   buildPlatformArchiveHref,
+  parsePlatformArchiveTimeframe,
+  type PlatformArchiveTimeframe,
   type PlatformArchiveSlug,
 } from "@/lib/archive-links";
 import {
@@ -39,10 +42,12 @@ export async function generateMetadata({
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const page = parsePageParam(resolvedSearchParams.page);
+  const timeframe = parsePlatformArchiveTimeframe(resolvedSearchParams.window, "7d");
   const platformLabel = getPlatformLabelFromSlug(platform);
   const title = `${platformLabel} trending${page > 1 ? ` | Page ${page}` : ""} | MooSQA`;
-  const description = `The most clicked ${platformLabel} releases on MooSQA over the last 7 days.`;
-  const canonicalUrl = new URL(buildPlatformArchiveHref(platform, page), getSiteUrl()).toString();
+  const description = `The most clicked ${platformLabel} releases on MooSQA over ${getTimeframeDescription(timeframe)}.`;
+  const canonicalUrl = new URL(buildPlatformArchiveHref(platform, page, timeframe), getSiteUrl()).toString();
+  const socialImage = new URL(`/platform/${platform}/opengraph-image`, getSiteUrl()).toString();
 
   return {
     title,
@@ -54,11 +59,13 @@ export async function generateMetadata({
       title,
       description,
       url: canonicalUrl,
+      images: [socialImage],
     },
     twitter: {
-      card: "summary",
+      card: "summary_large_image",
       title,
       description,
+      images: [socialImage],
     },
   };
 }
@@ -86,7 +93,8 @@ async function PlatformArchiveContent({
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const page = parsePageParam(resolvedSearchParams.page);
-  const archive = await getPlatformArchivePage(platform, page);
+  const timeframe = parsePlatformArchiveTimeframe(resolvedSearchParams.window, "7d");
+  const archive = await getPlatformArchivePage(platform, page, timeframe);
 
   return (
     <main className="editorial-shell flex-1 px-4 pb-10 pt-4 md:px-8">
@@ -114,8 +122,29 @@ async function PlatformArchiveContent({
               <span className="border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2">
                 Page {archive.page} / {archive.pageCount}
               </span>
+              <span className="border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2">
+                Window {archive.timeframe}
+              </span>
               <ShareFilterLink href={archive.canonicalHref} label={`${archive.label} trending archive`} />
             </div>
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-3 border-b border-[var(--color-soft-line)] pb-6 text-[11px] uppercase tracking-[0.18em]">
+            {(["today", "7d", "30d"] as PlatformArchiveTimeframe[]).map((windowValue) => (
+              <Link
+                key={`${platform}-${windowValue}`}
+                href={buildPlatformArchiveHref(platform, 1, windowValue)}
+                prefetch
+                scroll={false}
+                className={
+                  windowValue === archive.timeframe
+                    ? "inline-flex items-center border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-3 py-2 text-white"
+                    : "inline-flex items-center border border-[var(--color-line)] px-3 py-2 text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+                }
+              >
+                {windowValue}
+              </Link>
+            ))}
           </div>
 
           {archive.entries.length > 0 ? (
@@ -126,7 +155,7 @@ async function PlatformArchiveContent({
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <p className="section-kicker text-black/43">#{index + 1}</p>
                       <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-accent-strong)]">
-                        {entry.count} clicks
+                        {entry.count} {archive.countLabel}
                       </p>
                     </div>
                     <ReleaseCard
@@ -148,7 +177,7 @@ async function PlatformArchiveContent({
           <ArchivePagination
             page={archive.page}
             pageCount={archive.pageCount}
-            buildHref={(nextPage) => buildPlatformArchiveHref(platform, nextPage)}
+            buildHref={(nextPage) => buildPlatformArchiveHref(platform, nextPage, archive.timeframe)}
           />
         </section>
 
@@ -178,4 +207,15 @@ function parsePageParam(value: string | string[] | undefined) {
   const raw = Array.isArray(value) ? value[0] : value;
   const parsed = Number(raw || "1");
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function getTimeframeDescription(timeframe: PlatformArchiveTimeframe) {
+  if (timeframe === "today") {
+    return "today";
+  }
+  if (timeframe === "30d") {
+    return "the last 30 days";
+  }
+
+  return "the last 7 days";
 }

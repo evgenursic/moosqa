@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { ReleaseBrief } from "@/components/release-brief";
 import { ShareFilterLink } from "@/components/share-filter-link";
-import { buildTrendingGenreHref } from "@/lib/archive-links";
+import { buildSceneArchiveHref } from "@/lib/archive-links";
 import type { ReleaseListingItem } from "@/lib/release-sections";
 
 type DiscoveryBySceneSectionProps = {
@@ -34,7 +34,7 @@ export function DiscoveryBySceneSection({ items }: DiscoveryBySceneSectionProps)
 
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
         {visibleItems.map((item) => {
-          const href = buildTrendingGenreHref(item.leadGenre);
+          const href = buildSceneArchiveHref(item.slug);
           return (
             <div key={item.slug} className="border border-[var(--color-line)] bg-[var(--color-panel)] p-4">
               <p className="section-kicker text-black/43">{item.title}</p>

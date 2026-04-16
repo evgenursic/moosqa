@@ -68,37 +68,47 @@ export function HomepageExploreSection({
 
   return (
     <section id="home-discovery" className="border-t border-[var(--color-line)] py-10">
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <div>
-          <p className="section-kicker text-black/43">Discovery map</p>
-          <h2 className="mt-3 text-5xl leading-none text-[var(--color-ink)] serif-display">
-            Find the right lane fast.
-          </h2>
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-black/63">
-            Jump straight into the strongest sections, then open the live audience signals that are
-            driving discovery across the feed right now.
-          </p>
+      <details className="group border border-[var(--color-line)] bg-[var(--color-panel)]">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-left">
+          <div>
+            <p className="section-kicker text-black/43">Discovery map</p>
+            <p className="mt-2 text-2xl text-[var(--color-ink)] serif-display">Open discovery tools.</p>
+          </div>
+          <span className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-accent-strong)] transition group-open:rotate-45">
+            +
+          </span>
+        </summary>
+
+        <div className="border-t border-[var(--color-soft-line)] px-5 py-6">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+            <div>
+              <p className="max-w-2xl text-sm leading-7 text-black/63">
+                Expand the editorial shortcuts only when you want a wider discovery layer beyond the
+                main feed.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <ExploreGroup title="Radar sections" items={quickLinks} />
+              <ExploreGroup title="Trending archives" items={trendingArchiveLinks} showScore />
+              <ExploreGroup title="Signal archives" items={buildHomepageSignalLinks()} />
+            </div>
+          </div>
+
+          <div className="mt-10">
+            <AnalyticsInsightsStrip
+              mostOpenedToday={audiencePulse.mostOpenedToday}
+              mostSharedThisWeek={audiencePulse.mostSharedThisWeek}
+              mostClickedToListen={audiencePulse.mostClickedToListen}
+              platformHighlights={audiencePulse.platformHighlights}
+            />
+          </div>
+
+          <TrendingNowSection items={trendingNow} />
+          <DiscoveryBySceneSection items={discoveryScenes} />
+          <TrendingByGenreSection items={trendingByGenre} />
         </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <ExploreGroup title="Radar sections" items={quickLinks} />
-          <ExploreGroup title="Trending archives" items={trendingArchiveLinks} showScore />
-          <ExploreGroup title="Signal archives" items={buildHomepageSignalLinks()} />
-        </div>
-      </div>
-
-      <div className="mt-10">
-        <AnalyticsInsightsStrip
-          mostOpenedToday={audiencePulse.mostOpenedToday}
-          mostSharedThisWeek={audiencePulse.mostSharedThisWeek}
-          mostClickedToListen={audiencePulse.mostClickedToListen}
-          platformHighlights={audiencePulse.platformHighlights}
-        />
-      </div>
-
-      <TrendingNowSection items={trendingNow} />
-      <DiscoveryBySceneSection items={discoveryScenes} />
-      <TrendingByGenreSection items={trendingByGenre} />
+      </details>
     </section>
   );
 }

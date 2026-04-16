@@ -14,11 +14,13 @@ import {
   buildPlatformArchiveHref,
   buildSignalArchiveHref,
   buildTrendingGenreHref,
+  type PlatformArchiveTimeframe,
   type PlatformArchiveSlug,
   type SignalArchiveSlug,
   type SignalArchiveTimeframe,
 } from "@/lib/archive-links";
 import { ensureDatabase } from "@/lib/database";
+import { getSceneDefinitionBySlug, matchSceneForGenre } from "@/lib/discovery-scenes";
 import { prisma } from "@/lib/prisma";
 import { getQualityDashboardData } from "@/lib/quality-dashboard";
 import {
@@ -237,9 +239,13 @@ export async function getPublicAnalyticsInsights() {
   return getCachedPublicAnalyticsInsights();
 }
 
-export async function getPlatformArchivePage(platform: PlatformArchiveSlug, requestedPage = 1) {
+export async function getPlatformArchivePage(
+  platform: PlatformArchiveSlug,
+  requestedPage = 1,
+  timeframe: PlatformArchiveTimeframe = "7d",
+) {
   await ensureDatabase();
-  return getCachedPlatformArchivePage(platform, requestedPage);
+  return getCachedPlatformArchivePage(platform, requestedPage, timeframe);
 }
 
 export async function getSignalArchivePage(
@@ -249,6 +255,11 @@ export async function getSignalArchivePage(
 ) {
   await ensureDatabase();
   return getCachedSignalArchivePage(signal, requestedPage, timeframe || SIGNAL_ARCHIVE_DEFAULT_TIMEFRAME[signal]);
+}
+
+export async function getSceneArchivePage(sceneSlug: string, requestedPage = 1) {
+  await ensureDatabase();
+  return getCachedSceneArchivePage(sceneSlug, requestedPage);
 }
 
 export function getPlatformLabelFromSlug(platform: PlatformArchiveSlug): PublicPlatformLabel {
@@ -697,16 +708,15 @@ const getCachedPublicAnalyticsInsights = unstable_cache(
 );
 
 const getCachedPlatformArchivePage = unstable_cache(
-  async (platform: PlatformArchiveSlug, requestedPage: number) => {
+  async (platform: PlatformArchiveSlug, requestedPage: number, timeframe: PlatformArchiveTimeframe) => {
     const label = getPlatformLabelFromSlug(platform);
-    const now = new Date();
-    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const since = getSignalSince(timeframe);
     const groups = await prisma.analyticsEvent.groupBy({
       by: ["releaseId"],
       where: {
         action: AnalyticsEventType.LISTEN_CLICK,
         createdAt: {
-          gte: weekStart,
+          gte: since,
         },
         platform: label,
         releaseId: {
@@ -744,17 +754,69 @@ const getCachedPlatformArchivePage = unstable_cache(
 
     return {
       platform,
+      timeframe,
       label,
       title: `${label} trending`,
-      description: `The most clicked ${label} releases on MooSQA over the last 7 days.`,
+      description: `The most clicked ${label} releases on MooSQA over ${getSignalTimeframeDescription(timeframe)}.`,
+      countLabel: "clicks",
       page,
       pageCount,
       total: entries.length,
       entries: entries.slice(start, start + PLATFORM_ARCHIVE_PAGE_SIZE),
-      canonicalHref: buildPlatformArchiveHref(platform, page),
+      canonicalHref: buildPlatformArchiveHref(platform, page, timeframe),
     };
   },
   ["platform-archive-page"],
+  {
+    revalidate: 300,
+    tags: [ANALYTICS_TAG, "releases"],
+  },
+);
+
+const getCachedSceneArchivePage = unstable_cache(
+  async (sceneSlug: string, requestedPage: number) => {
+    const scene = getSceneDefinitionBySlug(sceneSlug);
+    if (!scene) {
+      return null;
+    }
+
+    const releases = await getSectionReleasesForInsights("top-engaged");
+    const ranked = releases
+      .map((release) => ({
+        release,
+        score: computeTrendingScore(release),
+      }))
+      .filter((entry) => {
+        if (!entry.release.genreName || entry.score <= 0) {
+          return false;
+        }
+
+        const matchedScene = matchSceneForGenre(entry.release.genreName);
+        return matchedScene?.slug === scene.slug;
+      })
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 160);
+
+    const pageCount = Math.max(1, Math.ceil(ranked.length / SIGNAL_ARCHIVE_PAGE_SIZE));
+    const page = clampPageNumber(requestedPage, pageCount);
+    const start = (page - 1) * SIGNAL_ARCHIVE_PAGE_SIZE;
+    const matchedGenres = [
+      ...new Set(ranked.map((entry) => entry.release.genreName).filter((value): value is string => Boolean(value))),
+    ].slice(0, 8);
+
+    return {
+      scene,
+      title: scene.title,
+      kicker: "Discovery scene",
+      description: scene.description,
+      matchedGenres,
+      page,
+      pageCount,
+      total: ranked.length,
+      entries: ranked.slice(start, start + SIGNAL_ARCHIVE_PAGE_SIZE),
+    };
+  },
+  ["scene-archive-page"],
   {
     revalidate: 300,
     tags: [ANALYTICS_TAG, "releases"],
@@ -2051,46 +2113,4 @@ function buildSceneDiscoveryItems(items: GenreTrendingItem[]): SceneDiscoveryIte
       count: entry.count,
       release: entry.release,
     }));
-}
-
-const SCENE_DISCOVERY_RULES = [
-  {
-    slug: "soft-focus",
-    title: "Soft focus",
-    description: "Dream-pop, shoegaze and blurred melodic releases with softer edges.",
-    keywords: ["dream pop", "shoegaze", "ethereal", "slowcore", "bedroom pop"],
-  },
-  {
-    slug: "night-drive",
-    title: "Night drive",
-    description: "Dark post-punk, synth-led and nocturnal guitar records with momentum.",
-    keywords: ["post-punk", "darkwave", "synth-pop", "new wave", "gothic rock"],
-  },
-  {
-    slug: "nervy-guitars",
-    title: "Nervy guitars",
-    description: "Math rock, emo and wiry indie bands built around tension and movement.",
-    keywords: ["math rock", "emo", "midwest emo", "post-hardcore", "art rock"],
-  },
-  {
-    slug: "quiet-drift",
-    title: "Quiet drift",
-    description: "Ambient folk, intimate songwriting and low-lit slower records.",
-    keywords: ["folk", "ambient", "singer-songwriter", "chamber pop", "indie folk"],
-  },
-  {
-    slug: "high-tension",
-    title: "High tension",
-    description: "Noise, punk and heavier guitar releases pushing harder energy.",
-    keywords: ["noise rock", "punk", "hardcore", "grunge", "noise pop"],
-  },
-] as const;
-
-function matchSceneForGenre(genre: string) {
-  const normalized = genre.toLowerCase();
-  return (
-    SCENE_DISCOVERY_RULES.find((rule) =>
-      rule.keywords.some((keyword) => normalized.includes(keyword.toLowerCase())),
-    ) || null
-  );
 }
