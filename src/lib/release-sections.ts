@@ -481,6 +481,59 @@ export async function getSectionArchivePage(
   };
 }
 
+export async function getSectionArchivePageLightweight(
+  section: ReleaseSectionKey,
+  requestedPage = 1,
+  requestedGenre?: string | null,
+  requestedView: ArchiveViewMode = "latest",
+) {
+  await ensureDatabase();
+
+  const matchedGenre = requestedGenre?.trim() || null;
+  const overscanTake = Math.max(ARCHIVE_PAGE_SIZE * 4, requestedPage * ARCHIVE_PAGE_SIZE * 3);
+  const where = buildLightweightArchiveWhere(section, matchedGenre);
+  const orderBy = getLightweightArchiveOrderBy(section, requestedView);
+
+  const [total, releases] = await Promise.all([
+    prisma.release.count({ where }),
+    prisma.release.findMany({
+      where,
+      select: releaseListingSelect,
+      orderBy,
+      take: overscanTake,
+    }),
+  ]);
+
+  const prepared = prepareDisplayReleases(releases);
+  const filteredReleases =
+    matchedGenre
+      ? prepared.filter((release) => releaseMatchesGenre(release, matchedGenre))
+      : prepared;
+  const pageCount = Math.max(1, Math.ceil(total / ARCHIVE_PAGE_SIZE));
+  const page = clampPageNumber(requestedPage, pageCount);
+  const start = (page - 1) * ARCHIVE_PAGE_SIZE;
+  const end = start + ARCHIVE_PAGE_SIZE;
+  const genres = buildSectionGenreFacets(prepared).slice(0, 24);
+
+  return {
+    ...releaseSectionDefinitions[section],
+    archiveMode: requestedView,
+    title:
+      requestedView === "trending"
+        ? `${releaseSectionDefinitions[section].title} trending`
+        : releaseSectionDefinitions[section].title,
+    description: buildArchiveDescription(section, requestedView, matchedGenre),
+    genres,
+    overallTotal: total,
+    page,
+    pageCount,
+    total,
+    selectedGenre: matchedGenre,
+    releases: filteredReleases.slice(start, end),
+    lightweight: true,
+  };
+}
+
 export async function getSectionReleasesForInsights(section: ReleaseSectionKey) {
   await ensureDatabase();
   return getSectionReleases(section);
@@ -815,6 +868,75 @@ function getTopEngagedWhere(): Prisma.ReleaseWhereInput {
       { scoreCount: { gt: 0 } },
     ],
   };
+}
+
+function buildLightweightArchiveWhere(
+  section: ReleaseSectionKey,
+  requestedGenre: string | null,
+): Prisma.ReleaseWhereInput {
+  const genreWhere =
+    requestedGenre && normalizeSearchText(requestedGenre)
+      ? {
+          genreName: {
+            contains: requestedGenre,
+            mode: "insensitive" as const,
+          },
+        }
+      : {};
+
+  if (section === "top-rated") {
+    return {
+      scoreCount: { gt: 0 },
+      ...genreWhere,
+    };
+  }
+
+  if (section === "top-engaged") {
+    return {
+      ...getTopEngagedWhere(),
+      ...genreWhere,
+    };
+  }
+
+  if (section === "albums") {
+    return {
+      releaseType: ReleaseType.ALBUM,
+      ...genreWhere,
+    };
+  }
+
+  if (section === "eps") {
+    return {
+      releaseType: ReleaseType.EP,
+      ...genreWhere,
+    };
+  }
+
+  if (section === "live") {
+    return {
+      releaseType: {
+        in: [ReleaseType.PERFORMANCE, ReleaseType.LIVE_SESSION],
+      },
+      ...genreWhere,
+    };
+  }
+
+  return genreWhere;
+}
+
+function getLightweightArchiveOrderBy(
+  section: ReleaseSectionKey,
+  requestedView: ArchiveViewMode,
+): Prisma.ReleaseOrderByWithRelationInput[] {
+  if (requestedView === "trending" || section === "top-engaged") {
+    return [{ commentCount: "desc" }, { score: "desc" }, { publishedAt: "desc" }];
+  }
+
+  if (section === "top-rated") {
+    return [{ scoreAverage: "desc" }, { scoreCount: "desc" }, { publishedAt: "desc" }];
+  }
+
+  return [{ publishedAt: "desc" }];
 }
 
 function clamp(value: number, min: number, max: number) {

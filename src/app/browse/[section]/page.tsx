@@ -10,7 +10,7 @@ import { ShareFilterLink } from "@/components/share-filter-link";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import {
-  getSectionArchivePage,
+  getSectionArchivePageLightweight,
   releaseSectionDefinitions,
   isReleaseSectionKey,
 } from "@/lib/release-sections";
@@ -95,7 +95,7 @@ export default async function BrowseSectionPage({
   const page = parsePageParam(resolvedSearchParams.page);
   const genre = parseGenreParam(resolvedSearchParams.genre);
   const view = parseArchiveViewMode(resolvedSearchParams.view);
-  let archive: Awaited<ReturnType<typeof getSectionArchivePage>> | null = null;
+  let archive: Awaited<ReturnType<typeof getSectionArchivePageLightweight>> | null = null;
   let archiveLoadError = false;
   let refreshFailed = false;
 
@@ -116,7 +116,7 @@ export default async function BrowseSectionPage({
   }
 
   try {
-    archive = await getSectionArchivePage(section, page, genre, view);
+    archive = await getSectionArchivePageLightweight(section, page, genre, view);
   } catch (error) {
     archiveLoadError = true;
     console.error(`Archive page failed to load for section ${section}.`, error);

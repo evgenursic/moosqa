@@ -12,7 +12,7 @@ import { ShareFilterLink } from "@/components/share-filter-link";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { buildTrendingGenreHref, slugifyGenre } from "@/lib/archive-links";
-import { getSectionArchivePage, getSearchGenreFacets } from "@/lib/release-sections";
+import { getSectionArchivePageLightweight, getSearchGenreFacets } from "@/lib/release-sections";
 import { getSiteUrl } from "@/lib/site";
 import { refreshHomepageData, shouldBlockForHomepageRefresh } from "@/lib/sync-releases";
 
@@ -97,7 +97,7 @@ async function TrendingGenreContent({
     notFound();
   }
 
-  const archive = await getSectionArchivePage("top-engaged", page, matchedGenre, "trending");
+  const archive = await getSectionArchivePageLightweight("top-engaged", page, matchedGenre, "trending");
   const canonicalHref = page > 1 ? `${buildTrendingGenreHref(matchedGenre)}?page=${archive.page}` : buildTrendingGenreHref(matchedGenre);
 
   return (
