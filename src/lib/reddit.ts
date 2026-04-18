@@ -15,7 +15,7 @@ const BROWSER_USER_AGENT =
 const REDDIT_FETCH_TIMEOUT_MS = 10000;
 const REDDIT_PAGE_LIMIT = 100;
 const REDDIT_LOOKBACK_DAYS = 4;
-const REDDIT_MAX_PAGES = 5;
+const REDDIT_MAX_PAGES = 8;
 
 type RedditListing = {
   data?: {
@@ -599,7 +599,6 @@ export function shouldKeepReleaseRecord(input: {
     "playlist",
     "new music friday",
     "catch-up",
-    "magazine",
     "podcast",
     "ama",
   ];

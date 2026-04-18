@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
 import { ReleaseType } from "@/generated/prisma/enums";
-import { ListeningLinks } from "@/components/listening-links";
-import { RatingMeter } from "@/components/rating-meter";
 import { BackToHomeButton } from "@/components/back-to-home-button";
+import { ListeningLinks } from "@/components/listening-links";
 import { MobileReleaseNav } from "@/components/mobile-release-nav";
-import { ReleasePublicCounters } from "@/components/release-public-counters";
+import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
+import { ReleasePublicCounters } from "@/components/release-public-counters";
 import { TopEngagedVisual } from "@/components/top-engaged-visual";
 import { getSiteUrl } from "@/lib/site";
 import { getReleaseBySlug } from "@/lib/sync-releases";
@@ -99,20 +99,18 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
   }
 
   if (!release) {
-    return (
-      <main className="min-h-screen px-4 py-6 md:px-8">
-        <div className="mx-auto max-w-[1500px] bg-[var(--color-paper)] px-2 md:px-4">
-          <div className="border-b border-[var(--color-line)] py-10">
-            <BackToHomeButton className="section-kicker inline-flex cursor-pointer text-black/43 transition hover:text-[var(--color-accent-strong)]" />
-            <div className="mt-6 border border-[var(--color-line)] bg-[var(--color-panel)] p-6 text-sm leading-7 text-black/63">
-              This release page is temporarily unavailable. Reload in a moment.
-            </div>
-          </div>
-        </div>
-      </main>
-    );
+    return <UnavailableReleasePage message="This release page is temporarily unavailable. Reload in a moment." />;
   }
 
+  try {
+    return renderReleasePage(release);
+  } catch (error) {
+    console.error(`Release page render failed for slug ${slug}.`, error);
+    return <UnavailableReleasePage message="This release page is temporarily unavailable. Reload in a moment." />;
+  }
+}
+
+function renderReleasePage(release: NonNullable<Awaited<ReturnType<typeof getReleaseBySlug>>>) {
   const releaseDateValue = release.releaseDate ? new Date(release.releaseDate) : null;
   const publishedAtValue = new Date(release.publishedAt);
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
@@ -203,6 +201,7 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
               <span>{displayGenre}</span>
               {release.labelName ? <span>{release.labelName}</span> : null}
             </div>
+
             <div className="max-w-4xl border border-[var(--color-line)] bg-[var(--color-panel)] p-6 text-sm leading-7 text-black/66">
               <p className="mb-3 text-[11px] uppercase tracking-[0.18em] text-black/45">Summary</p>
               <p>
@@ -298,6 +297,21 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
               initialCount={release.scoreCount}
             />
           </section>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function UnavailableReleasePage({ message }: { message: string }) {
+  return (
+    <main className="min-h-screen px-4 py-6 md:px-8">
+      <div className="mx-auto max-w-[1500px] bg-[var(--color-paper)] px-2 md:px-4">
+        <div className="border-b border-[var(--color-line)] py-10">
+          <BackToHomeButton className="section-kicker inline-flex cursor-pointer text-black/43 transition hover:text-[var(--color-accent-strong)]" />
+          <div className="mt-6 border border-[var(--color-line)] bg-[var(--color-panel)] p-6 text-sm leading-7 text-black/63">
+            {message}
+          </div>
         </div>
       </div>
     </main>
