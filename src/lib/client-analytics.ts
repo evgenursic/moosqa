@@ -137,10 +137,14 @@ export function restoreScrollPositionForCurrentPage() {
     return false;
   }
 
+  const previousScrollRestoration = window.history.scrollRestoration;
+  window.history.scrollRestoration = "manual";
+  window.scrollTo({ top: parsed, behavior: "auto" });
   window.requestAnimationFrame(() => {
     window.scrollTo({ top: parsed, behavior: "auto" });
     window.requestAnimationFrame(() => {
       window.scrollTo({ top: parsed, behavior: "auto" });
+      window.history.scrollRestoration = previousScrollRestoration;
     });
   });
   safeSessionStorageRemove(key);

@@ -25,17 +25,7 @@ export function BackToHomeButton({
   }, [prefetchTarget, router]);
 
   function handleNavigateHome() {
-    if (sanitizedFallbackHref) {
-      router.push(sanitizedFallbackHref);
-      return;
-    }
-
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-      return;
-    }
-
-    router.push("/");
+    router.push(sanitizedFallbackHref || "/", { scroll: false });
   }
 
   function prefetchHome() {

@@ -59,17 +59,7 @@ export function MobileReleaseNav({ title, fallbackHref = null }: MobileReleaseNa
   }, []);
 
   function handleBack() {
-    if (sanitizedFallbackHref) {
-      router.push(sanitizedFallbackHref);
-      return;
-    }
-
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-      return;
-    }
-
-    router.push("/");
+    router.push(sanitizedFallbackHref || "/", { scroll: false });
   }
 
   return (
@@ -94,6 +84,7 @@ export function MobileReleaseNav({ title, fallbackHref = null }: MobileReleaseNa
 
         <Link
           href={sanitizedFallbackHref || "/"}
+          scroll={false}
           className="section-kicker inline-flex items-center text-[var(--color-accent-strong)]"
         >
           MooSQA

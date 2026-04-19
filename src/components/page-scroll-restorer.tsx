@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 
 import { restoreScrollPositionForCurrentPage } from "@/lib/client-analytics";
 
 export function PageScrollRestorer() {
-  useEffect(() => {
+  useLayoutEffect(() => {
     restoreScrollPositionForCurrentPage();
   }, []);
 
