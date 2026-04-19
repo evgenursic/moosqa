@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 
 import { ReleaseType } from "@/generated/prisma/enums";
 import { BackToHomeButton } from "@/components/back-to-home-button";
+import { ClientWidgetBoundary } from "@/components/client-widget-boundary";
 import { ListeningLinks } from "@/components/listening-links";
 import { MobileReleaseNav } from "@/components/mobile-release-nav";
 import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleasePublicCounters } from "@/components/release-public-counters";
 import { TopEngagedVisual } from "@/components/top-engaged-visual";
+import { sanitizeExternalUrl, sanitizeInternalHref } from "@/lib/navigation";
 import { getSiteUrl } from "@/lib/site";
 import { getReleaseBySlug } from "@/lib/sync-releases";
 import {
@@ -22,6 +24,9 @@ import {
 type ReleasePageProps = {
   params: Promise<{
     slug: string;
+  }>;
+  searchParams?: Promise<{
+    from?: string | string[];
   }>;
 };
 
@@ -88,8 +93,14 @@ export async function generateMetadata({ params }: ReleasePageProps): Promise<Me
   }
 }
 
-export default async function ReleasePage({ params }: ReleasePageProps) {
+export default async function ReleasePage({ params, searchParams }: ReleasePageProps) {
   const { slug } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const fallbackHref = sanitizeInternalHref(
+    Array.isArray(resolvedSearchParams?.from)
+      ? resolvedSearchParams?.from[0]
+      : resolvedSearchParams?.from || null,
+  );
   let release: Awaited<ReturnType<typeof getReleaseBySlug>> | null = null;
 
   try {
@@ -103,14 +114,17 @@ export default async function ReleasePage({ params }: ReleasePageProps) {
   }
 
   try {
-    return renderReleasePage(release);
+    return renderReleasePage(release, fallbackHref);
   } catch (error) {
     console.error(`Release page render failed for slug ${slug}.`, error);
     return <UnavailableReleasePage message="This release page is temporarily unavailable. Reload in a moment." />;
   }
 }
 
-function renderReleasePage(release: NonNullable<Awaited<ReturnType<typeof getReleaseBySlug>>>) {
+function renderReleasePage(
+  release: NonNullable<Awaited<ReturnType<typeof getReleaseBySlug>>>,
+  fallbackHref: string | null,
+) {
   const releaseDateValue = release.releaseDate ? new Date(release.releaseDate) : null;
   const publishedAtValue = new Date(release.publishedAt);
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
@@ -123,6 +137,8 @@ function renderReleasePage(release: NonNullable<Awaited<ReturnType<typeof getRel
   const redditDateLabel = formatRedditDateLabel(publishedAtValue);
   const releaseUrl = new URL(`/releases/${release.slug}`, getSiteUrl()).toString();
   const image = release.imageUrl || release.thumbnailUrl || undefined;
+  const originalSourceUrl = sanitizeExternalUrl(release.sourceUrl);
+  const redditThreadUrl = sanitizeExternalUrl(release.redditPermalink);
   const schemaType =
     release.releaseType === ReleaseType.ALBUM || release.releaseType === ReleaseType.EP
       ? "MusicAlbum"
@@ -178,11 +194,18 @@ function renderReleasePage(release: NonNullable<Awaited<ReturnType<typeof getRel
         suppressHydrationWarning
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <MobileReleaseNav title={releaseHeading} />
+      <ClientWidgetBoundary widgetName="mobile-release-nav">
+        <MobileReleaseNav title={releaseHeading} fallbackHref={fallbackHref} />
+      </ClientWidgetBoundary>
       <div className="mx-auto max-w-[1500px] bg-[var(--color-paper)] px-2 md:px-4">
         <div className="grid gap-10 border-b border-[var(--color-line)] py-6 pt-12 lg:grid-cols-[1.05fr_0.95fr] lg:pt-6">
           <section className="space-y-6">
-            <BackToHomeButton className="section-kicker inline-flex cursor-pointer text-black/43 transition hover:text-[var(--color-accent-strong)]" />
+            <ClientWidgetBoundary widgetName="back-to-home">
+              <BackToHomeButton
+                fallbackHref={fallbackHref}
+                className="section-kicker inline-flex cursor-pointer text-black/43 transition hover:text-[var(--color-accent-strong)]"
+              />
+            </ClientWidgetBoundary>
 
             <div>
               <p className="section-kicker text-black/43">{formatReleaseTypeLabel(release.releaseType)}</p>
@@ -232,49 +255,60 @@ function renderReleasePage(release: NonNullable<Awaited<ReturnType<typeof getRel
               negativeReactionCount={release.negativeReactionCount}
             />
 
-            <ListeningLinks
-              release={release}
-              releaseId={release.id}
-              sourcePath={`/releases/${release.slug}`}
-            />
+            <ClientWidgetBoundary
+              widgetName="listening-links"
+              fallback={<div className="section-kicker text-black/45">Listening links are temporarily unavailable.</div>}
+            >
+              <ListeningLinks
+                release={release}
+                releaseId={release.id}
+                sourcePath={`/releases/${release.slug}`}
+              />
+            </ClientWidgetBoundary>
 
             <div className="flex flex-wrap gap-3">
-              <a
-                href={release.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-4 py-3 text-xs uppercase tracking-[0.18em] text-white transition hover:opacity-92"
-              >
-                Open original source
-              </a>
-              <a
-                href={release.redditPermalink}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center border border-[var(--color-line)] px-4 py-3 text-xs uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:border-[var(--color-ink)]"
-              >
-                Open Reddit thread
-              </a>
+              {originalSourceUrl ? (
+                <a
+                  href={originalSourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-4 py-3 text-xs uppercase tracking-[0.18em] text-white transition hover:opacity-92"
+                >
+                  Open original source
+                </a>
+              ) : null}
+              {redditThreadUrl ? (
+                <a
+                  href={redditThreadUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center border border-[var(--color-line)] px-4 py-3 text-xs uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:border-[var(--color-ink)]"
+                >
+                  Open Reddit thread
+                </a>
+              ) : null}
             </div>
           </section>
 
           <section className="space-y-6">
-            <ReleaseArtwork
-              releaseId={release.id}
-              title={release.title}
-              artistName={release.artistName}
-              projectTitle={release.projectTitle}
-              imageUrl={release.imageUrl || null}
-              thumbnailUrl={release.thumbnailUrl || null}
-              sourceUrl={release.sourceUrl}
-              youtubeUrl={release.youtubeUrl || null}
-              youtubeMusicUrl={release.youtubeMusicUrl || null}
-              bandcampUrl={release.bandcampUrl || null}
-              officialWebsiteUrl={release.officialWebsiteUrl || null}
-              officialStoreUrl={release.officialStoreUrl || null}
-              genreName={displayGenre}
-              imageClassName="aspect-[4/3]"
-            />
+            <ClientWidgetBoundary widgetName="release-artwork">
+              <ReleaseArtwork
+                releaseId={release.id}
+                title={release.title}
+                artistName={release.artistName}
+                projectTitle={release.projectTitle}
+                imageUrl={release.imageUrl || null}
+                thumbnailUrl={release.thumbnailUrl || null}
+                sourceUrl={release.sourceUrl}
+                youtubeUrl={release.youtubeUrl || null}
+                youtubeMusicUrl={release.youtubeMusicUrl || null}
+                bandcampUrl={release.bandcampUrl || null}
+                officialWebsiteUrl={release.officialWebsiteUrl || null}
+                officialStoreUrl={release.officialStoreUrl || null}
+                genreName={displayGenre}
+                imageClassName="aspect-[4/3]"
+              />
+            </ClientWidgetBoundary>
 
             <div className="border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
               <p className="section-kicker text-black/45">At a glance</p>
@@ -291,11 +325,16 @@ function renderReleasePage(release: NonNullable<Awaited<ReturnType<typeof getRel
               </div>
             </div>
 
-            <RatingMeter
-              releaseId={release.id}
-              initialAverage={release.scoreAverage}
-              initialCount={release.scoreCount}
-            />
+            <ClientWidgetBoundary
+              widgetName="rating-meter"
+              fallback={<div className="section-kicker text-black/45">Ratings are temporarily unavailable.</div>}
+            >
+              <RatingMeter
+                releaseId={release.id}
+                initialAverage={release.scoreAverage}
+                initialCount={release.scoreCount}
+              />
+            </ClientWidgetBoundary>
           </section>
         </div>
       </div>

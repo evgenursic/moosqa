@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { rememberScrollPosition, trackClientAnalyticsEvent } from "@/lib/client-analytics";
+import { sanitizeInternalHref } from "@/lib/navigation";
 
 type ReleaseLinkProps = {
   releaseId?: string;
@@ -81,23 +82,4 @@ export function buildReleaseHref(slug: string, fromHref?: string | null) {
 
   const query = params.toString();
   return query ? `/releases/${slug}?${query}` : `/releases/${slug}`;
-}
-
-export function sanitizeInternalHref(value: string | null | undefined) {
-  const normalized = value?.trim() || "";
-  if (!normalized || !normalized.startsWith("/")) {
-    return null;
-  }
-
-  return normalized;
-}
-
-export function getPrefetchTarget(value: string | null | undefined) {
-  const href = sanitizeInternalHref(value);
-  if (!href) {
-    return "/";
-  }
-
-  const [pathWithQuery] = href.split("#");
-  return pathWithQuery || "/";
 }
