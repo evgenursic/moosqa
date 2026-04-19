@@ -1,13 +1,13 @@
 import { computeTrendingScore } from "@/lib/trending-score";
 
 type ReleasePublicCountersProps = {
-  publishedAt?: Date;
-  analyticsUpdatedAt?: Date | null;
-  openCount: number;
-  listenClickCount: number;
-  shareCount: number;
-  positiveReactionCount: number;
-  negativeReactionCount: number;
+  publishedAt?: Date | string | null;
+  analyticsUpdatedAt?: Date | string | null;
+  openCount: number | null | undefined;
+  listenClickCount: number | null | undefined;
+  shareCount: number | null | undefined;
+  positiveReactionCount: number | null | undefined;
+  negativeReactionCount: number | null | undefined;
 };
 
 export function ReleasePublicCounters({
@@ -19,31 +19,36 @@ export function ReleasePublicCounters({
   positiveReactionCount,
   negativeReactionCount,
 }: ReleasePublicCountersProps) {
+  const safeOpenCount = sanitizeMetric(openCount);
+  const safeListenClickCount = sanitizeMetric(listenClickCount);
+  const safeShareCount = sanitizeMetric(shareCount);
+  const safePositiveReactionCount = sanitizeMetric(positiveReactionCount);
+  const safeNegativeReactionCount = sanitizeMetric(negativeReactionCount);
   const trendScore = Math.round(
     computeTrendingScore({
       publishedAt,
       analyticsUpdatedAt,
-      openCount,
-      listenClickCount,
-      shareCount,
-      positiveReactionCount,
-      negativeReactionCount,
+      openCount: safeOpenCount,
+      listenClickCount: safeListenClickCount,
+      shareCount: safeShareCount,
+      positiveReactionCount: safePositiveReactionCount,
+      negativeReactionCount: safeNegativeReactionCount,
     }),
   );
   const audienceActions =
-    openCount +
-    listenClickCount +
-    shareCount +
-    positiveReactionCount +
-    negativeReactionCount;
+    safeOpenCount +
+    safeListenClickCount +
+    safeShareCount +
+    safePositiveReactionCount +
+    safeNegativeReactionCount;
   const items = [
     { label: "Trend score", value: trendScore },
     { label: "Audience actions", value: audienceActions },
-    { label: "Opens", value: openCount },
-    { label: "Listen clicks", value: listenClickCount },
-    { label: "Shares", value: shareCount },
-    { label: "Likes", value: positiveReactionCount },
-    { label: "Dislikes", value: negativeReactionCount },
+    { label: "Opens", value: safeOpenCount },
+    { label: "Listen clicks", value: safeListenClickCount },
+    { label: "Shares", value: safeShareCount },
+    { label: "Likes", value: safePositiveReactionCount },
+    { label: "Dislikes", value: safeNegativeReactionCount },
   ];
 
   return (
@@ -59,4 +64,12 @@ export function ReleasePublicCounters({
       </div>
     </div>
   );
+}
+
+function sanitizeMetric(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value) || Number.isNaN(value)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.round(value));
 }

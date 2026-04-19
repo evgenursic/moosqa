@@ -245,15 +245,7 @@ function renderReleasePage(
               commentCount={release.commentCount}
             />
 
-            <ReleasePublicCounters
-              publishedAt={release.publishedAt}
-              analyticsUpdatedAt={release.analyticsUpdatedAt}
-              openCount={release.openCount}
-              listenClickCount={release.listenClickCount}
-              shareCount={release.shareCount}
-              positiveReactionCount={release.positiveReactionCount}
-              negativeReactionCount={release.negativeReactionCount}
-            />
+            {renderReleasePublicCounters(release)}
 
             <ClientWidgetBoundary
               widgetName="listening-links"
@@ -340,6 +332,31 @@ function renderReleasePage(
       </div>
     </main>
   );
+}
+
+function renderReleasePublicCounters(
+  release: NonNullable<Awaited<ReturnType<typeof getReleaseBySlug>>>,
+) {
+  try {
+    return (
+      <ReleasePublicCounters
+        publishedAt={release.publishedAt}
+        analyticsUpdatedAt={release.analyticsUpdatedAt}
+        openCount={release.openCount}
+        listenClickCount={release.listenClickCount}
+        shareCount={release.shareCount}
+        positiveReactionCount={release.positiveReactionCount}
+        negativeReactionCount={release.negativeReactionCount}
+      />
+    );
+  } catch (error) {
+    console.error(`Release public counters failed for slug ${release.slug}.`, error);
+    return (
+      <div className="section-kicker text-black/45">
+        Audience signals are temporarily unavailable.
+      </div>
+    );
+  }
 }
 
 function UnavailableReleasePage({ message }: { message: string }) {
