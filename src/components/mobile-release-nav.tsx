@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
+import { prepareAnchoredScrollRestore } from "@/lib/client-analytics";
 import { getPrefetchTarget, sanitizeInternalHref } from "@/lib/navigation";
 
 type MobileReleaseNavProps = {
@@ -59,7 +60,20 @@ export function MobileReleaseNav({ title, fallbackHref = null }: MobileReleaseNa
   }, []);
 
   function handleBack() {
-    router.push(sanitizedFallbackHref || "/", { scroll: false });
+    const targetHref = sanitizedFallbackHref || "/";
+    if (targetHref.includes("#") && typeof window !== "undefined") {
+      // Next 16 can duplicate hash fragments here, so restore against the path first and add the hash after mount.
+      const navigationTarget = prepareAnchoredScrollRestore(targetHref);
+      if (navigationTarget) {
+        router.push(navigationTarget, { scroll: false });
+        return;
+      }
+
+      window.location.assign(targetHref);
+      return;
+    }
+
+    router.push(targetHref, { scroll: false });
   }
 
   return (

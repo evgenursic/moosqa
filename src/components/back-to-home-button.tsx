@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+import { prepareAnchoredScrollRestore } from "@/lib/client-analytics";
 import { getPrefetchTarget, sanitizeInternalHref } from "@/lib/navigation";
 
 type BackToHomeButtonProps = {
@@ -25,7 +26,20 @@ export function BackToHomeButton({
   }, [prefetchTarget, router]);
 
   function handleNavigateHome() {
-    router.push(sanitizedFallbackHref || "/", { scroll: false });
+    const targetHref = sanitizedFallbackHref || "/";
+    if (targetHref.includes("#") && typeof window !== "undefined") {
+      // Next 16 can duplicate hash fragments here, so restore against the path first and add the hash after mount.
+      const navigationTarget = prepareAnchoredScrollRestore(targetHref);
+      if (navigationTarget) {
+        router.push(navigationTarget, { scroll: false });
+        return;
+      }
+
+      window.location.assign(targetHref);
+      return;
+    }
+
+    router.push(targetHref, { scroll: false });
   }
 
   function prefetchHome() {

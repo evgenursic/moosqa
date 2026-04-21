@@ -26,6 +26,7 @@ type AnalyticsPayload = {
 };
 
 const DEVICE_STORAGE_KEY = "moosqa:device-key";
+const PENDING_ANCHORED_HREF_KEY = "moosqa:pending-anchored-href";
 
 export function getClientDeviceKey() {
   if (typeof window === "undefined") {
@@ -140,6 +141,7 @@ export function restoreScrollPositionForCurrentPage() {
   const previousScrollRestoration = window.history.scrollRestoration;
   window.history.scrollRestoration = "manual";
   window.scrollTo({ top: parsed, behavior: "auto" });
+  restorePendingAnchoredHref();
   window.requestAnimationFrame(() => {
     window.scrollTo({ top: parsed, behavior: "auto" });
     window.requestAnimationFrame(() => {
@@ -151,6 +153,23 @@ export function restoreScrollPositionForCurrentPage() {
   return true;
 }
 
+export function prepareAnchoredScrollRestore(targetHref: string) {
+  if (typeof window === "undefined" || !targetHref.includes("#")) {
+    return null;
+  }
+
+  const [pathTarget] = targetHref.split("#");
+  const navigationTarget = pathTarget || "/";
+  const storedScrollPosition = safeSessionStorageGet(buildScrollStorageKey(targetHref));
+  if (!storedScrollPosition) {
+    return null;
+  }
+
+  safeSessionStorageSet(buildScrollStorageKey(navigationTarget), storedScrollPosition);
+  safeSessionStorageSet(PENDING_ANCHORED_HREF_KEY, targetHref);
+  return navigationTarget;
+}
+
 function buildScrollStorageKey(targetHref?: string | null) {
   const rawValue = targetHref?.trim()
     || (typeof window !== "undefined"
@@ -158,4 +177,21 @@ function buildScrollStorageKey(targetHref?: string | null) {
       : "/");
 
   return `moosqa:scroll:${rawValue}`;
+}
+
+function restorePendingAnchoredHref() {
+  const pendingHref = safeSessionStorageGet(PENDING_ANCHORED_HREF_KEY);
+  if (!pendingHref || !pendingHref.includes("#")) {
+    return;
+  }
+
+  const [pathTarget] = pendingHref.split("#");
+  const currentTarget = `${window.location.pathname}${window.location.search}`;
+  if ((pathTarget || "/") !== currentTarget) {
+    return;
+  }
+
+  window.history.replaceState(window.history.state, "", pendingHref);
+  safeSessionStorageRemove(PENDING_ANCHORED_HREF_KEY);
+  safeSessionStorageRemove(buildScrollStorageKey(pendingHref));
 }

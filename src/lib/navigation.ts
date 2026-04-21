@@ -1,10 +1,19 @@
 export function sanitizeInternalHref(value: string | null | undefined) {
   const normalized = value?.trim() || "";
-  if (!normalized || !normalized.startsWith("/")) {
+  if (!normalized || !normalized.startsWith("/") || normalized.startsWith("//")) {
     return null;
   }
 
-  return normalized;
+  try {
+    const parsed = new URL(normalized, "https://moosqa.local");
+    if (parsed.origin !== "https://moosqa.local") {
+      return null;
+    }
+
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
 }
 
 export function getPrefetchTarget(value: string | null | undefined) {
