@@ -562,13 +562,21 @@ function inferOutletName(domain: string | undefined) {
   }
 
   const normalized = domain.replace(/^www\./, "");
+  if (normalized === "music.youtube.com") {
+    return "YouTube Music";
+  }
+  if (normalized === "youtube.com" || normalized.endsWith(".youtube.com") || normalized === "youtu.be") {
+    return "YouTube";
+  }
+  if (normalized === "bandcamp.com" || normalized.endsWith(".bandcamp.com")) {
+    return "Bandcamp";
+  }
+  if (normalized === "soundcloud.com" || normalized.endsWith(".soundcloud.com")) {
+    return "SoundCloud";
+  }
+
   const labels: Record<string, string> = {
-    "youtube.com": "YouTube",
-    "youtu.be": "YouTube",
-    "music.youtube.com": "YouTube Music",
     "open.spotify.com": "Spotify",
-    "soundcloud.com": "SoundCloud",
-    "bandcamp.com": "Bandcamp",
     "music.apple.com": "Apple Music",
     "i.redd.it": "Reddit image",
   };
