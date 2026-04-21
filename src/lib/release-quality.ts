@@ -44,6 +44,18 @@ export type ReleaseQualityIssue = {
   label: string;
 };
 
+const QUALITY_ISSUE_PRIORITY_WEIGHT: Record<ReleaseQualityIssueCode, number> = {
+  missing_artwork: 32,
+  basic_artwork: 12,
+  missing_genre: 30,
+  basic_genre: 14,
+  low_genre_confidence: 18,
+  missing_links: 22,
+  partial_links: 8,
+  missing_release_date: 14,
+  low_summary_quality: 18,
+};
+
 export type PublicMetadataStatus = {
   label: string;
   tone: "complete" | "strong" | "building";
@@ -131,6 +143,13 @@ export function getReleaseQualityIssues(input: ReleaseQualityInput): ReleaseQual
   }
 
   return issues;
+}
+
+export function getReleaseQualityIssuePriority(input: ReleaseQualityInput) {
+  return getReleaseQualityIssues(input).reduce(
+    (priority, issue) => priority + QUALITY_ISSUE_PRIORITY_WEIGHT[issue.code],
+    0,
+  );
 }
 
 export function getPublicMetadataStatus(input: ReleaseQualityInput): PublicMetadataStatus {
@@ -304,33 +323,7 @@ function getQualityPriority(
     qualityScore: number;
   },
 ) {
-  let priority = 100 - snapshot.qualityScore;
-
-  if (snapshot.artworkStatus === ArtworkStatus.MISSING) {
-    priority += 26;
-  }
-
-  if (snapshot.genreStatus === GenreStatus.MISSING) {
-    priority += 24;
-  } else if (snapshot.genreStatus === GenreStatus.BASIC) {
-    priority += 10;
-  }
-
-  if ((input.genreConfidence ?? 100) < 55) {
-    priority += 18;
-  } else if ((input.genreConfidence ?? 100) < 72) {
-    priority += 10;
-  }
-
-  if (snapshot.linkStatus === LinkStatus.MISSING) {
-    priority += 18;
-  } else if (snapshot.linkStatus === LinkStatus.PARTIAL) {
-    priority += 8;
-  }
-
-  if (!input.releaseDate) {
-    priority += 12;
-  }
+  let priority = 100 - snapshot.qualityScore + getReleaseQualityIssuePriority(input);
 
   const ageHours = input.publishedAt
     ? (Date.now() - input.publishedAt.getTime()) / (1000 * 60 * 60)
