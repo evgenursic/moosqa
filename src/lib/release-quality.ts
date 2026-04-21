@@ -28,6 +28,22 @@ export type ReleaseQualitySnapshot = {
   priorityScore: number;
 };
 
+export type ReleaseQualityIssueCode =
+  | "missing_artwork"
+  | "basic_artwork"
+  | "missing_genre"
+  | "basic_genre"
+  | "low_genre_confidence"
+  | "missing_links"
+  | "partial_links"
+  | "missing_release_date"
+  | "low_summary_quality";
+
+export type ReleaseQualityIssue = {
+  code: ReleaseQualityIssueCode;
+  label: string;
+};
+
 export type PublicMetadataStatus = {
   label: string;
   tone: "complete" | "strong" | "building";
@@ -76,6 +92,45 @@ export function isWeakQualityRelease(input: ReleaseQualityInput) {
     (input.genreConfidence ?? 0) < 70 ||
     (input.summaryQualityScore ?? 100) < 72
   );
+}
+
+export function getReleaseQualityIssues(input: ReleaseQualityInput): ReleaseQualityIssue[] {
+  const artworkStatus = getArtworkStatus(input);
+  const genreStatus = getGenreStatus(input);
+  const linkStatus = getLinkStatus(input);
+  const issues: ReleaseQualityIssue[] = [];
+
+  if (artworkStatus === ArtworkStatus.MISSING) {
+    issues.push({ code: "missing_artwork", label: "Missing artwork" });
+  } else if (artworkStatus === ArtworkStatus.BASIC) {
+    issues.push({ code: "basic_artwork", label: "Basic artwork only" });
+  }
+
+  if (genreStatus === GenreStatus.MISSING) {
+    issues.push({ code: "missing_genre", label: "Missing genre" });
+  } else if (genreStatus === GenreStatus.BASIC) {
+    issues.push({ code: "basic_genre", label: "Generic genre" });
+  }
+
+  if ((input.genreConfidence ?? 100) < 70) {
+    issues.push({ code: "low_genre_confidence", label: "Low genre confidence" });
+  }
+
+  if (linkStatus === LinkStatus.MISSING) {
+    issues.push({ code: "missing_links", label: "Missing listen/buy links" });
+  } else if (linkStatus === LinkStatus.PARTIAL) {
+    issues.push({ code: "partial_links", label: "Partial listen/buy links" });
+  }
+
+  if (!input.releaseDate) {
+    issues.push({ code: "missing_release_date", label: "Missing release date" });
+  }
+
+  if ((input.summaryQualityScore ?? 100) < 72) {
+    issues.push({ code: "low_summary_quality", label: "Low summary quality" });
+  }
+
+  return issues;
 }
 
 export function getPublicMetadataStatus(input: ReleaseQualityInput): PublicMetadataStatus {

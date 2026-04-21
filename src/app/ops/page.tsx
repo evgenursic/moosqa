@@ -294,6 +294,22 @@ async function OpsContent({ searchParams }: OpsPageProps) {
         </section>
 
         <section className="border-t border-[var(--color-line)] py-8">
+          <PanelCard title="Weak-card reason pressure">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {dashboard.quality.weakIssueBreakdown.slice(0, 8).map((issue) => (
+                <div
+                  key={issue.code}
+                  className="border border-[var(--color-line)] bg-[var(--color-paper)] p-3"
+                >
+                  <p className="section-kicker text-black/43">{issue.label}</p>
+                  <p className="mt-2 text-3xl text-[var(--color-ink)] serif-display">{issue.count}</p>
+                </div>
+              ))}
+            </div>
+          </PanelCard>
+        </section>
+
+        <section className="border-t border-[var(--color-line)] py-8">
           <PanelCard title="Alert delivery log">
             <div className="grid gap-3">
               {dashboard.alertDeliveries.map((delivery) => (

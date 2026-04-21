@@ -4,6 +4,7 @@ import { ArtworkStatus, GenreStatus, LinkStatus, ReleaseType } from "@/generated
 import { ensureDatabase } from "@/lib/database";
 import { isSpecificGenreProfile } from "@/lib/genre-profile";
 import { prisma } from "@/lib/prisma";
+import { getReleaseQualityIssues, type ReleaseQualityIssueCode } from "@/lib/release-quality";
 import { resolveBestGenreProfile } from "@/lib/genre-resolution";
 import { normalizeSearchText } from "@/lib/release-search";
 import { buildSummaryAudit } from "@/lib/summary-quality";
@@ -21,6 +22,11 @@ export type QualityDashboardData = {
   artwork: Record<ArtworkStatus, number>;
   genre: Record<GenreStatus, number>;
   links: Record<LinkStatus, number>;
+  weakIssueBreakdown: Array<{
+    code: ReleaseQualityIssueCode;
+    label: string;
+    count: number;
+  }>;
   genreAudit: {
     missing: number;
     generic: number;
@@ -69,11 +75,15 @@ export type QualityDashboardData = {
     artistName: string | null;
     projectTitle: string | null;
     qualityScore: number;
+    genreName: string | null;
+    genreConfidence: number;
+    summaryQualityScore: number;
     artworkStatus: ArtworkStatus;
     genreStatus: GenreStatus;
     linkStatus: LinkStatus;
     releaseDate: Date | null;
     publishedAt: Date;
+    qualityIssues: string[];
   }>;
 };
 
@@ -93,6 +103,7 @@ const getCachedQualityDashboardData = unstable_cache(
       linkGroups,
       retryQueueRow,
       recentWeakCards,
+      weakIssueRows,
       genreAuditRows,
       summaryAuditRows,
     ] = await Promise.all([
@@ -147,14 +158,54 @@ const getCachedQualityDashboardData = unstable_cache(
           artistName: true,
           projectTitle: true,
           qualityScore: true,
+          genreName: true,
+          genreConfidence: true,
+          summaryQualityScore: true,
           artworkStatus: true,
           genreStatus: true,
           linkStatus: true,
+          releaseType: true,
+          imageUrl: true,
+          thumbnailUrl: true,
+          youtubeUrl: true,
+          youtubeMusicUrl: true,
+          bandcampUrl: true,
+          officialWebsiteUrl: true,
+          officialStoreUrl: true,
           releaseDate: true,
           publishedAt: true,
         },
         orderBy: [{ qualityScore: "asc" }, { publishedAt: "desc" }],
         take: 24,
+      }),
+      prisma.release.findMany({
+        where: {
+          OR: [
+            { artworkStatus: { not: ArtworkStatus.STRONG } },
+            { genreStatus: { not: GenreStatus.STRONG } },
+            { linkStatus: { not: LinkStatus.STRONG } },
+            { releaseDate: null },
+            { genreConfidence: { lt: 70 } },
+            { summaryQualityScore: { lt: 72 } },
+          ],
+        },
+        select: {
+          releaseType: true,
+          genreName: true,
+          genreConfidence: true,
+          imageUrl: true,
+          thumbnailUrl: true,
+          youtubeUrl: true,
+          youtubeMusicUrl: true,
+          bandcampUrl: true,
+          officialWebsiteUrl: true,
+          officialStoreUrl: true,
+          releaseDate: true,
+          publishedAt: true,
+          summaryQualityScore: true,
+        },
+        orderBy: [{ publishedAt: "desc" }],
+        take: 320,
       }),
       prisma.release.findMany({
         where: {
@@ -205,6 +256,7 @@ const getCachedQualityDashboardData = unstable_cache(
     const retryQueue = parseRetryQueueCount(retryQueueRow?.value || null);
     const genreAudit = buildGenreAudit(genreAuditRows);
     const summaryAudit = buildSummaryAudit(summaryAuditRows);
+    const weakIssueBreakdown = buildWeakIssueBreakdown(weakIssueRows);
 
     return {
       totals: {
@@ -228,9 +280,13 @@ const getCachedQualityDashboardData = unstable_cache(
         linkGroups,
         (group) => group.linkStatus,
       ),
+      weakIssueBreakdown,
       genreAudit,
       summaryAudit,
-      recentWeakCards,
+      recentWeakCards: recentWeakCards.map((release) => ({
+        ...release,
+        qualityIssues: getReleaseQualityIssues(release).map((issue) => issue.label),
+      })),
     };
   },
   ["quality-dashboard"],
@@ -272,6 +328,34 @@ function parseRetryQueueCount(rawValue: string | null) {
   } catch {
     return 0;
   }
+}
+
+function buildWeakIssueBreakdown(
+  rows: Array<Parameters<typeof getReleaseQualityIssues>[0]>,
+): QualityDashboardData["weakIssueBreakdown"] {
+  const issueMap = new Map<ReleaseQualityIssueCode, { label: string; count: number }>();
+
+  for (const row of rows) {
+    for (const issue of getReleaseQualityIssues(row)) {
+      const current = issueMap.get(issue.code) || { label: issue.label, count: 0 };
+      current.count += 1;
+      issueMap.set(issue.code, current);
+    }
+  }
+
+  return [...issueMap.entries()]
+    .map(([code, value]) => ({
+      code,
+      label: value.label,
+      count: value.count,
+    }))
+    .sort((left, right) => {
+      if (right.count !== left.count) {
+        return right.count - left.count;
+      }
+
+      return left.label.localeCompare(right.label);
+    });
 }
 
 function buildGenreAudit(

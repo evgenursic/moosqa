@@ -58,6 +58,21 @@ async function DebugContent({ searchParams }: DebugPageProps) {
         <StatusCard title="Link coverage" rows={dashboard.links} />
       </section>
 
+      <section className="border-t border-[var(--color-line)] py-8">
+        <div className="mb-5">
+          <p className="section-kicker text-black/43">Weak-card reasons</p>
+          <h2 className="mt-3 text-4xl leading-none text-[var(--color-ink)] serif-display">
+            What repair should prioritize.
+          </h2>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {dashboard.weakIssueBreakdown.map((issue) => (
+            <StatCard key={issue.code} label={issue.label} value={String(issue.count)} />
+          ))}
+        </div>
+      </section>
+
       <section className="grid gap-4 border-t border-[var(--color-line)] py-8 md:grid-cols-3">
         <StatCard label="Genre missing" value={String(dashboard.genreAudit.missing)} />
         <StatCard label="Genre generic" value={String(dashboard.genreAudit.generic)} />
@@ -210,6 +225,15 @@ async function DebugContent({ searchParams }: DebugPageProps) {
                 <span>{formatPubDate(release.publishedAt)}</span>
                 {release.releaseDate ? <span>Release {formatPubDate(release.releaseDate)}</span> : null}
               </div>
+              {release.qualityIssues.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.16em] text-black/52">
+                  {release.qualityIssues.map((issue) => (
+                    <span key={issue} className="border border-[var(--color-soft-line)] bg-[var(--color-paper)] px-2 py-1">
+                      {issue}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <h3 className="mt-3 text-3xl leading-[0.94] text-[var(--color-ink)] serif-display">
                 {release.artistName || release.projectTitle || release.title}
               </h3>
