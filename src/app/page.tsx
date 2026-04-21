@@ -8,6 +8,7 @@ import {
   HomepageExploreSection,
   buildHomepageQuickLinks,
 } from "@/components/homepage-explore-section";
+import { HomepageFormatRadar } from "@/components/homepage-format-radar";
 import { HomeOnboardingStrip } from "@/components/home-onboarding-strip";
 import { HomepageGenreFilter } from "@/components/homepage-genre-filter";
 import { PageScrollRestorer } from "@/components/page-scroll-restorer";
@@ -188,6 +189,8 @@ async function HomeContent({ searchParams }: HomePageProps) {
 
         <SectionReadMore section="latest" className="mt-8" />
       </section>
+
+      <HomepageFormatRadar albums={sections.albums} eps={sections.eps} live={sections.live} />
 
       <ReleaseCardSection section="top-rated" releases={sections.topRated} />
       <ReleaseCardSection section="top-engaged" releases={sections.topEngaged} />
