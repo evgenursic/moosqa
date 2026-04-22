@@ -293,6 +293,42 @@ async function OpsContent({ searchParams }: OpsPageProps) {
           <StatCard label="Missing release date" value={String(dashboard.quality.totals.missingReleaseDate)} />
         </section>
 
+        <section className="grid gap-4 border-t border-[var(--color-line)] py-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-1">
+            <StatCard label="Summary weak" value={String(dashboard.quality.summaryAudit.lowQuality)} />
+            <StatCard label="Summary-only weak" value={String(dashboard.quality.summaryAudit.summaryOnlyWeak)} />
+            <StatCard label="Summary repair next" value={String(dashboard.quality.summaryAudit.repairCandidates.length)} />
+          </div>
+
+          <PanelCard title="Next summary repairs">
+            <div className="grid gap-3">
+              {dashboard.quality.summaryAudit.repairCandidates.slice(0, 6).map((release) => (
+                <div
+                  key={release.id}
+                  className="grid gap-3 border-t border-[var(--color-soft-line)] pt-3 first:border-t-0 first:pt-0 md:grid-cols-[minmax(0,1fr)_auto]"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-lg text-[var(--color-ink)] serif-display">
+                      {release.artistName || release.projectTitle || release.title}
+                    </p>
+                    <p className="truncate text-sm text-black/58 serif-display">
+                      {release.projectTitle || release.title}
+                    </p>
+                    <p className="mt-2 max-h-10 overflow-hidden text-xs leading-5 text-black/52">
+                      {release.aiSummary || "No summary stored"}
+                    </p>
+                  </div>
+                  <div className="text-right text-xs uppercase tracking-[0.14em] text-black/52">
+                    <p>{release.summaryQualityScore}/100 summary</p>
+                    <p>{release.priorityScore} priority</p>
+                    <p>{formatRelative(release.publishedAt)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </PanelCard>
+        </section>
+
         <section className="border-t border-[var(--color-line)] py-8">
           <PanelCard title="Weak-card reason pressure">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

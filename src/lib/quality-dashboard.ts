@@ -4,13 +4,45 @@ import { ArtworkStatus, GenreStatus, LinkStatus, ReleaseType } from "@/generated
 import { ensureDatabase } from "@/lib/database";
 import { isSpecificGenreProfile } from "@/lib/genre-profile";
 import { prisma } from "@/lib/prisma";
-import { getReleaseQualityIssues, type ReleaseQualityIssueCode } from "@/lib/release-quality";
+import {
+  assessReleaseQuality,
+  getEffectiveSummaryQualityScore,
+  getReleaseQualityIssues,
+  isWeakQualityRelease,
+  type ReleaseQualityIssueCode,
+} from "@/lib/release-quality";
 import { resolveBestGenreProfile } from "@/lib/genre-resolution";
 import { normalizeSearchText } from "@/lib/release-search";
 import { buildSummaryAudit } from "@/lib/summary-quality";
 
 const QUALITY_RETRY_QUEUE_STATE_KEY = "quality-retry-queue";
 const GENRE_AUDIT_LOOKBACK_DAYS = 45;
+
+type QualityReleaseRow = {
+  id: string;
+  slug: string;
+  title: string;
+  artistName: string | null;
+  projectTitle: string | null;
+  aiSummary: string | null;
+  qualityScore: number;
+  genreName: string | null;
+  genreConfidence: number;
+  summaryQualityScore: number;
+  artworkStatus: ArtworkStatus;
+  genreStatus: GenreStatus;
+  linkStatus: LinkStatus;
+  releaseType: ReleaseType;
+  imageUrl: string | null;
+  thumbnailUrl: string | null;
+  youtubeUrl: string | null;
+  youtubeMusicUrl: string | null;
+  bandcampUrl: string | null;
+  officialWebsiteUrl: string | null;
+  officialStoreUrl: string | null;
+  releaseDate: Date | null;
+  publishedAt: Date;
+};
 
 export type QualityDashboardData = {
   totals: {
@@ -51,6 +83,7 @@ export type QualityDashboardData = {
   summaryAudit: {
     lowQuality: number;
     repetitive: number;
+    summaryOnlyWeak: number;
     repeatedPatterns: Array<{
       patternLabel: string;
       count: number;
@@ -65,6 +98,19 @@ export type QualityDashboardData = {
       aiSummary: string | null;
       summaryQualityScore: number;
       patternLabel: string | null;
+      publishedAt: Date;
+    }>;
+    repairCandidates: Array<{
+      id: string;
+      slug: string;
+      title: string;
+      artistName: string | null;
+      projectTitle: string | null;
+      aiSummary: string | null;
+      summaryQualityScore: number;
+      qualityScore: number;
+      priorityScore: number;
+      qualityIssues: string[];
       publishedAt: Date;
     }>;
   };
@@ -102,7 +148,7 @@ const getCachedQualityDashboardData = unstable_cache(
       genreGroups,
       linkGroups,
       retryQueueRow,
-      recentWeakCards,
+      recentQualityRows,
       weakIssueRows,
       genreAuditRows,
       summaryAuditRows,
@@ -144,12 +190,9 @@ const getCachedQualityDashboardData = unstable_cache(
       }),
       prisma.release.findMany({
         where: {
-          OR: [
-            { artworkStatus: { not: ArtworkStatus.STRONG } },
-            { genreStatus: { not: GenreStatus.STRONG } },
-            { linkStatus: { not: LinkStatus.STRONG } },
-            { releaseDate: null },
-          ],
+          publishedAt: {
+            gte: new Date(Date.now() - GENRE_AUDIT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000),
+          },
         },
         select: {
           id: true,
@@ -157,6 +200,7 @@ const getCachedQualityDashboardData = unstable_cache(
           title: true,
           artistName: true,
           projectTitle: true,
+          aiSummary: true,
           qualityScore: true,
           genreName: true,
           genreConfidence: true,
@@ -175,21 +219,20 @@ const getCachedQualityDashboardData = unstable_cache(
           releaseDate: true,
           publishedAt: true,
         },
-        orderBy: [{ qualityScore: "asc" }, { publishedAt: "desc" }],
-        take: 24,
+        orderBy: [{ publishedAt: "desc" }],
+        take: 320,
       }),
       prisma.release.findMany({
         where: {
-          OR: [
-            { artworkStatus: { not: ArtworkStatus.STRONG } },
-            { genreStatus: { not: GenreStatus.STRONG } },
-            { linkStatus: { not: LinkStatus.STRONG } },
-            { releaseDate: null },
-            { genreConfidence: { lt: 70 } },
-            { summaryQualityScore: { lt: 72 } },
-          ],
+          publishedAt: {
+            gte: new Date(Date.now() - GENRE_AUDIT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000),
+          },
         },
         select: {
+          artistName: true,
+          projectTitle: true,
+          title: true,
+          aiSummary: true,
           releaseType: true,
           genreName: true,
           genreConfidence: true,
@@ -257,6 +300,8 @@ const getCachedQualityDashboardData = unstable_cache(
     const genreAudit = buildGenreAudit(genreAuditRows);
     const summaryAudit = buildSummaryAudit(summaryAuditRows);
     const weakIssueBreakdown = buildWeakIssueBreakdown(weakIssueRows);
+    const recentWeakCards = buildRecentWeakCards(recentQualityRows);
+    const summaryRepairCandidates = buildSummaryRepairCandidates(recentQualityRows);
 
     return {
       totals: {
@@ -282,11 +327,12 @@ const getCachedQualityDashboardData = unstable_cache(
       ),
       weakIssueBreakdown,
       genreAudit,
-      summaryAudit,
-      recentWeakCards: recentWeakCards.map((release) => ({
-        ...release,
-        qualityIssues: getReleaseQualityIssues(release).map((issue) => issue.label),
-      })),
+      summaryAudit: {
+        ...summaryAudit,
+        summaryOnlyWeak: summaryRepairCandidates.filter((release) => release.qualityIssues.length === 1).length,
+        repairCandidates: summaryRepairCandidates.slice(0, 12),
+      },
+      recentWeakCards,
     };
   },
   ["quality-dashboard"],
@@ -355,6 +401,93 @@ function buildWeakIssueBreakdown(
       }
 
       return left.label.localeCompare(right.label);
+    });
+}
+
+function buildRecentWeakCards(
+  rows: Array<QualityReleaseRow>,
+): QualityDashboardData["recentWeakCards"] {
+  return rows
+    .filter((release) => isWeakQualityRelease(release))
+    .map((release) => {
+      const snapshot = assessReleaseQuality(release);
+
+      return {
+        id: release.id,
+        slug: release.slug,
+        title: release.title,
+        artistName: release.artistName,
+        projectTitle: release.projectTitle,
+        qualityScore: release.qualityScore,
+        genreName: release.genreName,
+        genreConfidence: release.genreConfidence,
+        summaryQualityScore: getEffectiveSummaryQualityScore(release),
+        artworkStatus: snapshot.artworkStatus,
+        genreStatus: snapshot.genreStatus,
+        linkStatus: snapshot.linkStatus,
+        releaseDate: release.releaseDate,
+        publishedAt: release.publishedAt,
+        qualityIssues: getReleaseQualityIssues(release).map((issue) => issue.label),
+        priorityScore: snapshot.priorityScore,
+      };
+    })
+    .sort((left, right) => {
+      if (right.priorityScore !== left.priorityScore) {
+        return right.priorityScore - left.priorityScore;
+      }
+
+      return right.publishedAt.getTime() - left.publishedAt.getTime();
+    })
+    .slice(0, 24)
+    .map((release) => ({
+      id: release.id,
+      slug: release.slug,
+      title: release.title,
+      artistName: release.artistName,
+      projectTitle: release.projectTitle,
+      qualityScore: release.qualityScore,
+      genreName: release.genreName,
+      genreConfidence: release.genreConfidence,
+      summaryQualityScore: release.summaryQualityScore,
+      artworkStatus: release.artworkStatus,
+      genreStatus: release.genreStatus,
+      linkStatus: release.linkStatus,
+      releaseDate: release.releaseDate,
+      publishedAt: release.publishedAt,
+      qualityIssues: release.qualityIssues,
+    }));
+}
+
+function buildSummaryRepairCandidates(
+  rows: Array<QualityReleaseRow>,
+): QualityDashboardData["summaryAudit"]["repairCandidates"] {
+  return rows
+    .map((release) => {
+      const summaryQualityScore = getEffectiveSummaryQualityScore(release);
+      const snapshot = assessReleaseQuality(release);
+      const qualityIssues = getReleaseQualityIssues(release).map((issue) => issue.label);
+
+      return {
+        id: release.id,
+        slug: release.slug,
+        title: release.title,
+        artistName: release.artistName,
+        projectTitle: release.projectTitle,
+        aiSummary: release.aiSummary,
+        summaryQualityScore,
+        qualityScore: release.qualityScore,
+        priorityScore: snapshot.priorityScore,
+        qualityIssues,
+        publishedAt: release.publishedAt,
+      };
+    })
+    .filter((release) => release.summaryQualityScore < 72)
+    .sort((left, right) => {
+      if (right.priorityScore !== left.priorityScore) {
+        return right.priorityScore - left.priorityScore;
+      }
+
+      return right.publishedAt.getTime() - left.publishedAt.getTime();
     });
 }
 

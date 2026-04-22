@@ -82,6 +82,56 @@ async function DebugContent({ searchParams }: DebugPageProps) {
       <section className="grid gap-4 border-t border-[var(--color-line)] py-8 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Summary low quality" value={String(dashboard.summaryAudit.lowQuality)} />
         <StatCard label="Summary repetitive" value={String(dashboard.summaryAudit.repetitive)} />
+        <StatCard label="Summary-only weak" value={String(dashboard.summaryAudit.summaryOnlyWeak)} />
+        <StatCard
+          label="Summary repair next"
+          value={String(dashboard.summaryAudit.repairCandidates.length)}
+        />
+      </section>
+
+      <section className="border-t border-[var(--color-line)] py-8">
+        <div className="mb-5">
+          <p className="section-kicker text-black/43">Summary repair queue</p>
+          <h2 className="mt-3 text-4xl leading-none text-[var(--color-ink)] serif-display">
+            Next cards likely to regenerate.
+          </h2>
+        </div>
+
+        <div className="grid gap-4">
+          {dashboard.summaryAudit.repairCandidates.map((release) => (
+            <article
+              key={release.id}
+              className="border border-[var(--color-line)] bg-[var(--color-panel)] p-4"
+            >
+              <div className="flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-[0.18em] text-black/50">
+                <span>{release.summaryQualityScore}/100 summary</span>
+                <span>{release.priorityScore} priority</span>
+                <span>{formatPubDate(release.publishedAt)}</span>
+              </div>
+              {release.qualityIssues.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.16em] text-black/52">
+                  {release.qualityIssues.map((issue) => (
+                    <span key={issue} className="border border-[var(--color-soft-line)] bg-[var(--color-paper)] px-2 py-1">
+                      {issue}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              <h3 className="mt-3 text-3xl leading-[0.94] text-[var(--color-ink)] serif-display">
+                {release.artistName || release.projectTitle || release.title}
+              </h3>
+              <p className="mt-2 text-base text-black/66 serif-display">
+                {release.projectTitle || release.title}
+              </p>
+              {release.aiSummary ? (
+                <p className="mt-3 text-sm leading-7 text-black/62">{release.aiSummary}</p>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-4 border-t border-[var(--color-line)] py-8 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Repeated patterns"
           value={String(dashboard.summaryAudit.repeatedPatterns.length)}
