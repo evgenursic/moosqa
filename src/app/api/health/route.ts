@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getPublicHealthSummary } from "@/lib/ops-dashboard";
-import { buildPublicHealthPayload } from "@/lib/public-health";
+import { buildPublicHealthPayload, buildPublicReadinessPayload } from "@/lib/public-health";
 import {
   createRateLimitResponse,
   getRateLimitIdentity,
@@ -19,6 +19,11 @@ export async function GET(request: Request) {
   const rateLimit = await takeRateLimit(HEALTH_RATE_LIMIT, getRateLimitIdentity(request));
   if (!rateLimit.allowed) {
     return createRateLimitResponse(rateLimit, "Too many health check requests.");
+  }
+
+  const { searchParams } = new URL(request.url);
+  if (searchParams.get("scope") === "ready") {
+    return withRateLimitHeaders(NextResponse.json(buildPublicReadinessPayload()), rateLimit);
   }
 
   try {

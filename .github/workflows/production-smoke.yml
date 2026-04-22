@@ -110,23 +110,23 @@ jobs:
 
           while (Date.now() < deadline) {
             try {
-              const response = await fetch(`${baseUrl}/api/health`, {
+              const response = await fetch(`${baseUrl}/api/health?scope=ready`, {
                 headers: {
                   accept: "application/json",
                 },
               });
-              console.log(`/api/health: ${response.status}`);
+              console.log(`/api/health?scope=ready: ${response.status}`);
               if (response.ok) {
                 process.exit(0);
               }
             } catch (error) {
-              console.log(`/api/health unavailable: ${error instanceof Error ? error.message : String(error)}`);
+              console.log(`/api/health?scope=ready unavailable: ${error instanceof Error ? error.message : String(error)}`);
             }
 
             await sleep(10_000);
           }
 
-          throw new Error(`/api/health did not become ready for ${baseUrl}`);
+          throw new Error(`/api/health?scope=ready did not become ready for ${baseUrl}`);
           NODE
 
       - name: Install dependencies

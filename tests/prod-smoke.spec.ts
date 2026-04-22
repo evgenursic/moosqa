@@ -2,6 +2,21 @@ import { expect, type Page, test } from "@playwright/test";
 
 const knownReleasePath = "/releases/laufey-1spov0b?from=%2F%23latest";
 
+test("public readiness endpoint confirms the deployed app is reachable", async ({ request }) => {
+  const response = await request.get("/api/health?scope=ready");
+  expect(response.status()).toBe(200);
+
+  const payload = await response.json();
+  expect(payload).toEqual(expect.objectContaining({
+    ok: true,
+    status: "ready",
+    generatedAt: expect.any(String),
+    checks: {
+      application: "ready",
+    },
+  }));
+});
+
 test("public health endpoint returns a sanitized status payload", async ({ request }) => {
   const response = await request.get("/api/health");
   expect([200, 503]).toContain(response.status());

@@ -78,6 +78,7 @@ expectIncludes(smoke, "Wait for Vercel deployment", ".github/workflows/productio
 expectIncludes(smoke, "Vercel – moosqa-ci4e", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "Wait for public health endpoint", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "/api/health", ".github/workflows/production-smoke.yml");
+expectIncludes(smoke, "/api/health?scope=ready", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "id: smoke_tests", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "npm run smoke:prod", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "MOOSQA_SMOKE_BASE_URL", ".github/workflows/production-smoke.yml");

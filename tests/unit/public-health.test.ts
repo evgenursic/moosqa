@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildPublicHealthPayload } from "../../src/lib/public-health";
+import { buildPublicHealthPayload, buildPublicReadinessPayload } from "../../src/lib/public-health";
 
 describe("public health payload", () => {
+  it("returns a database-independent readiness payload", () => {
+    assert.deepEqual(buildPublicReadinessPayload(new Date("2026-04-22T05:02:00.000Z")), {
+      ok: true,
+      status: "ready",
+      generatedAt: "2026-04-22T05:02:00.000Z",
+      checks: {
+        application: "ready",
+      },
+    });
+  });
+
   it("returns a sanitized public health summary", () => {
     const payload = buildPublicHealthPayload(
       {

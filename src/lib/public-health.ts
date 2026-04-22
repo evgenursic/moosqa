@@ -5,6 +5,17 @@ type PublicHealthSummary = Awaited<ReturnType<typeof getPublicHealthSummary>>;
 
 export type PublicHealthStatus = "healthy" | "running" | "warning" | "error" | "idle";
 
+export function buildPublicReadinessPayload(generatedAt = new Date()) {
+  return {
+    ok: true,
+    status: "ready",
+    generatedAt: generatedAt.toISOString(),
+    checks: {
+      application: "ready",
+    },
+  };
+}
+
 export function buildPublicHealthPayload(summary: PublicHealthSummary, generatedAt = new Date()) {
   const status = derivePublicHealthStatus(summary.sync, summary.openAlertCount);
 
