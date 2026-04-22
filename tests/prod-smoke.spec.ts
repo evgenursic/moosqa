@@ -2,6 +2,31 @@ import { expect, type Page, test } from "@playwright/test";
 
 const knownReleasePath = "/releases/laufey-1spov0b?from=%2F%23latest";
 
+test("public health endpoint returns a sanitized status payload", async ({ request }) => {
+  const response = await request.get("/api/health");
+  expect(response.status()).toBe(200);
+
+  const payload = await response.json();
+  expect(payload.generatedAt).toEqual(expect.any(String));
+  expect(["healthy", "running", "warning", "error", "idle"]).toContain(payload.status);
+  expect(payload.sync).toEqual(expect.objectContaining({
+    level: expect.any(String),
+    label: expect.any(String),
+    message: expect.any(String),
+    isRunning: expect.any(Boolean),
+    isStale: expect.any(Boolean),
+    consecutiveFailures: expect.any(Number),
+  }));
+  expect(payload.alerts).toEqual(expect.objectContaining({
+    open: expect.any(Number),
+  }));
+
+  const serialized = JSON.stringify(payload);
+  expect(serialized).not.toContain("lastError");
+  expect(serialized).not.toContain("lastResult");
+  expect(serialized).not.toContain("destination");
+});
+
 test("known release detail renders without the temporary fallback", async ({ page }) => {
   const issues = collectRuntimeIssues(page);
 
