@@ -10,6 +10,7 @@ import { OpsPlatformHistoryChart } from "@/components/ops-platform-history-chart
 import { getRequiredDebugSecret } from "@/lib/admin-auth";
 import { getOpsDashboardData } from "@/lib/ops-dashboard";
 import { formatPubDate, formatRelative } from "@/lib/utils";
+import { formatWorkflowAgeMinutes, getWorkflowStaleness, parseWorkflowDetails } from "@/lib/workflow-health";
 
 export const metadata: Metadata = {
   title: "Ops Health | MooSQA",
@@ -120,39 +121,7 @@ async function OpsContent({ searchParams }: OpsPageProps) {
           <PanelCard title="GitHub workflows">
             <div className="grid gap-3">
               {dashboard.workflows.map((workflow) => (
-                <div
-                  key={workflow.workflowName}
-                  className="flex items-center justify-between gap-4 border-t border-[var(--color-soft-line)] pt-3 first:border-t-0 first:pt-0"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm uppercase tracking-[0.16em] text-black/52">
-                      {workflow.workflowName}
-                    </p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.14em] text-black/44">
-                      {workflow.lastRunAt ? `last run ${formatRelative(workflow.lastRunAt)}` : "no runs yet"}
-                    </p>
-                    {workflow.details ? (
-                      <p className="mt-2 text-xs leading-5 text-black/56">
-                        {workflow.details}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm uppercase tracking-[0.14em] text-[var(--color-ink)]">
-                      {workflow.status}
-                    </span>
-                    {workflow.runUrl ? (
-                      <a
-                        href={workflow.runUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="section-kicker text-[var(--color-accent-strong)]"
-                      >
-                        Open
-                      </a>
-                    ) : null}
-                  </div>
-                </div>
+                <WorkflowRow key={workflow.workflowName} workflow={workflow} />
               ))}
             </div>
           </PanelCard>
@@ -415,6 +384,68 @@ function DailyMetric({
     <div className="border border-[var(--color-line)] bg-[var(--color-paper)] px-3 py-3">
       <p className="section-kicker text-black/43">{label}</p>
       <p className="mt-2 text-xl text-[var(--color-ink)] serif-display">{value}</p>
+    </div>
+  );
+}
+
+function WorkflowRow({
+  workflow,
+}: {
+  workflow: Awaited<ReturnType<typeof getOpsDashboardData>>["workflows"][number];
+}) {
+  const details = parseWorkflowDetails(workflow.details);
+  const staleness = getWorkflowStaleness(workflow.workflowName, workflow.lastRunAt);
+  const isUnhealthy = workflow.status !== "SUCCESS" || Boolean(staleness?.isStale);
+
+  return (
+    <div className="grid gap-3 border-t border-[var(--color-soft-line)] pt-3 first:border-t-0 first:pt-0 md:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="min-w-0">
+        <p className="truncate text-sm uppercase tracking-[0.16em] text-black/52">
+          {workflow.workflowName}
+        </p>
+        <p className="mt-1 text-xs uppercase tracking-[0.14em] text-black/44">
+          {workflow.lastRunAt ? `last run ${formatRelative(workflow.lastRunAt)}` : "no runs yet"}
+        </p>
+        {staleness?.isStale ? (
+          <p className="mt-2 text-xs uppercase tracking-[0.14em] text-[#9a5a41]">
+            stale for {formatWorkflowAgeMinutes(staleness.ageMs)} / expected {staleness.cadenceLabel}
+          </p>
+        ) : null}
+        {details.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {details.map((detail) => (
+              <span
+                key={`${workflow.workflowName}-${detail.key}`}
+                className="border border-[var(--color-line)] bg-[var(--color-paper)] px-2.5 py-1 text-xs leading-5 text-black/60"
+              >
+                <span className="uppercase tracking-[0.12em] text-black/42">{detail.label}</span>{" "}
+                <span className="text-[var(--color-ink)]">{detail.value}</span>
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <div className="flex items-start gap-3 md:justify-end">
+        <span
+          className={
+            isUnhealthy
+              ? "text-sm uppercase tracking-[0.14em] text-[#9a5a41]"
+              : "text-sm uppercase tracking-[0.14em] text-[var(--color-ink)]"
+          }
+        >
+          {workflow.status}
+        </span>
+        {workflow.runUrl ? (
+          <a
+            href={workflow.runUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="section-kicker text-[var(--color-accent-strong)]"
+          >
+            Open
+          </a>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -32,6 +32,7 @@ import {
 } from "@/lib/release-sections";
 import { getSyncStatusSummary } from "@/lib/sync-releases";
 import { computeTrendingScore } from "@/lib/trending-score";
+import { formatWorkflowAgeMinutes, getWorkflowStaleness } from "@/lib/workflow-health";
 
 export type AnalyticsAction =
   | "OPEN"
@@ -446,20 +447,35 @@ export async function evaluateProductionAlerts() {
   }
 
   for (const workflow of workflowStates) {
-    if (workflow.status !== WorkflowRunStatus.FAILURE) {
+    if (workflow.status === WorkflowRunStatus.FAILURE) {
+      alerts.push({
+        key: `workflow-${workflow.workflowName}`,
+        severity: "WARNING",
+        title: `${workflow.workflowName} workflow failed`,
+        message: `${workflow.workflowName} reported a failed GitHub run.`,
+        context: {
+          runUrl: workflow.runUrl,
+          lastFailureAt: workflow.lastFailureAt?.toISOString() || null,
+        },
+      });
       continue;
     }
 
-    alerts.push({
-      key: `workflow-${workflow.workflowName}`,
-      severity: "WARNING",
-      title: `${workflow.workflowName} workflow failed`,
-      message: `${workflow.workflowName} reported a failed GitHub run.`,
-      context: {
-        runUrl: workflow.runUrl,
-        lastFailureAt: workflow.lastFailureAt?.toISOString() || null,
-      },
-    });
+    const staleness = getWorkflowStaleness(workflow.workflowName, workflow.lastRunAt);
+    if (staleness?.isStale) {
+      alerts.push({
+        key: `workflow-${workflow.workflowName}-stale`,
+        severity: workflow.workflowName === "sync" ? "CRITICAL" : "WARNING",
+        title: `${workflow.workflowName} workflow stale`,
+        message: `${workflow.workflowName} has not reported for ${formatWorkflowAgeMinutes(staleness.ageMs)}. Expected cadence is ${staleness.cadenceLabel}.`,
+        metricValue: staleness.ageMs === null ? null : Math.round(staleness.ageMs / 60000),
+        context: {
+          runUrl: workflow.runUrl,
+          lastRunAt: workflow.lastRunAt?.toISOString() || null,
+          expectedEvery: staleness.cadenceLabel,
+        },
+      });
+    }
   }
 
   await persistProductionAlerts(alerts);
@@ -1516,6 +1532,8 @@ async function sendAlertNotification(
     alert.metricValue !== null ? `Metric: ${alert.metricValue}` : null,
     context?.runUrl ? `Run: ${context.runUrl}` : null,
     context?.lastFailureAt ? `Failure: ${context.lastFailureAt}` : null,
+    context?.lastRunAt ? `Last run: ${context.lastRunAt}` : null,
+    context?.expectedEvery ? `Expected cadence: ${context.expectedEvery}` : null,
     context?.lastError ? `Error: ${String(context.lastError).slice(0, 280)}` : null,
   ].filter((item): item is string => Boolean(item));
 
@@ -1642,6 +1660,8 @@ async function sendAlertSummaryEmail(
       alert.metricValue !== null ? `Metric: ${alert.metricValue}` : null,
       context?.runUrl ? `Run: ${context.runUrl}` : null,
       context?.lastFailureAt ? `Failure: ${context.lastFailureAt}` : null,
+      context?.lastRunAt ? `Last run: ${context.lastRunAt}` : null,
+      context?.expectedEvery ? `Expected cadence: ${context.expectedEvery}` : null,
       context?.lastError ? `Error: ${String(context.lastError).slice(0, 320)}` : null,
     ]
       .filter((item): item is string => Boolean(item))
@@ -1660,6 +1680,8 @@ async function sendAlertSummaryEmail(
             alert.metricValue !== null ? `Metric: ${alert.metricValue}` : null,
             context?.runUrl ? `Run: ${context.runUrl}` : null,
             context?.lastFailureAt ? `Failure: ${context.lastFailureAt}` : null,
+            context?.lastRunAt ? `Last run: ${context.lastRunAt}` : null,
+            context?.expectedEvery ? `Expected cadence: ${context.expectedEvery}` : null,
             context?.lastError ? `Error: ${String(context.lastError).slice(0, 320)}` : null,
           ]
             .filter((item): item is string => Boolean(item))
