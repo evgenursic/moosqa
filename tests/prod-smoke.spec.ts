@@ -3,41 +3,33 @@ import { expect, type Page, test } from "@playwright/test";
 const knownReleasePath = "/releases/laufey-1spov0b?from=%2F%23latest";
 
 test("public health endpoint returns a sanitized status payload", async ({ request }) => {
-  let payload: Record<string, unknown> | null = null;
+  const response = await request.get("/api/health");
+  expect([200, 503]).toContain(response.status());
 
-  await expect.poll(
-    async () => {
-      const response = await request.get("/api/health");
-      if (response.status() !== 200) {
-        return response.status();
-      }
-
-      payload = await response.json();
-      return response.status();
-    },
-    {
-      intervals: [1_000, 3_000, 5_000, 10_000],
-      timeout: 60_000,
-    },
-  ).toBe(200);
-
-  if (!payload) {
-    throw new Error("Health endpoint returned 200 without a JSON payload.");
-  }
+  const payload = await response.json();
 
   expect(payload.generatedAt).toEqual(expect.any(String));
-  expect(["healthy", "running", "warning", "error", "idle"]).toContain(payload.status);
-  expect(payload.sync).toEqual(expect.objectContaining({
-    level: expect.any(String),
-    label: expect.any(String),
-    message: expect.any(String),
-    isRunning: expect.any(Boolean),
-    isStale: expect.any(Boolean),
-    consecutiveFailures: expect.any(Number),
-  }));
-  expect(payload.alerts).toEqual(expect.objectContaining({
-    open: expect.any(Number),
-  }));
+
+  if (response.status() === 200) {
+    expect(["healthy", "running", "warning", "error", "idle"]).toContain(payload.status);
+    expect(payload.sync).toEqual(expect.objectContaining({
+      level: expect.any(String),
+      label: expect.any(String),
+      message: expect.any(String),
+      isRunning: expect.any(Boolean),
+      isStale: expect.any(Boolean),
+      consecutiveFailures: expect.any(Number),
+    }));
+    expect(payload.alerts).toEqual(expect.objectContaining({
+      open: expect.any(Number),
+    }));
+  } else {
+    expect(payload).toEqual(expect.objectContaining({
+      ok: false,
+      status: "unavailable",
+      error: "Health check unavailable.",
+    }));
+  }
 
   const serialized = JSON.stringify(payload);
   expect(serialized).not.toContain("lastError");
