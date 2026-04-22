@@ -8,7 +8,11 @@ import { searchBandcampRelease } from "@/lib/bandcamp-search";
 import { isSpecificGenreProfile, pickPreferredGenreProfile } from "@/lib/genre-profile";
 import { getGenreOverride } from "@/lib/genre-overrides";
 import { resolveBestGenreProfile, resolveGenreDecision } from "@/lib/genre-resolution";
-import { assessReleaseQuality, isWeakQualityRelease } from "@/lib/release-quality";
+import {
+  assessReleaseQuality,
+  getEffectiveSummaryQualityScore,
+  isWeakQualityRelease,
+} from "@/lib/release-quality";
 import { fetchRedditPosts, normalizeRedditPost, shouldKeepReleaseRecord } from "@/lib/reddit";
 import { buildReleaseEnrichment, enrichRecentReleases } from "@/lib/release-enrichment";
 import { clearReleaseDataCaches } from "@/lib/release-sections";
@@ -814,6 +818,7 @@ async function runRecentReleaseQualityPass(
   for (const candidate of candidates) {
     const checkedAt = new Date();
     const beforeScore = candidate.snapshot.qualityScore;
+    const beforeSummaryQualityScore = getEffectiveSummaryQualityScore(candidate.release);
     const metadata = await buildReleaseEnrichment(candidate.release).catch((error) => {
       console.error(`Quality pass enrichment failed for release ${candidate.release.id}.`, error);
       return null;
@@ -869,13 +874,16 @@ async function runRecentReleaseQualityPass(
         qualityScore: qualitySnapshot.qualityScore,
         qualityCheckedAt: checkedAt,
         summaryQualityCheckedAt:
-          metadata?.summaryQualityScore ? checkedAt : candidate.release.summaryQualityCheckedAt,
+          metadata ? checkedAt : candidate.release.summaryQualityCheckedAt,
       },
     });
 
     checked += 1;
+    const afterSummaryQualityScore = metadata?.summaryQualityScore ?? beforeSummaryQualityScore;
     if (
       qualitySnapshot.qualityScore > beforeScore ||
+      afterSummaryQualityScore > beforeSummaryQualityScore ||
+      (metadata?.aiSummary && metadata.aiSummary !== candidate.release.aiSummary) ||
       qualitySnapshot.artworkStatus !== candidate.snapshot.artworkStatus ||
       qualitySnapshot.genreStatus !== candidate.snapshot.genreStatus ||
       qualitySnapshot.linkStatus !== candidate.snapshot.linkStatus
@@ -1232,8 +1240,7 @@ async function buildReleaseDataForUpsert(
       release.summary ||
       null;
     const nextSummaryQualityScore = existing?.aiSummary
-      ? existing.summaryQualityScore ||
-        scoreSummaryQuality({
+      ? scoreSummaryQuality({
           summary: existing.aiSummary,
           artistName: release.artistName,
           projectTitle: release.projectTitle,

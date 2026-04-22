@@ -276,7 +276,12 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
     null;
   const summaryNeedsRefresh =
     shouldRegenerateAiSummary(release.aiSummary) ||
-    (release.summaryQualityScore ?? 100) < 72;
+    scoreSummaryQuality({
+      summary: release.aiSummary,
+      artistName: release.artistName,
+      projectTitle: release.projectTitle,
+      title: release.title,
+    }) < 72;
   const summaryContext = [
     sourceMetadata.sourceTitle,
     sourceMetadata.sourceExcerpt,

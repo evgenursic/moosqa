@@ -1,8 +1,13 @@
 import { ArtworkStatus, GenreStatus, LinkStatus, ReleaseType } from "@/generated/prisma/enums";
 import { countGenreProfileSegments, isSpecificGenreProfile } from "@/lib/genre-profile";
+import { scoreSummaryQuality } from "@/lib/summary-quality";
 
 type ReleaseQualityInput = {
   releaseType: ReleaseType;
+  aiSummary?: string | null;
+  artistName?: string | null;
+  projectTitle?: string | null;
+  title?: string | null;
   genreName?: string | null;
   genreConfidence?: number | null;
   imageUrl?: string | null;
@@ -102,7 +107,7 @@ export function isWeakQualityRelease(input: ReleaseQualityInput) {
     linkStatus !== LinkStatus.STRONG ||
     !input.releaseDate ||
     (input.genreConfidence ?? 0) < 70 ||
-    (input.summaryQualityScore ?? 100) < 72
+    getEffectiveSummaryQualityScore(input) < 72
   );
 }
 
@@ -138,7 +143,7 @@ export function getReleaseQualityIssues(input: ReleaseQualityInput): ReleaseQual
     issues.push({ code: "missing_release_date", label: "Missing release date" });
   }
 
-  if ((input.summaryQualityScore ?? 100) < 72) {
+  if (getEffectiveSummaryQualityScore(input) < 72) {
     issues.push({ code: "low_summary_quality", label: "Low summary quality" });
   }
 
@@ -300,14 +305,15 @@ function shouldRetryForQuality(
     return false;
   }
 
+  const summaryQualityScore = getEffectiveSummaryQualityScore(input);
   const checkedAgoMs = input.qualityCheckedAt
     ? Date.now() - input.qualityCheckedAt.getTime()
     : Number.POSITIVE_INFINITY;
 
   const retryAfterMs =
-    snapshot.qualityScore < 45 || (input.genreConfidence ?? 0) < 55 || (input.summaryQualityScore ?? 100) < 60
+    snapshot.qualityScore < 45 || (input.genreConfidence ?? 0) < 55 || summaryQualityScore < 60
       ? 1000 * 60 * 20
-      : snapshot.qualityScore < 75 || (input.genreConfidence ?? 0) < 72 || (input.summaryQualityScore ?? 100) < 72
+      : snapshot.qualityScore < 75 || (input.genreConfidence ?? 0) < 72 || summaryQualityScore < 72
         ? 1000 * 60 * 60 * 2
         : 1000 * 60 * 60 * 8;
 
@@ -324,6 +330,7 @@ function getQualityPriority(
   },
 ) {
   let priority = 100 - snapshot.qualityScore + getReleaseQualityIssuePriority(input);
+  const summaryQualityScore = getEffectiveSummaryQualityScore(input);
 
   const ageHours = input.publishedAt
     ? (Date.now() - input.publishedAt.getTime()) / (1000 * 60 * 60)
@@ -340,13 +347,26 @@ function getQualityPriority(
     priority += 8;
   }
 
-  if ((input.summaryQualityScore ?? 100) < 60) {
+  if (summaryQualityScore < 60) {
     priority += 16;
-  } else if ((input.summaryQualityScore ?? 100) < 72) {
+  } else if (summaryQualityScore < 72) {
     priority += 8;
   }
 
   return priority;
+}
+
+export function getEffectiveSummaryQualityScore(input: ReleaseQualityInput) {
+  if ("aiSummary" in input) {
+    return scoreSummaryQuality({
+      summary: input.aiSummary,
+      artistName: input.artistName,
+      projectTitle: input.projectTitle,
+      title: input.title,
+    });
+  }
+
+  return input.summaryQualityScore ?? 100;
 }
 
 function normalizeGenre(value: string | null | undefined) {
