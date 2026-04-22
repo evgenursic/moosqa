@@ -136,6 +136,53 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run production smoke tests
+        id: smoke_tests
         env:
           MOOSQA_SMOKE_BASE_URL: ${{ steps.target.outputs.base_url }}
-        run: npm run smoke:prod
+          TRIGGER: ${{ github.event_name }}
+        run: |
+          set +e
+          npm run smoke:prod
+          EXIT_CODE=$?
+          if [ "${EXIT_CODE}" -eq 0 ]; then
+            DETAILS="baseUrl=${MOOSQA_SMOKE_BASE_URL}, tests=passed, trigger=${TRIGGER}"
+          else
+            DETAILS="baseUrl=${MOOSQA_SMOKE_BASE_URL}, tests=failed, trigger=${TRIGGER}"
+          fi
+          echo "details=${DETAILS}" >> "${GITHUB_OUTPUT}"
+          exit "${EXIT_CODE}"
+
+      - name: Report workflow status
+        if: always()
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          STATUS_URL: https://moosqa-ci4e.vercel.app/api/internal/workflow-status
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          JOB_STATUS: ${{ job.status }}
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          DETAILS: ${{ steps.smoke_tests.outputs.details }}
+        run: |
+          set -euo pipefail
+          if [ "${JOB_STATUS}" = "success" ]; then STATUS="SUCCESS"; else STATUS="FAILURE"; fi
+          export STATUS
+          python3 - <<'PY' > workflow-status.json
+          import json
+          import os
+
+          payload = {
+              "workflowName": "production-smoke",
+              "status": os.environ["STATUS"],
+              "runUrl": os.environ["RUN_URL"],
+              "branch": os.environ["BRANCH_NAME"],
+              "commitSha": os.environ["COMMIT_SHA"],
+              "details": os.environ.get("DETAILS") or "smoke test failed",
+          }
+          print(json.dumps(payload))
+          PY
+          curl --fail --show-error --silent \
+            --request POST \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            --header "Content-Type: application/json" \
+            --data @workflow-status.json \
+            "${STATUS_URL}"

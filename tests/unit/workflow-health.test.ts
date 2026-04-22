@@ -48,9 +48,13 @@ describe("workflow health helpers", () => {
       getWorkflowStaleness("repair", new Date("2026-04-22T02:45:00.000Z"), now)?.isStale,
       true,
     );
+    assert.equal(
+      getWorkflowStaleness("production-smoke", new Date("2026-04-22T02:45:00.000Z"), now)?.isStale,
+      true,
+    );
   });
 
   it("does not flag unknown manual workflows", () => {
-    assert.equal(getWorkflowStaleness("production-smoke", null), null);
+    assert.equal(getWorkflowStaleness("manual-debug", null), null);
   });
 });

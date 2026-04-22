@@ -78,9 +78,18 @@ expectIncludes(smoke, "Wait for Vercel deployment", ".github/workflows/productio
 expectIncludes(smoke, "Vercel – moosqa-ci4e", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "Wait for public health endpoint", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "/api/health", ".github/workflows/production-smoke.yml");
+expectIncludes(smoke, "id: smoke_tests", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "npm run smoke:prod", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "MOOSQA_SMOKE_BASE_URL", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "steps.target.outputs.base_url", ".github/workflows/production-smoke.yml");
+expectIncludes(smoke, "Report workflow status", ".github/workflows/production-smoke.yml");
+expectIncludes(smoke, 'workflowName": "production-smoke"', ".github/workflows/production-smoke.yml");
+expectIncludes(smoke, `DETAILS: \${{ steps.smoke_tests.outputs.details }}`, ".github/workflows/production-smoke.yml");
+expectIncludes(smoke, '"details": os.environ.get("DETAILS") or "smoke test failed"', ".github/workflows/production-smoke.yml");
+expectIncludes(smoke, "--data @workflow-status.json", ".github/workflows/production-smoke.yml");
+expectIncludes(smoke, "baseUrl=", ".github/workflows/production-smoke.yml");
+expectIncludes(smoke, "tests=passed", ".github/workflows/production-smoke.yml");
+expectIncludes(smoke, "tests=failed", ".github/workflows/production-smoke.yml");
 
 if (failures.length > 0) {
   console.error("Workflow checks failed:");
