@@ -25,6 +25,7 @@ export const metadata: Metadata = {
   description:
     "Editorial music radar for fresh indie releases, pulled automatically from r/indieheads and shaped for fast listening discovery.",
   applicationName: "MooSQA",
+  manifest: "/manifest.webmanifest",
   alternates: {
     canonical: "/",
   },
