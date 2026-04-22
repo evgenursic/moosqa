@@ -131,6 +131,11 @@ async function OpsContent({ searchParams }: OpsPageProps) {
                     <p className="mt-1 text-xs uppercase tracking-[0.14em] text-black/44">
                       {workflow.lastRunAt ? `last run ${formatRelative(workflow.lastRunAt)}` : "no runs yet"}
                     </p>
+                    {workflow.details ? (
+                      <p className="mt-2 text-xs leading-5 text-black/56">
+                        {workflow.details}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-sm uppercase tracking-[0.14em] text-[var(--color-ink)]">

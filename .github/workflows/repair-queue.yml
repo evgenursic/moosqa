@@ -15,12 +15,32 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           SYNC_URL: https://moosqa-ci4e.vercel.app/api/sync?repair=1&limit=8
         run: |
+          set -euo pipefail
+          RESPONSE_FILE="$(mktemp)"
           curl --fail --show-error --silent \
             --retry 1 \
             --retry-delay 8 \
             --max-time 240 \
             --header "Authorization: Bearer ${CRON_SECRET}" \
+            --output "${RESPONSE_FILE}" \
             "${SYNC_URL}"
+          cat "${RESPONSE_FILE}"
+          DETAILS="$(python3 - "${RESPONSE_FILE}" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              payload = json.load(handle)
+
+          fields = []
+          for key in ("mode", "queued", "checked", "improved", "syncedAt"):
+              if key in payload:
+                  fields.append(f"{key}={payload[key]}")
+
+          print(", ".join(fields)[:480])
+          PY
+          )"
+          echo "details=${DETAILS}" >> "${GITHUB_OUTPUT}"
       - name: Report workflow status
         if: always()
         env:
@@ -30,11 +50,28 @@ jobs:
           JOB_STATUS: ${{ job.status }}
           BRANCH_NAME: ${{ github.ref_name }}
           COMMIT_SHA: ${{ github.sha }}
+          DETAILS: ${{ steps.repair_call.outputs.details }}
         run: |
+          set -euo pipefail
           if [ "${JOB_STATUS}" = "success" ]; then STATUS="SUCCESS"; else STATUS="FAILURE"; fi
+          export STATUS
+          python3 - <<'PY' > workflow-status.json
+          import json
+          import os
+
+          payload = {
+              "workflowName": "repair",
+              "status": os.environ["STATUS"],
+              "runUrl": os.environ["RUN_URL"],
+              "branch": os.environ["BRANCH_NAME"],
+              "commitSha": os.environ["COMMIT_SHA"],
+              "details": os.environ.get("DETAILS") or "endpoint call failed",
+          }
+          print(json.dumps(payload))
+          PY
           curl --fail --show-error --silent \
             --request POST \
             --header "Authorization: Bearer ${CRON_SECRET}" \
             --header "Content-Type: application/json" \
-            --data "{\"workflowName\":\"repair\",\"status\":\"${STATUS}\",\"runUrl\":\"${RUN_URL}\",\"branch\":\"${BRANCH_NAME}\",\"commitSha\":\"${COMMIT_SHA}\"}" \
+            --data @workflow-status.json \
             "${STATUS_URL}"
