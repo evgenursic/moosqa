@@ -83,11 +83,22 @@ const GENERIC_OPENINGS = [
   "one telling move",
 ];
 
+const ABSTRACT_TEMPLATE_PATTERNS = [
+  /\b(?:center of gravity|stable center|steady center)\b/,
+  /\b(?:background color|one color|one wash|museum lit|ceremonial)\b/,
+  /\b(?:memorable silhouette|distinctive silhouette|different scale|clear contour|internal shape)\b/,
+  /\b(?:through the seams|surface|the edges|enough contrast to matter)\b/,
+  /\b(?:does the quiet work|the strongest detail|the telling move|what sticks is)\b/,
+  /\b(?:rather than background color|rather than merely promised|rather than preserved)\b/,
+  /\b(?:keeps? (?:the )?(?:song|single|track|release|album|ep|set|mood|material) from)\b/,
+  /\b(?:gives? (?:the )?(?:song|single|track|release|album|ep|set|arrangement) (?:a|its|enough))\b/,
+];
+
 const SUMMARY_SCAFFOLD_PATTERNS: Array<[RegExp, string]> = [
-  [/\b(acoustic texture|electronic detail|live arrangement details|guitar texture|piano led phrasing|stacked harmonies|percussive drive|drone weight|a sharp hook|distorted weight|hazy layers|ragged momentum)\b/g, "<detail>"],
-  [/\b(the release|the track|the song|the single|the album|the ep|the set|this release|this track|this song|this single|this album|this ep|this set)\b/g, "<format>"],
+  [/\b(acoustic texture|electronic detail|live arrangement details|guitar texture|piano led phrasing|stacked harmonies|percussive drive|drone weight|a sharp hook|distorted weight|hazy layers|ragged momentum|room sound)\b/g, "<detail>"],
+  [/\b(the release|the track|the song|the single|the album|the ep|the set|this release|this track|this song|this single|this album|this ep|this set|release|track|song|single|album|ep|set)\b/g, "<format>"],
   [/\b(the live setup|a tiny desk setting|a world cafe session|a kexp session|an audiotree session|a studio session|a late show set|a jimmy kimmel live set|a cbs saturday morning performance)\b/g, "<performance>"],
-  [/\b(center of gravity|stable center|steady center|internal shape|memorable silhouette|different scale|structural shift|clear contour|sharp picture)\b/g, "<shape>"],
+  [/\b((?:steady|stable)\s+center\s+of\s+gravity|center of gravity|stable center|steady center|internal shape|memorable silhouette|different scale|structural shift|clear contour|sharp picture)\b/g, "<shape>"],
   [/\b(background color|surface|the seams|one color|museum lit|ceremonial|proximity)\b/g, "<texture>"],
 ];
 
@@ -127,6 +138,15 @@ export function scoreSummaryQuality(input: SummaryQualityInput) {
   const opener = words.slice(0, 3).join(" ");
   if (GENERIC_OPENINGS.some((pattern) => opener.startsWith(pattern))) {
     score -= 10;
+  }
+
+  const abstractTemplateHits = ABSTRACT_TEMPLATE_PATTERNS.filter((pattern) =>
+    pattern.test(normalizedSummary),
+  ).length;
+  if (abstractTemplateHits >= 2) {
+    score -= 22;
+  } else if (abstractTemplateHits === 1) {
+    score -= 12;
   }
 
   if (hasHeavyWordRepetition(significantWords)) {
