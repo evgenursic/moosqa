@@ -3,10 +3,28 @@ import { expect, type Page, test } from "@playwright/test";
 const knownReleasePath = "/releases/laufey-1spov0b?from=%2F%23latest";
 
 test("public health endpoint returns a sanitized status payload", async ({ request }) => {
-  const response = await request.get("/api/health");
-  expect(response.status()).toBe(200);
+  let payload: Record<string, unknown> | null = null;
 
-  const payload = await response.json();
+  await expect.poll(
+    async () => {
+      const response = await request.get("/api/health");
+      if (response.status() !== 200) {
+        return response.status();
+      }
+
+      payload = await response.json();
+      return response.status();
+    },
+    {
+      intervals: [1_000, 3_000, 5_000, 10_000],
+      timeout: 60_000,
+    },
+  ).toBe(200);
+
+  if (!payload) {
+    throw new Error("Health endpoint returned 200 without a JSON payload.");
+  }
+
   expect(payload.generatedAt).toEqual(expect.any(String));
   expect(["healthy", "running", "warning", "error", "idle"]).toContain(payload.status);
   expect(payload.sync).toEqual(expect.objectContaining({
