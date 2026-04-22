@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "check:workflows": "node scripts/check-workflows.mjs",
     "lint": "eslint",
     "test:unit": "tsx --test tests/unit/**/*.test.ts",
     "smoke:prod": "playwright test --project=prod-smoke",
