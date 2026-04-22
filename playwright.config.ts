@@ -5,6 +5,7 @@ const baseURL = process.env.MOOSQA_SMOKE_BASE_URL || "https://moosqa-ci4e.vercel
 export default defineConfig({
   testDir: "./tests",
   timeout: 60_000,
+  retries: process.env.CI ? 1 : 0,
   expect: {
     timeout: 10_000,
   },

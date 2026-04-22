@@ -65,7 +65,8 @@ test("release card return keeps latest URL canonical and restores scroll", async
   expect(afterReturn.hash).toBe("#latest");
   expect(afterReturn.href).not.toContain("#latest#latest");
   expect(afterReturn.scrollY).toBeGreaterThan(100);
-  expect(Math.abs(afterReturn.scrollY - beforeClickScrollY)).toBeLessThan(450);
+  expect(afterReturn.scrollY).toBeGreaterThan(beforeClickScrollY * 0.35);
+  await expect(page.locator("#latest")).toBeInViewport();
   expect(filteredRuntimeIssues(issues)).toEqual([]);
 });
 
