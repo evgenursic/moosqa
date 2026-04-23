@@ -9,6 +9,7 @@ import {
   ReleaseType,
 } from "@/generated/prisma/enums";
 import { ensureDatabase } from "@/lib/database";
+import { applyReleaseEditorialFields, buildVisibleReleaseWhere } from "@/lib/editorial";
 import { prisma } from "@/lib/prisma";
 import { getSiteUrl } from "@/lib/site";
 import { getDisplaySummary } from "@/lib/utils";
@@ -73,6 +74,8 @@ type DigestCandidate = {
   qualityScore: number;
   aiSummary: string | null;
   summary: string | null;
+  genreOverride: string | null;
+  summaryOverride: string | null;
 };
 
 type RankedDigestItem = {
@@ -725,32 +728,33 @@ export function selectDigestItems(input: {
 }) {
   const ranked = input.candidates
     .map((candidate) => {
-      const matchReasons = buildMatchReasons(candidate, input.signals);
+      const editedCandidate = applyReleaseEditorialFields(candidate);
+      const matchReasons = buildMatchReasons(editedCandidate, input.signals);
       if (matchReasons.length === 0) {
         return null;
       }
 
       return {
-        id: candidate.id,
-        slug: candidate.slug,
-        title: candidate.title,
-        artistName: candidate.artistName,
-        projectTitle: candidate.projectTitle,
-        labelName: candidate.labelName,
-        genreName: candidate.genreName,
-        releaseType: candidate.releaseType,
-        publishedAt: candidate.publishedAt.toISOString(),
+        id: editedCandidate.id,
+        slug: editedCandidate.slug,
+        title: editedCandidate.title,
+        artistName: editedCandidate.artistName,
+        projectTitle: editedCandidate.projectTitle,
+        labelName: editedCandidate.labelName,
+        genreName: editedCandidate.genreName,
+        releaseType: editedCandidate.releaseType,
+        publishedAt: editedCandidate.publishedAt.toISOString(),
         summary: getDisplaySummary({
-          aiSummary: candidate.aiSummary,
-          summary: candidate.summary,
-          artistName: candidate.artistName,
-          projectTitle: candidate.projectTitle,
-          title: candidate.title,
-          releaseType: candidate.releaseType,
-          genreName: candidate.genreName,
+          aiSummary: editedCandidate.aiSummary,
+          summary: editedCandidate.summary,
+          artistName: editedCandidate.artistName,
+          projectTitle: editedCandidate.projectTitle,
+          title: editedCandidate.title,
+          releaseType: editedCandidate.releaseType,
+          genreName: editedCandidate.genreName,
         }),
         matchReasons,
-        score: scoreDigestCandidate(candidate, matchReasons),
+        score: scoreDigestCandidate(editedCandidate, matchReasons),
       } satisfies RankedDigestItem;
     })
     .filter((item): item is RankedDigestItem => Boolean(item))
@@ -983,7 +987,7 @@ async function buildNotificationJobDraft(input: {
   }
 
   const candidates = await prisma.release.findMany({
-    where: {
+    where: buildVisibleReleaseWhere({
       releaseType: {
         in: [...ALLOWED_DIGEST_RELEASE_TYPES],
       },
@@ -996,7 +1000,7 @@ async function buildNotificationJobDraft(input: {
         ...signals.followedLabels.map((labelName) => ({ labelName })),
         ...signals.savedGenres.map((genreName) => ({ genreName })),
       ],
-    },
+    }),
     orderBy: [{ publishedAt: "desc" }, { qualityScore: "desc" }],
     take: 60,
     select: {
@@ -1012,6 +1016,8 @@ async function buildNotificationJobDraft(input: {
       qualityScore: true,
       aiSummary: true,
       summary: true,
+      genreOverride: true,
+      summaryOverride: true,
     },
   });
   const items = selectDigestItems({

@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { ensureDatabase } from "@/lib/database";
+import { applyReleaseEditorialFields } from "@/lib/editorial";
 import { prisma } from "@/lib/prisma";
 import { getSearchGenreFacets } from "@/lib/release-sections";
 import { getSiteUrl } from "@/lib/site";
@@ -22,12 +23,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     await ensureDatabase();
 
     const releases = await prisma.release.findMany({
+      where: {
+        isHidden: false,
+      },
       select: {
         slug: true,
         updatedAt: true,
         publishedAt: true,
         imageUrl: true,
         thumbnailUrl: true,
+        imageUrlOverride: true,
       },
       orderBy: {
         publishedAt: "desc",
@@ -35,7 +40,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       take: SITEMAP_RELEASE_LIMIT,
     });
 
-    releaseEntries = releases.map((release) => buildReleaseSitemapEntry(siteUrl, release));
+    releaseEntries = releases.map((release) =>
+      buildReleaseSitemapEntry(siteUrl, applyReleaseEditorialFields(release)),
+    );
   } catch (error) {
     console.error("Release sitemap entries failed to load.", error);
   }

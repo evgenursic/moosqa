@@ -4,9 +4,30 @@
 
 1. Merge or push to `main`.
 2. Wait for the Vercel production deployment to finish.
-3. Verify `https://moosqa-ci4e.vercel.app/api/health?scope=ready`.
-4. Run `npm run smoke:prod`.
-5. Check `/ops?secret=<DEBUG_SECRET>` for workflow freshness, sync health, alerts, and production smoke status.
+3. Run `npm run db:inspect` before assuming the direct Supabase host is usable from the current environment.
+4. If `DATABASE_URL` is unresolved but `DATABASE_RUNTIME_URL` reports the required tables, use `npm run db:setup` as the activation path for schema changes.
+5. Re-run `npm run db:inspect` and confirm the runtime target still reports the required tables.
+6. Verify `https://moosqa-ci4e.vercel.app/api/health?scope=ready`.
+7. Run `npm run smoke:prod`.
+8. Check `/ops?secret=<DEBUG_SECRET>` for workflow freshness, sync health, alerts, production smoke status, and notification delivery totals.
+
+## Database Activation
+
+Current operational expectation:
+
+- `DATABASE_URL` may not resolve from this workstation or CI environment.
+- `DATABASE_RUNTIME_URL` is the canonical reachable target for `db push` plus hardening in this repo.
+- `npm run db:setup` is the safe reproducible path because it attempts the direct target first, then falls back to the runtime pooled target and re-applies grants.
+
+Use this sequence for schema-bearing deploys:
+
+1. `npm run db:inspect`
+2. `npm run db:setup`
+3. `npm run db:inspect`
+4. `npm run build`
+5. deploy and smoke test
+
+Do not claim migration success unless `db:inspect` shows the required tables on the runtime target.
 
 ## Rollback
 
@@ -14,6 +35,7 @@
 2. Run `npm run smoke:prod` against production.
 3. Check `/api/health?scope=ready` and `/api/health`.
 4. Confirm GitHub workflow status reporting recovers in `/ops`.
+5. If a schema-bearing change partially applied, re-run `npm run db:inspect` before making additional DB changes.
 
 ## Failed Sync
 
@@ -30,6 +52,15 @@
 3. Confirm outbound metadata fetches are not blocked by source websites.
 4. Run `Repair weak cards` manually.
 5. Use `/debug?secret=<DEBUG_SECRET>` to inspect weak-card reasons before broad code changes.
+
+## Failed Notification Processing
+
+1. Check `/ops?secret=<DEBUG_SECRET>` for queued, sent, failed, and skipped notification totals.
+2. Verify `CRON_SECRET`, `RESEND_API_KEY`, and `ALERT_EMAIL_FROM` are present in Vercel.
+3. Hit `/api/notifications` without a secret and confirm it still returns `401`.
+4. Trigger `/api/notifications?phase=enqueue&mode=all` with a valid bearer or query secret.
+5. If jobs remain skipped, inspect missing profile emails, disabled preferences, or transport configuration before retrying.
+6. Re-run `npm run db:inspect` if the route unexpectedly returns `503`.
 
 ## Secret Rotation
 
@@ -69,7 +100,10 @@ Rotation order:
 - `npm run lint`
 - `npm run test:unit`
 - `npm run build`
+- `npm run db:inspect`
 - `npm run smoke:prod`
 - Known release URL works: `/releases/laufey-1spov0b?from=%2F%23latest`
 - Homepage release-card return restores `/#latest` without duplicate hashes.
 - `/ops` shows recent successful workflow reports.
+- `/api/notifications` returns `401` without secret and `200` with secret.
+- `/admin` resolves to sign-in-required or access-denied instead of a server error.

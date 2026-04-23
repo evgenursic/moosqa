@@ -1,6 +1,7 @@
 import { FollowTargetType } from "@/generated/prisma/enums";
 
 import { ensureDatabase } from "@/lib/database";
+import { buildVisibleReleaseWhere } from "@/lib/editorial";
 import { prisma } from "@/lib/prisma";
 
 export type AuthUserProfileInput = {
@@ -239,7 +240,7 @@ export async function getPersonalRadarForUser(userId: string) {
       take: 12,
       select: {
         release: {
-          select: personalRadarReleaseSelect,
+          select: personalRadarReleaseSelectWithVisibility,
         },
       },
     }),
@@ -264,12 +265,12 @@ export async function getPersonalRadarForUser(userId: string) {
   const followedReleases =
     artistTargets.length > 0 || labelTargets.length > 0
       ? await prisma.release.findMany({
-          where: {
+          where: buildVisibleReleaseWhere({
             OR: [
               ...artistTargets.map((artistName) => ({ artistName })),
               ...labelTargets.map((labelName) => ({ labelName })),
             ],
-          },
+          }),
           orderBy: { publishedAt: "desc" },
           take: 12,
           select: personalRadarReleaseSelect,
@@ -277,7 +278,14 @@ export async function getPersonalRadarForUser(userId: string) {
       : [];
 
   return {
-    savedReleases: savedReleases.map((entry) => entry.release),
+    savedReleases: savedReleases
+      .map((entry) => entry.release)
+      .filter((release) => !release.isHidden)
+      .map((release) => {
+        const { isHidden, ...visibleRelease } = release;
+        void isHidden;
+        return visibleRelease;
+      }),
     followedReleases,
     follows,
   };
@@ -293,6 +301,11 @@ const personalRadarReleaseSelect = {
   genreName: true,
   publishedAt: true,
 } satisfies Record<keyof PersonalRadarRelease, true>;
+
+const personalRadarReleaseSelectWithVisibility = {
+  ...personalRadarReleaseSelect,
+  isHidden: true,
+};
 
 export async function followTargetForUser(
   userId: string,

@@ -21,7 +21,21 @@ Notification delivery adds:
 - `NotificationJob`
 - `NotificationDeliveryLog`
 
-Apply the Prisma schema change before enabling the workflow in production.
+Current operational path:
+
+1. Run `npm run db:inspect`.
+2. If `DATABASE_URL` is unreachable but `DATABASE_RUNTIME_URL` shows the required tables, treat the runtime pooled URL as the active schema target.
+3. Run `npm run db:setup`.
+4. Re-run `npm run db:inspect` and verify the required tables are present on `DATABASE_RUNTIME_URL`.
+5. Only then enable or trust the notification workflow.
+
+Current status:
+
+- the reachable activation target in this environment is the pooled runtime database
+- pre-migration fallbacks remain in place for any environment that has not run the setup path yet
+- production should be treated as live-ready only after `/api/notifications` returns a protected `200` with the expected secret and `/ops` shows notification job activity
+
+`migrate deploy` is not the primary activation path in this repo right now because the live database was behind earlier auth-era tables and the direct Supabase host is currently unresolved from this environment.
 
 ## Runtime flow
 
@@ -46,6 +60,13 @@ Private ops view now includes:
 - pending/processing/sent/failed/skipped totals
 - recent notification jobs
 - recent notification delivery attempts
+
+Recommended first checks:
+
+1. `npm run db:inspect`
+2. `/api/notifications` without secret -> expect `401`
+3. `/api/notifications?phase=enqueue&mode=all` with secret -> expect `200`
+4. `/ops?secret=<DEBUG_SECRET>` -> inspect recent notification job rows
 
 ## Safe re-run behavior
 

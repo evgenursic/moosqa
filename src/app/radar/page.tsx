@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { getRecommendedReleasesForUser, type RadarRecommendation } from "@/lib/recommendations";
 import { getSiteUrl } from "@/lib/site";
 import { isSupabaseAuthConfigured } from "@/lib/supabase/config";
 import { getSupabaseServerUser } from "@/lib/supabase/server";
@@ -66,6 +67,7 @@ async function RadarContent() {
   });
 
   const radar = await getPersonalRadarForUser(authState.user.id);
+  const recommendations = await getRecommendedReleasesForUser(authState.user.id);
 
   return (
     <section className="border-t border-[var(--color-line)] py-10 md:py-14">
@@ -79,9 +81,10 @@ async function RadarContent() {
         </p>
       </div>
 
-      <div className="grid gap-8 xl:grid-cols-2">
+      <div className="grid gap-8 xl:grid-cols-3">
         <RadarReleaseList title="Saved releases" releases={radar.savedReleases} empty="Save releases from detail pages and they will collect here." />
         <RadarReleaseList title="From your follows" releases={radar.followedReleases} empty="Follow artists or labels on release pages to build this feed." />
+        <RadarRecommendationList releases={recommendations} />
       </div>
 
       <section className="mt-8 border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
@@ -138,6 +141,48 @@ function RadarReleaseList({
         </div>
       ) : (
         <p className="mt-5 text-sm leading-7 text-black/62">{empty}</p>
+      )}
+    </section>
+  );
+}
+
+function RadarRecommendationList({ releases }: { releases: RadarRecommendation[] }) {
+  return (
+    <section className="border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
+      <p className="section-kicker text-black/45">Recommended next</p>
+      {releases.length > 0 ? (
+        <div className="mt-5 grid gap-4">
+          {releases.map((release) => (
+            <Link
+              key={release.id}
+              href={`/releases/${release.slug}?from=%2Fradar`}
+              className="block border border-[var(--color-soft-line)] bg-[var(--color-paper)] p-4 transition hover:border-[var(--color-accent-strong)]"
+            >
+              <p className="text-xl leading-tight text-[var(--color-ink)] serif-display">
+                {release.artistName || release.projectTitle || release.title}
+              </p>
+              {release.artistName && release.projectTitle ? (
+                <p className="mt-1 text-sm text-black/62">{release.projectTitle}</p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.16em] text-black/48">
+                {release.genreName ? <span>{release.genreName}</span> : null}
+                {release.labelName ? <span>{release.labelName}</span> : null}
+                <span>{formatRedditDateLabel(release.publishedAt)}</span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.16em] text-black/52">
+                {release.reasons.map((reason) => (
+                  <span key={reason} className="border border-[var(--color-soft-line)] px-2 py-1">
+                    {reason}
+                  </span>
+                ))}
+              </div>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-5 text-sm leading-7 text-black/62">
+          Recommendations appear after MooSQA sees enough save, follow, and genre signals.
+        </p>
       )}
     </section>
   );

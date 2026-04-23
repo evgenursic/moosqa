@@ -11,6 +11,7 @@
     "test:unit": "tsx --test tests/unit/**/*.test.ts",
     "smoke:prod": "playwright test --project=prod-smoke",
     "db:generate": "prisma generate",
+    "db:inspect": "node scripts/inspect-db-targets.mjs",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma db push",
     "db:push": "prisma db push",

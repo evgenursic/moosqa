@@ -25,6 +25,9 @@ const PUBLIC_TABLES = [
   '"AlertDeliveryLog"',
   '"NotificationJob"',
   '"NotificationDeliveryLog"',
+  '"EditorialCollection"',
+  '"EditorialCollectionEntry"',
+  '"ReleaseEditorialAudit"',
 ];
 
 async function main() {

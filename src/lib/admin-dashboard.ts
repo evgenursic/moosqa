@@ -1,0 +1,410 @@
+import { unstable_cache } from "next/cache";
+
+import { FollowTargetType, NotificationJobStatus } from "@/generated/prisma/enums";
+import { Prisma } from "@/generated/prisma/client";
+import { ensureDatabase } from "@/lib/database";
+import { applyReleaseEditorialFields, buildVisibleReleaseWhere } from "@/lib/editorial";
+import { prisma } from "@/lib/prisma";
+import { getQualityDashboardData } from "@/lib/quality-dashboard";
+import { getReleaseListingItemsByIds } from "@/lib/release-sections";
+
+type CountRow = {
+  count: bigint;
+};
+
+type SavedGenreRow = {
+  genre: string;
+  count: bigint;
+};
+
+type SearchReleaseRow = {
+  id: string;
+  slug: string;
+  title: string;
+  artistName: string | null;
+  projectTitle: string | null;
+  labelName: string | null;
+  genreName: string | null;
+  genreOverride: string | null;
+  summary: string | null;
+  summaryOverride: string | null;
+  imageUrl: string | null;
+  imageUrlOverride: string | null;
+  sourceUrl: string;
+  sourceUrlOverride: string | null;
+  releaseType: string;
+  publishedAt: Date;
+  qualityScore: number;
+  isHidden: boolean;
+  hiddenReason: string | null;
+  isFeatured: boolean;
+  editorialRank: number;
+  editorialNotes: string | null;
+  featuredAt: Date | null;
+  editorialUpdatedAt: Date | null;
+};
+
+const ADMIN_SEARCH_LIMIT = 18;
+
+export async function getAdminDashboardData(query: string) {
+  await ensureDatabase();
+  const normalizedQuery = query.trim();
+
+  const [
+    quality,
+    productAnalytics,
+    collections,
+    featuredReleases,
+    searchResults,
+    recentAudits,
+  ] = await Promise.all([
+    getQualityDashboardData(),
+    getProductAnalyticsData(),
+    getEditorialCollections(),
+    getFeaturedReleaseRows(),
+    normalizedQuery ? searchAdminReleases(normalizedQuery) : Promise.resolve([]),
+    getRecentEditorialAudits(),
+  ]);
+
+  return {
+    quality,
+    productAnalytics,
+    collections,
+    featuredReleases,
+    searchResults,
+    recentAudits,
+  };
+}
+
+const getProductAnalyticsData = unstable_cache(
+  async () => {
+    const [
+      totalUsers,
+      totalSaves,
+      totalFollows,
+      usersWithSaves,
+      usersWithFollows,
+      totalOpens,
+      notificationPreferenceUsers,
+      notificationEligibleRows,
+      notificationJobGroups,
+      topSavedReleaseGroups,
+      topFollowArtistGroups,
+      topFollowLabelGroups,
+      topSavedGenres,
+    ] = await Promise.all([
+      prisma.userProfile.count(),
+      prisma.userSavedRelease.count(),
+      prisma.userFollow.count(),
+      prisma.userSavedRelease.findMany({
+        distinct: ["userId"],
+        select: { userId: true },
+      }),
+      prisma.userFollow.findMany({
+        distinct: ["userId"],
+        select: { userId: true },
+      }),
+      prisma.analyticsEvent.count({
+        where: {
+          action: "OPEN",
+        },
+      }),
+      prisma.userPreference.count({
+        where: {
+          emailNotifications: true,
+        },
+      }),
+      prisma.$queryRaw<CountRow[]>(Prisma.sql`
+        select count(distinct up."userId") as count
+        from "UserPreference" up
+        join "UserProfile" profile on profile."id" = up."userId"
+        left join "UserFollow" uf on uf."userId" = up."userId"
+        left join "UserSavedRelease" usr on usr."userId" = up."userId"
+        left join "Release" r on r."id" = usr."releaseId"
+        where up."emailNotifications" = true
+          and (up."dailyDigest" = true or up."weeklyDigest" = true)
+          and profile."email" is not null
+          and (
+            uf."id" is not null
+            or r."genreName" is not null
+          )
+      `),
+      prisma.notificationJob.groupBy({
+        by: ["status"],
+        _count: {
+          _all: true,
+        },
+      }),
+      prisma.userSavedRelease.groupBy({
+        by: ["releaseId"],
+        _count: {
+          _all: true,
+        },
+        orderBy: {
+          _count: {
+            releaseId: "desc",
+          },
+        },
+        take: 8,
+      }),
+      prisma.userFollow.groupBy({
+        by: ["targetValue"],
+        where: {
+          targetType: FollowTargetType.ARTIST,
+        },
+        _count: {
+          _all: true,
+        },
+        orderBy: {
+          _count: {
+            targetValue: "desc",
+          },
+        },
+        take: 8,
+      }),
+      prisma.userFollow.groupBy({
+        by: ["targetValue"],
+        where: {
+          targetType: FollowTargetType.LABEL,
+        },
+        _count: {
+          _all: true,
+        },
+        orderBy: {
+          _count: {
+            targetValue: "desc",
+          },
+        },
+        take: 8,
+      }),
+      prisma.$queryRaw<SavedGenreRow[]>(Prisma.sql`
+        select r."genreName" as genre, count(*) as count
+        from "UserSavedRelease" usr
+        join "Release" r on r."id" = usr."releaseId"
+        where r."genreName" is not null
+        group by r."genreName"
+        order by count(*) desc, r."genreName" asc
+        limit 8
+      `),
+    ]);
+
+    const topSavedReleaseIds = topSavedReleaseGroups.map((entry) => entry.releaseId);
+    const topSavedReleaseMap = new Map(
+      (await getReleaseListingItemsByIds(topSavedReleaseIds)).map((release) => [release.id, release]),
+    );
+
+    const saveUserCount = usersWithSaves.length;
+    const followUserCount = usersWithFollows.length;
+    const radarUserCount = new Set([
+      ...usersWithSaves.map((entry) => entry.userId),
+      ...usersWithFollows.map((entry) => entry.userId),
+    ]).size;
+    const notificationEligibleCount = Number(notificationEligibleRows[0]?.count || 0);
+
+    return {
+      funnel: {
+        totalUsers,
+        saveUsers: saveUserCount,
+        followUsers: followUserCount,
+        radarUsers: radarUserCount,
+        notificationUsers: notificationPreferenceUsers,
+        notificationEligibleUsers: notificationEligibleCount,
+      },
+      conversion: {
+        totalSaves,
+        totalFollows,
+        totalOpens,
+        savesPer100Opens: totalOpens > 0 ? roundToOneDecimal((totalSaves / totalOpens) * 100) : 0,
+        followsPer100Opens: totalOpens > 0 ? roundToOneDecimal((totalFollows / totalOpens) * 100) : 0,
+      },
+      notifications: {
+        pending: readNotificationJobCount(notificationJobGroups, NotificationJobStatus.PENDING),
+        processing: readNotificationJobCount(notificationJobGroups, NotificationJobStatus.PROCESSING),
+        sent: readNotificationJobCount(notificationJobGroups, NotificationJobStatus.SENT),
+        failed: readNotificationJobCount(notificationJobGroups, NotificationJobStatus.FAILED),
+        skipped: readNotificationJobCount(notificationJobGroups, NotificationJobStatus.SKIPPED),
+      },
+      topSavedReleases: topSavedReleaseGroups
+        .map((entry) => ({
+          release: topSavedReleaseMap.get(entry.releaseId) || null,
+          count: entry._count._all,
+        }))
+        .filter((entry) => entry.release),
+      topFollowedArtists: topFollowArtistGroups.map((entry) => ({
+        label: entry.targetValue,
+        count: entry._count._all,
+      })),
+      topFollowedLabels: topFollowLabelGroups.map((entry) => ({
+        label: entry.targetValue,
+        count: entry._count._all,
+      })),
+      topSavedGenres: topSavedGenres.map((entry) => ({
+        label: entry.genre,
+        count: Number(entry.count),
+      })),
+    };
+  },
+  ["admin-product-analytics"],
+  {
+    revalidate: 60,
+    tags: ["ops-dashboard", "analytics", "releases"],
+  },
+);
+
+async function getEditorialCollections() {
+  const collections = await prisma.editorialCollection.findMany({
+    orderBy: [{ isPublished: "desc" }, { updatedAt: "desc" }],
+    take: 12,
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      description: true,
+      type: true,
+      isPublished: true,
+      publishedAt: true,
+      updatedAt: true,
+      entries: {
+        orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+        take: 6,
+        select: {
+          id: true,
+          position: true,
+          note: true,
+          release: {
+            select: {
+              id: true,
+              slug: true,
+              title: true,
+              artistName: true,
+              projectTitle: true,
+              genreName: true,
+              genreOverride: true,
+              publishedAt: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return collections.map((collection) => ({
+    ...collection,
+    entries: collection.entries.map((entry) => ({
+      id: entry.id,
+      position: entry.position,
+      note: entry.note,
+      release: {
+        ...entry.release,
+        genreName: entry.release.genreOverride?.trim() || entry.release.genreName,
+      },
+    })),
+  }));
+}
+
+async function getFeaturedReleaseRows() {
+  const releases = await prisma.release.findMany({
+    where: buildVisibleReleaseWhere({ isFeatured: true }),
+    orderBy: [{ editorialRank: "desc" }, { featuredAt: "desc" }, { publishedAt: "desc" }],
+    take: 10,
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      artistName: true,
+      projectTitle: true,
+      genreName: true,
+      genreOverride: true,
+      featuredAt: true,
+      editorialRank: true,
+      publishedAt: true,
+    },
+  });
+
+  return releases.map((release) => ({
+    ...release,
+    genreName: release.genreOverride?.trim() || release.genreName,
+  }));
+}
+
+async function searchAdminReleases(query: string) {
+  const releases = await prisma.release.findMany({
+    where: {
+      OR: [
+        { slug: { contains: query, mode: "insensitive" } },
+        { title: { contains: query, mode: "insensitive" } },
+        { artistName: { contains: query, mode: "insensitive" } },
+        { projectTitle: { contains: query, mode: "insensitive" } },
+        { labelName: { contains: query, mode: "insensitive" } },
+      ],
+    },
+    orderBy: [{ isFeatured: "desc" }, { publishedAt: "desc" }],
+    take: ADMIN_SEARCH_LIMIT,
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      artistName: true,
+      projectTitle: true,
+      labelName: true,
+      genreName: true,
+      genreOverride: true,
+      summary: true,
+      summaryOverride: true,
+      imageUrl: true,
+      imageUrlOverride: true,
+      sourceUrl: true,
+      sourceUrlOverride: true,
+      releaseType: true,
+      publishedAt: true,
+      qualityScore: true,
+      isHidden: true,
+      hiddenReason: true,
+      isFeatured: true,
+      editorialRank: true,
+      editorialNotes: true,
+      featuredAt: true,
+      editorialUpdatedAt: true,
+    },
+  });
+
+  return releases.map((release) => applyReleaseEditorialFields(release satisfies SearchReleaseRow));
+}
+
+async function getRecentEditorialAudits() {
+  return prisma.releaseEditorialAudit.findMany({
+    orderBy: [{ createdAt: "desc" }],
+    take: 18,
+    select: {
+      id: true,
+      action: true,
+      detailsJson: true,
+      createdAt: true,
+      editor: {
+        select: {
+          email: true,
+          displayName: true,
+        },
+      },
+      release: {
+        select: {
+          slug: true,
+          title: true,
+          artistName: true,
+          projectTitle: true,
+        },
+      },
+    },
+  });
+}
+
+function readNotificationJobCount(
+  rows: Array<{ status: NotificationJobStatus; _count: { _all: number } }>,
+  status: NotificationJobStatus,
+) {
+  return rows.find((row) => row.status === status)?._count._all || 0;
+}
+
+function roundToOneDecimal(value: number) {
+  return Math.round(value * 10) / 10;
+}

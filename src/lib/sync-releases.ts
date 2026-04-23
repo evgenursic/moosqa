@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { ArtworkStatus, GenreStatus, LinkStatus, ReleaseType } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
 import { ensureDatabase } from "@/lib/database";
+import { applyReleaseEditorialFields } from "@/lib/editorial";
 import { prisma } from "@/lib/prisma";
 import { generateAiSummary, shouldRegenerateAiSummary } from "@/lib/ai-summary";
 import { searchBandcampRelease } from "@/lib/bandcamp-search";
@@ -299,10 +300,17 @@ export async function getReleaseBySlug(slug: string) {
 }
 
 const getCachedReleaseBySlug = unstable_cache(
-  async (slug: string) =>
-    prisma.release.findUnique({
+  async (slug: string) => {
+    const release = await prisma.release.findUnique({
       where: { slug },
-    }),
+    });
+
+    if (!release || release.isHidden) {
+      return null;
+    }
+
+    return applyReleaseEditorialFields(release);
+  },
   ["release-by-slug"],
   {
     revalidate: RELEASES_CACHE_REVALIDATE_SECONDS,

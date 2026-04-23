@@ -3,6 +3,7 @@ import { ReleaseType } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { ensureDatabase } from "@/lib/database";
 import { dedupeReleasesForDisplay } from "@/lib/display-dedupe";
+import { applyReleaseEditorialFields, buildVisibleReleaseWhere } from "@/lib/editorial";
 import { isSpecificGenreProfile } from "@/lib/genre-profile";
 import { getGenreOverride } from "@/lib/genre-overrides";
 import { prisma } from "@/lib/prisma";
@@ -54,6 +55,16 @@ export type ReleaseListingItem = {
   upvoteRatio: number | null;
   awardCount: number | null;
   crosspostCount: number | null;
+};
+
+type ReleaseListingRow = ReleaseListingItem & {
+  isHidden: boolean;
+  isFeatured: boolean;
+  editorialRank: number;
+  genreOverride: string | null;
+  summaryOverride: string | null;
+  imageUrlOverride: string | null;
+  sourceUrlOverride: string | null;
 };
 
 type ReleaseSectionDefinition = {
@@ -185,6 +196,13 @@ const releaseListingSelect = {
   bandcampUrl: true,
   officialWebsiteUrl: true,
   officialStoreUrl: true,
+  isHidden: true,
+  isFeatured: true,
+  editorialRank: true,
+  genreOverride: true,
+  summaryOverride: true,
+  imageUrlOverride: true,
+  sourceUrlOverride: true,
   qualityScore: true,
   labelName: true,
   genreName: true,
@@ -203,7 +221,7 @@ const releaseListingSelect = {
   upvoteRatio: true,
   awardCount: true,
   crosspostCount: true,
-} as const;
+} as const satisfies Record<keyof ReleaseListingRow, true>;
 
 export async function getHomepageSectionsData() {
   const now = Date.now();
@@ -235,52 +253,53 @@ async function getHomepageSectionsDataUncached() {
   ] = await Promise.all([
     prisma.release.findMany({
       select: releaseListingSelect,
+      where: buildVisibleReleaseWhere(),
       orderBy: { publishedAt: "desc" },
       take: HOMEPAGE_LIMITS.latestCandidates,
     }),
     prisma.release.findMany({
       select: releaseListingSelect,
-      where: { scoreCount: { gt: 0 } },
+      where: buildVisibleReleaseWhere({ scoreCount: { gt: 0 } }),
       orderBy: [{ scoreAverage: "desc" }, { scoreCount: "desc" }, { publishedAt: "desc" }],
       take: HOMEPAGE_LIMITS.topRatedCandidates,
     }),
     prisma.release.findMany({
       select: releaseListingSelect,
-      where: getTopEngagedWhere(),
+      where: buildVisibleReleaseWhere(getTopEngagedWhere()),
       orderBy: [{ commentCount: "desc" }, { publishedAt: "desc" }],
       take: HOMEPAGE_LIMITS.topEngagedCandidates,
     }),
     prisma.release.findMany({
       select: releaseListingSelect,
-      where: getTopEngagedWhere(),
+      where: buildVisibleReleaseWhere(getTopEngagedWhere()),
       orderBy: [{ score: "desc" }, { publishedAt: "desc" }],
       take: HOMEPAGE_LIMITS.topEngagedCandidates,
     }),
     prisma.release.findMany({
       select: releaseListingSelect,
-      where: getTopEngagedWhere(),
+      where: buildVisibleReleaseWhere(getTopEngagedWhere()),
       orderBy: [{ awardCount: "desc" }, { crosspostCount: "desc" }, { publishedAt: "desc" }],
       take: Math.ceil(HOMEPAGE_LIMITS.topEngagedCandidates / 2),
     }),
     prisma.release.findMany({
       select: releaseListingSelect,
-      where: { releaseType: ReleaseType.ALBUM },
+      where: buildVisibleReleaseWhere({ releaseType: ReleaseType.ALBUM }),
       orderBy: { publishedAt: "desc" },
       take: HOMEPAGE_LIMITS.gridCandidates,
     }),
     prisma.release.findMany({
       select: releaseListingSelect,
-      where: { releaseType: ReleaseType.EP },
+      where: buildVisibleReleaseWhere({ releaseType: ReleaseType.EP }),
       orderBy: { publishedAt: "desc" },
       take: HOMEPAGE_LIMITS.gridCandidates,
     }),
     prisma.release.findMany({
       select: releaseListingSelect,
-      where: {
+      where: buildVisibleReleaseWhere({
         releaseType: {
           in: [ReleaseType.PERFORMANCE, ReleaseType.LIVE_SESSION],
         },
-      },
+      }),
       orderBy: { publishedAt: "desc" },
       take: HOMEPAGE_LIMITS.gridCandidates,
     }),
@@ -311,6 +330,7 @@ export async function getSearchReleases(options?: { useCache?: boolean; ttlMs?: 
 
   const releases = await prisma.release.findMany({
     select: releaseListingSelect,
+    where: buildVisibleReleaseWhere(),
     orderBy: { publishedAt: "desc" },
   });
 
@@ -337,11 +357,11 @@ export async function getSearchGenreFacets(options?: { useCache?: boolean; ttlMs
 
   const recentCutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
   const releases = await prisma.release.findMany({
-    where: {
+    where: buildVisibleReleaseWhere({
       publishedAt: {
         gte: recentCutoff,
       },
-    },
+    }),
     select: {
       title: true,
       artistName: true,
@@ -549,9 +569,10 @@ export async function getReleaseListingItemsByIds(releaseIds: string[]) {
 
   const releases = await prisma.release.findMany({
     where: {
-      id: {
-        in: uniqueIds,
-      },
+      AND: [
+        { id: { in: uniqueIds } },
+        { isHidden: false },
+      ],
     },
     select: releaseListingSelect,
   });
@@ -603,6 +624,7 @@ async function getSectionReleasesUncached(section: ReleaseSectionKey) {
   if (section === "latest") {
     const releases = await prisma.release.findMany({
       select: releaseListingSelect,
+      where: buildVisibleReleaseWhere(),
       orderBy: { publishedAt: "desc" },
     });
     return prepareDisplayReleases(releases);
@@ -611,7 +633,7 @@ async function getSectionReleasesUncached(section: ReleaseSectionKey) {
   if (section === "top-rated") {
     const releases = await prisma.release.findMany({
       select: releaseListingSelect,
-      where: { scoreCount: { gt: 0 } },
+      where: buildVisibleReleaseWhere({ scoreCount: { gt: 0 } }),
       orderBy: [{ scoreAverage: "desc" }, { scoreCount: "desc" }, { publishedAt: "desc" }],
     });
     return prepareDisplayReleases(releases);
@@ -620,7 +642,7 @@ async function getSectionReleasesUncached(section: ReleaseSectionKey) {
   if (section === "top-engaged") {
     const releases = await prisma.release.findMany({
       select: releaseListingSelect,
-      where: getTopEngagedWhere(),
+      where: buildVisibleReleaseWhere(getTopEngagedWhere()),
       orderBy: [{ commentCount: "desc" }, { score: "desc" }, { publishedAt: "desc" }],
     });
     return prepareDisplayReleases(releases.sort(sortByEngagement));
@@ -629,7 +651,7 @@ async function getSectionReleasesUncached(section: ReleaseSectionKey) {
   if (section === "albums") {
     const releases = await prisma.release.findMany({
       select: releaseListingSelect,
-      where: { releaseType: ReleaseType.ALBUM },
+      where: buildVisibleReleaseWhere({ releaseType: ReleaseType.ALBUM }),
       orderBy: { publishedAt: "desc" },
     });
     return prepareDisplayReleases(releases);
@@ -638,7 +660,7 @@ async function getSectionReleasesUncached(section: ReleaseSectionKey) {
   if (section === "eps") {
     const releases = await prisma.release.findMany({
       select: releaseListingSelect,
-      where: { releaseType: ReleaseType.EP },
+      where: buildVisibleReleaseWhere({ releaseType: ReleaseType.EP }),
       orderBy: { publishedAt: "desc" },
     });
     return prepareDisplayReleases(releases);
@@ -646,19 +668,62 @@ async function getSectionReleasesUncached(section: ReleaseSectionKey) {
 
   const releases = await prisma.release.findMany({
     select: releaseListingSelect,
-    where: {
+    where: buildVisibleReleaseWhere({
       releaseType: {
         in: [ReleaseType.PERFORMANCE, ReleaseType.LIVE_SESSION],
       },
-    },
+    }),
     orderBy: { publishedAt: "desc" },
   });
 
   return prepareDisplayReleases(releases);
 }
 
-function prepareDisplayReleases(releases: ReleaseListingItem[]) {
-  return dedupeReleasesForDisplay(releases).map(refineDisplayGenre);
+function prepareDisplayReleases(releases: ReleaseListingRow[]) {
+  return dedupeReleasesForDisplay(
+    releases
+      .filter((release) => !release.isHidden)
+      .map((release) => {
+        const edited = applyReleaseEditorialFields(release);
+
+        return {
+          id: edited.id,
+          slug: edited.slug,
+          title: edited.title,
+          artistName: edited.artistName,
+          projectTitle: edited.projectTitle,
+          releaseType: edited.releaseType,
+          imageUrl: edited.imageUrl,
+          thumbnailUrl: edited.thumbnailUrl,
+          summary: edited.summary,
+          outletName: edited.outletName,
+          sourceUrl: edited.sourceUrl,
+          youtubeUrl: edited.youtubeUrl,
+          youtubeMusicUrl: edited.youtubeMusicUrl,
+          bandcampUrl: edited.bandcampUrl,
+          officialWebsiteUrl: edited.officialWebsiteUrl,
+          officialStoreUrl: edited.officialStoreUrl,
+          qualityScore: edited.qualityScore,
+          labelName: edited.labelName,
+          genreName: edited.genreName,
+          aiSummary: edited.aiSummary,
+          releaseDate: edited.releaseDate,
+          publishedAt: edited.publishedAt,
+          scoreAverage: edited.scoreAverage,
+          scoreCount: edited.scoreCount,
+          openCount: edited.openCount,
+          listenClickCount: edited.listenClickCount,
+          shareCount: edited.shareCount,
+          positiveReactionCount: edited.positiveReactionCount,
+          negativeReactionCount: edited.negativeReactionCount,
+          score: edited.score,
+          commentCount: edited.commentCount,
+          upvoteRatio: edited.upvoteRatio,
+          awardCount: edited.awardCount,
+          crosspostCount: edited.crosspostCount,
+        } satisfies ReleaseListingItem;
+      }),
+  ).map(refineDisplayGenre);
 }
 
 function buildSectionGenreFacets(releases: ReleaseListingItem[]) {
@@ -885,43 +950,43 @@ function buildLightweightArchiveWhere(
       : {};
 
   if (section === "top-rated") {
-    return {
+    return buildVisibleReleaseWhere({
       scoreCount: { gt: 0 },
       ...genreWhere,
-    };
+    });
   }
 
   if (section === "top-engaged") {
-    return {
+    return buildVisibleReleaseWhere({
       ...getTopEngagedWhere(),
       ...genreWhere,
-    };
+    });
   }
 
   if (section === "albums") {
-    return {
+    return buildVisibleReleaseWhere({
       releaseType: ReleaseType.ALBUM,
       ...genreWhere,
-    };
+    });
   }
 
   if (section === "eps") {
-    return {
+    return buildVisibleReleaseWhere({
       releaseType: ReleaseType.EP,
       ...genreWhere,
-    };
+    });
   }
 
   if (section === "live") {
-    return {
+    return buildVisibleReleaseWhere({
       releaseType: {
         in: [ReleaseType.PERFORMANCE, ReleaseType.LIVE_SESSION],
       },
       ...genreWhere,
-    };
+    });
   }
 
-  return genreWhere;
+  return buildVisibleReleaseWhere(genreWhere);
 }
 
 function getLightweightArchiveOrderBy(
@@ -964,8 +1029,8 @@ function buildArchiveDescription(
   return parts.join(" ");
 }
 
-function mergeReleasePools(...pools: ReleaseListingItem[][]) {
-  const byId = new Map<string, ReleaseListingItem>();
+function mergeReleasePools(...pools: ReleaseListingRow[][]) {
+  const byId = new Map<string, ReleaseListingRow>();
 
   for (const pool of pools) {
     for (const release of pool) {

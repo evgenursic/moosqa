@@ -119,6 +119,14 @@ enum NotificationDeliveryOutcome {
   SKIPPED
 }
 
+enum EditorialCollectionType {
+  EDITORS_PICK
+  CURATED
+  ROUNDUP
+  SEASONAL
+  BEST_OF
+}
+
 model Release {
   id              String        @id @default(cuid())
   source          ReleaseSource @default(REDDIT)
@@ -167,6 +175,18 @@ model Release {
   awardCount      Int?
   crosspostCount  Int?
   rawJson         String?
+  isHidden        Boolean       @default(false)
+  hiddenReason    String?
+  isFeatured      Boolean       @default(false)
+  featuredAt      DateTime?
+  editorialRank   Int           @default(0)
+  genreOverride   String?
+  summaryOverride String?
+  imageUrlOverride String?
+  sourceUrlOverride String?
+  editorialNotes  String?
+  editorialUpdatedAt DateTime?
+  editorialUpdatedBy String?
   scoreAverage    Float         @default(0)
   scoreCount      Int           @default(0)
   openCount       Int           @default(0)
@@ -180,10 +200,14 @@ model Release {
   reactions       ReleaseReaction[]
   analyticsLocks  AnalyticsActionLock[]
   savedBy         UserSavedRelease[]
+  collectionEntries EditorialCollectionEntry[]
+  editorialAudits ReleaseEditorialAudit[]
 
   @@index([publishedAt(sort: Desc)])
   @@index([releaseType, publishedAt(sort: Desc)])
   @@index([qualityScore(sort: Desc), publishedAt(sort: Desc)])
+  @@index([isHidden, publishedAt(sort: Desc)])
+  @@index([isFeatured, editorialRank(sort: Desc), publishedAt(sort: Desc)])
 }
 
 model UserProfile {
@@ -198,6 +222,7 @@ model UserProfile {
   follows     UserFollow[]
   notificationJobs NotificationJob[]
   notificationDeliveries NotificationDeliveryLog[]
+  releaseEditorialAudits ReleaseEditorialAudit[]
 
   @@index([role, createdAt(sort: Desc)])
 }
@@ -291,6 +316,52 @@ model NotificationDeliveryLog {
   @@index([channel, createdAt(sort: Desc)])
   @@index([jobId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
+}
+
+model EditorialCollection {
+  id          String                  @id @default(cuid())
+  slug        String                  @unique
+  title       String
+  description String?
+  type        EditorialCollectionType @default(CURATED)
+  isPublished Boolean                 @default(false)
+  publishedAt DateTime?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  entries     EditorialCollectionEntry[]
+
+  @@index([type, isPublished, updatedAt(sort: Desc)])
+}
+
+model EditorialCollectionEntry {
+  id           String              @id @default(cuid())
+  collectionId String
+  releaseId    String
+  position     Int                 @default(0)
+  note         String?
+  createdAt    DateTime            @default(now())
+  collection   EditorialCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  release      Release             @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, releaseId])
+  @@index([collectionId, position])
+  @@index([releaseId, createdAt(sort: Desc)])
+}
+
+model ReleaseEditorialAudit {
+  id           String      @id @default(cuid())
+  releaseId    String
+  editorUserId String?
+  action       String
+  detailsJson  String?
+  createdAt    DateTime    @default(now())
+  release      Release     @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  editor       UserProfile? @relation(fields: [editorUserId], references: [id], onDelete: SetNull)
+
+  @@index([releaseId, createdAt(sort: Desc)])
+  @@index([editorUserId, createdAt(sort: Desc)])
 }
 
 model Vote {
