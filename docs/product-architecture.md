@@ -15,11 +15,12 @@ This keeps saved items and follows queryable without denormalizing artists or la
 
 ## Auth Integration Sequence
 
-1. Configure `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-2. Add the Supabase SSR client boundary.
-3. Create sign-in, sign-up, sign-out, and callback routes.
-4. On first valid session, call `ensureUserProfile()` with the Supabase user id and safe profile fields.
-5. Protect `/account` and future `/radar` data at the data-access layer, not only in UI.
+1. Configure `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+2. Keep `NEXT_PUBLIC_SUPABASE_ANON_KEY` only as a compatibility fallback for older deployments.
+3. Use the Supabase SSR client boundary in `src/lib/supabase/`.
+4. Create sign-in, sign-up, sign-out, and callback routes.
+5. On first valid session, call `ensureUserProfile()` with the Supabase user id and safe profile fields.
+6. Protect `/account` and future `/radar` data at the data-access layer, not only in UI.
 
 ## Product Sequencing
 
@@ -34,6 +35,7 @@ The next safe slices are:
 ## Security Notes
 
 - Do not expose Supabase service-role credentials to client code.
+- Do not use unverified cookie session data for authorization decisions; validate the Supabase user before user-owned writes.
 - Keep user writes behind server actions or route handlers that verify the session.
 - Treat save/follow/notification actions like public APIs: validate input, check ownership, and keep mutations idempotent.
 - Internal editorial/admin tooling should remain separate from user account features and continue using scoped protection.
