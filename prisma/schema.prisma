@@ -95,6 +95,30 @@ enum FollowTargetType {
   GENRE
 }
 
+enum NotificationChannel {
+  EMAIL
+}
+
+enum NotificationJobType {
+  DAILY_DIGEST
+  WEEKLY_DIGEST
+  INSTANT_ALERT
+}
+
+enum NotificationJobStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum NotificationDeliveryOutcome {
+  SENT
+  FAILED
+  SKIPPED
+}
+
 model Release {
   id              String        @id @default(cuid())
   source          ReleaseSource @default(REDDIT)
@@ -172,6 +196,8 @@ model UserProfile {
   preferences UserPreference?
   savedReleases UserSavedRelease[]
   follows     UserFollow[]
+  notificationJobs NotificationJob[]
+  notificationDeliveries NotificationDeliveryLog[]
 
   @@index([role, createdAt(sort: Desc)])
 }
@@ -182,6 +208,8 @@ model UserPreference {
   dailyDigest        Boolean     @default(false)
   weeklyDigest       Boolean     @default(true)
   instantAlerts      Boolean     @default(false)
+  digestTimezone     String      @default("UTC")
+  digestHourLocal    Int         @default(9)
   preferredGenres    Json?
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
@@ -213,6 +241,56 @@ model UserFollow {
   @@unique([userId, targetType, normalizedValue])
   @@index([userId, targetType, createdAt(sort: Desc)])
   @@index([targetType, normalizedValue])
+}
+
+model NotificationJob {
+  id              String                     @id @default(cuid())
+  userId          String
+  type            NotificationJobType
+  channel         NotificationChannel
+  periodKey       String
+  status          NotificationJobStatus      @default(PENDING)
+  destination     String?
+  subject         String?
+  payloadJson     String?
+  itemCount       Int                        @default(0)
+  attemptCount    Int                        @default(0)
+  lastAttemptAt   DateTime?
+  processedAt     DateTime?
+  deliveredAt     DateTime?
+  queuedAt        DateTime                   @default(now())
+  message         String?
+  providerMessageId String?
+  user            UserProfile                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries      NotificationDeliveryLog[]
+
+  @@unique([userId, type, channel, periodKey])
+  @@index([status, queuedAt(sort: Asc)])
+  @@index([type, queuedAt(sort: Desc)])
+  @@index([userId, queuedAt(sort: Desc)])
+}
+
+model NotificationDeliveryLog {
+  id               String                    @id @default(cuid())
+  jobId            String?
+  userId           String?
+  type             NotificationJobType?
+  channel          NotificationChannel
+  outcome          NotificationDeliveryOutcome
+  destination      String?
+  attemptNumber    Int                       @default(1)
+  responseStatus   Int?
+  latencyMs        Int?
+  message          String?
+  providerMessageId String?
+  createdAt        DateTime                  @default(now())
+  job              NotificationJob?          @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  user             UserProfile?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([channel, createdAt(sort: Desc)])
+  @@index([jobId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 model Vote {

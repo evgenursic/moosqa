@@ -14,6 +14,8 @@ export const DEFAULT_USER_PREFERENCES = {
   dailyDigest: false,
   weeklyDigest: true,
   instantAlerts: false,
+  digestTimezone: "UTC",
+  digestHourLocal: 9,
   preferredGenres: [] as string[],
 };
 

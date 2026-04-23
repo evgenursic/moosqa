@@ -65,6 +65,8 @@ describe("user product foundations", () => {
       dailyDigest: false,
       weeklyDigest: true,
       instantAlerts: false,
+      digestTimezone: "UTC",
+      digestHourLocal: 9,
       preferredGenres: [],
     });
   });

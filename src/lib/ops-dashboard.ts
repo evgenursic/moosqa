@@ -7,6 +7,7 @@ import {
   getWorkflowRunSummary,
 } from "@/lib/analytics";
 import { ensureDatabase } from "@/lib/database";
+import { getNotificationOpsSnapshot } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { getQualityDashboardData } from "@/lib/quality-dashboard";
 import { getSyncStatusSummary } from "@/lib/sync-releases";
@@ -29,7 +30,7 @@ const getCachedOpsDashboardData = unstable_cache(
   async () => {
     const staleCutoff = new Date(Date.now() - STALE_METADATA_DAYS * 24 * 60 * 60 * 1000);
     const alertStatsCutoff = new Date(Date.now() - ALERT_DELIVERY_STATS_DAYS * 24 * 60 * 60 * 1000);
-    const [sync, quality, analytics, staleMetadata, activeRateLimits, alerts, workflows, recentAlerts, alertDeliveries, alertChannelBreakdown] = await Promise.all([
+    const [sync, quality, analytics, staleMetadata, activeRateLimits, alerts, workflows, recentAlerts, alertDeliveries, alertChannelBreakdown, notifications] = await Promise.all([
       getSyncStatusSummary(),
       getQualityDashboardData(),
       getAnalyticsOverview(24),
@@ -115,6 +116,7 @@ const getCachedOpsDashboardData = unstable_cache(
           createdAt: true,
         },
       }),
+      getNotificationOpsSnapshot(),
     ]);
 
     return {
@@ -134,12 +136,13 @@ const getCachedOpsDashboardData = unstable_cache(
       alertDeliveries,
       alertChannelStats: buildAlertChannelStats(alertChannelBreakdown),
       alertLatencyDaily: buildAlertLatencyDaily(alertChannelBreakdown),
+      notifications,
     };
   },
   ["ops-dashboard"],
   {
     revalidate: 60,
-    tags: ["releases", "analytics", "quality-dashboard"],
+    tags: ["releases", "analytics", "quality-dashboard", "ops-dashboard"],
   },
 );
 

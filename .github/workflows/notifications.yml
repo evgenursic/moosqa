@@ -1,0 +1,88 @@
+name: Notification digests
+
+on:
+  schedule:
+    - cron: "27 * * * *"
+  workflow_dispatch:
+
+jobs:
+  notifications:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call MooSQA notifications endpoint
+        id: notifications_call
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          NOTIFICATIONS_URL: https://moosqa-ci4e.vercel.app/api/notifications
+        run: |
+          set -euo pipefail
+          RESPONSE_FILE="$(mktemp)"
+          curl --fail --show-error --silent \
+            --retry 1 \
+            --retry-delay 8 \
+            --max-time 240 \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            --output "${RESPONSE_FILE}" \
+            "${NOTIFICATIONS_URL}"
+          cat "${RESPONSE_FILE}"
+          DETAILS="$(python3 - "${RESPONSE_FILE}" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              payload = json.load(handle)
+
+          fields = []
+          for key in (
+              "mode",
+              "phase",
+              "evaluated",
+              "queued",
+              "existing",
+              "processed",
+              "sent",
+              "failed",
+              "skipped",
+              "triggeredAt",
+          ):
+              if key in payload:
+                  fields.append(f"{key}={payload[key]}")
+
+          print(", ".join(fields)[:480])
+          PY
+          )"
+          echo "details=${DETAILS}" >> "${GITHUB_OUTPUT}"
+      - name: Report workflow status
+        if: always()
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          STATUS_URL: https://moosqa-ci4e.vercel.app/api/internal/workflow-status
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          JOB_STATUS: ${{ job.status }}
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          DETAILS: ${{ steps.notifications_call.outputs.details }}
+        run: |
+          set -euo pipefail
+          if [ "${JOB_STATUS}" = "success" ]; then STATUS="SUCCESS"; else STATUS="FAILURE"; fi
+          export STATUS
+          python3 - <<'PY' > workflow-status.json
+          import json
+          import os
+
+          payload = {
+              "workflowName": "notifications",
+              "status": os.environ["STATUS"],
+              "runUrl": os.environ["RUN_URL"],
+              "branch": os.environ["BRANCH_NAME"],
+              "commitSha": os.environ["COMMIT_SHA"],
+              "details": os.environ.get("DETAILS") or "endpoint call failed",
+          }
+          print(json.dumps(payload))
+          PY
+          curl --fail --show-error --silent \
+            --request POST \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            --header "Content-Type: application/json" \
+            --data @workflow-status.json \
+            "${STATUS_URL}"

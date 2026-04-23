@@ -23,6 +23,8 @@ const PUBLIC_TABLES = [
   '"WorkflowRunState"',
   '"OpsAlert"',
   '"AlertDeliveryLog"',
+  '"NotificationJob"',
+  '"NotificationDeliveryLog"',
 ];
 
 async function main() {

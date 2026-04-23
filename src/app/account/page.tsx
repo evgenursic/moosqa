@@ -4,10 +4,15 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import type { ReactNode } from "react";
 
-import { requestSignInLink, signOut } from "@/app/account/actions";
+import {
+  requestSignInLink,
+  signOut,
+  updateNotificationPreferencesAction,
+} from "@/app/account/actions";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getAccountAuthMessage, normalizeAuthNextPath } from "@/lib/auth-flow";
+import { getNotificationPreferenceState } from "@/lib/notifications";
 import { getSiteUrl } from "@/lib/site";
 import { isSupabaseAuthConfigured } from "@/lib/supabase/config";
 import { getSupabaseServerUser } from "@/lib/supabase/server";
@@ -51,6 +56,7 @@ async function AccountContent({ searchParams }: AccountPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const authMessage = getAccountAuthMessage(resolvedSearchParams.auth);
   const isSignedOut = resolvedSearchParams.signedOut === "1";
+  const notificationMessage = getAccountNotificationMessage(resolvedSearchParams.notifications);
   const nextPath = normalizeAuthNextPath(
     Array.isArray(resolvedSearchParams.next)
       ? resolvedSearchParams.next[0]
@@ -62,6 +68,8 @@ async function AccountContent({ searchParams }: AccountPageProps) {
     : { configured: false as const, user: null, error: null };
 
   let profileError = false;
+  let notificationError = false;
+  let notificationPreferences = null;
 
   if (authState.user) {
     try {
@@ -73,6 +81,13 @@ async function AccountContent({ searchParams }: AccountPageProps) {
     } catch (error) {
       profileError = true;
       console.error("Account profile bootstrap failed.", error);
+    }
+
+    try {
+      notificationPreferences = await getNotificationPreferenceState(authState.user.id);
+    } catch (error) {
+      notificationError = true;
+      console.error("Notification preference load failed.", error);
     }
   }
 
@@ -92,6 +107,7 @@ async function AccountContent({ searchParams }: AccountPageProps) {
 
         <div className="border border-[var(--color-line)] bg-[var(--color-panel)] p-5 md:p-7">
           {authMessage ? <AccountNotice>{authMessage}</AccountNotice> : null}
+          {notificationMessage ? <AccountNotice>{notificationMessage}</AccountNotice> : null}
           {isSignedOut ? <AccountNotice>You are signed out.</AccountNotice> : null}
           {authState.error ? (
             <AccountNotice>Account status could not be verified. Try again shortly.</AccountNotice>
@@ -103,6 +119,8 @@ async function AccountContent({ searchParams }: AccountPageProps) {
             <SignedInAccountState
               email={authState.user.email || "Signed-in listener"}
               profileError={profileError}
+              notificationPreferences={notificationPreferences}
+              notificationError={notificationError}
             />
           ) : (
                 <SignedOutAccountState nextPath={nextPath} />
@@ -162,9 +180,13 @@ function SignedOutAccountState({ nextPath }: { nextPath: string }) {
 function SignedInAccountState({
   email,
   profileError,
+  notificationPreferences,
+  notificationError,
 }: {
   email: string;
   profileError: boolean;
+  notificationPreferences: Awaited<ReturnType<typeof getNotificationPreferenceState>> | null;
+  notificationError: boolean;
 }) {
   return (
     <div>
@@ -175,8 +197,11 @@ function SignedInAccountState({
           Your session is active, but the local profile could not be prepared yet.
         </AccountNotice>
       ) : null}
+      {notificationError ? (
+        <AccountNotice>Notification preferences could not be loaded right now.</AccountNotice>
+      ) : null}
       <div className="mt-6 grid gap-3 border-t border-[var(--color-soft-line)] pt-5 text-sm leading-7 text-black/64">
-        <p>Saved releases, follows, and digest preferences are ready for the next product slice.</p>
+        <p>Saved releases, follows, and digest delivery are managed from the same listener profile.</p>
         <Link
           href="/radar"
           className="inline-flex w-fit border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-4 py-3 text-xs uppercase tracking-[0.16em] text-white transition hover:opacity-90"
@@ -190,6 +215,114 @@ function SignedInAccountState({
           Back to latest
         </Link>
       </div>
+      {notificationPreferences ? (
+        <section id="notifications" className="mt-8 border-t border-[var(--color-soft-line)] pt-6">
+          <p className="section-kicker text-black/44">Notifications</p>
+          <div className="mt-4 grid gap-4 text-sm leading-7 text-black/64">
+            <p>
+              Digests use your account email{" "}
+              <span className="break-words text-[var(--color-ink)]">{notificationPreferences.notificationEmail || "No email on file"}</span>.
+            </p>
+            {!notificationPreferences.transportReady ? (
+              <AccountNotice>
+                Email delivery is paused until server-side email transport is configured.
+              </AccountNotice>
+            ) : null}
+            {!notificationPreferences.notificationEmail ? (
+              <AccountNotice>
+                Your auth account does not expose an email address, so notification delivery will stay paused.
+              </AccountNotice>
+            ) : null}
+          </div>
+          <form action={updateNotificationPreferencesAction} className="mt-5 grid gap-5">
+            <label className="flex items-start gap-3 border border-[var(--color-line)] bg-[var(--color-paper)] p-4">
+              <input
+                type="checkbox"
+                name="emailNotifications"
+                defaultChecked={notificationPreferences.emailNotifications}
+                className="mt-1 h-4 w-4 accent-[var(--color-accent-strong)]"
+              />
+              <span className="grid gap-1">
+                <span className="text-sm uppercase tracking-[0.16em] text-[var(--color-ink)]">
+                  Email notifications
+                </span>
+                <span className="text-sm leading-6 text-black/58">
+                  Master switch for all digest and future instant email delivery.
+                </span>
+              </span>
+            </label>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <PreferenceToggle
+                name="dailyDigest"
+                title="Daily digest"
+                description="A compact rundown of fresh matches from your follows and saved taste signals."
+                defaultChecked={notificationPreferences.dailyDigest}
+              />
+              <PreferenceToggle
+                name="weeklyDigest"
+                title="Weekly digest"
+                description="A broader Monday roundup when you want fewer, denser email touchpoints."
+                defaultChecked={notificationPreferences.weeklyDigest}
+              />
+              <PreferenceToggle
+                name="instantAlerts"
+                title="Instant alerts"
+                description="Reserved for direct follow matches. Preference is stored now, live sends can be added later."
+                defaultChecked={notificationPreferences.instantAlerts}
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-2 text-xs uppercase tracking-[0.16em] text-black/58">
+                Digest timezone
+                <input
+                  name="digestTimezone"
+                  type="text"
+                  defaultValue={notificationPreferences.digestTimezone}
+                  className="min-h-12 border border-[var(--color-line)] bg-[var(--color-paper)] px-4 py-3 text-base normal-case tracking-normal text-[var(--color-ink)] outline-none transition focus:border-[var(--color-accent-strong)]"
+                  placeholder="Europe/Ljubljana"
+                />
+                <span className="text-[11px] normal-case tracking-normal text-black/48">
+                  Use an IANA timezone name, for example Europe/Ljubljana or America/New_York.
+                </span>
+              </label>
+              <label className="grid gap-2 text-xs uppercase tracking-[0.16em] text-black/58">
+                Local digest hour
+                <select
+                  name="digestHourLocal"
+                  defaultValue={String(notificationPreferences.digestHourLocal)}
+                  className="min-h-12 border border-[var(--color-line)] bg-[var(--color-paper)] px-4 py-3 text-base normal-case tracking-normal text-[var(--color-ink)] outline-none transition focus:border-[var(--color-accent-strong)]"
+                >
+                  {Array.from({ length: 24 }, (_, hour) => (
+                    <option key={hour} value={hour}>
+                      {hour.toString().padStart(2, "0")}:00
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[11px] normal-case tracking-normal text-black/48">
+                  Digests only queue when the current local hour reaches this slot.
+                </span>
+              </label>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="submit"
+                className="inline-flex min-h-12 items-center justify-center border border-[var(--color-ink)] bg-[var(--color-ink)] px-5 py-3 text-xs uppercase tracking-[0.18em] text-white transition hover:bg-[var(--color-accent-strong)]"
+              >
+                Save notification settings
+              </button>
+              <Link
+                href="/radar"
+                className="inline-flex min-h-12 items-center justify-center border border-[var(--color-line)] px-5 py-3 text-xs uppercase tracking-[0.16em] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+              >
+                Review radar
+              </Link>
+            </div>
+          </form>
+        </section>
+      ) : null}
       <form action={signOut} className="mt-6">
         <button
           type="submit"
@@ -220,6 +353,47 @@ function AccountNotice({ children }: { children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+function PreferenceToggle({
+  name,
+  title,
+  description,
+  defaultChecked,
+}: {
+  name: string;
+  title: string;
+  description: string;
+  defaultChecked: boolean;
+}) {
+  return (
+    <label className="flex h-full items-start gap-3 border border-[var(--color-line)] bg-[var(--color-paper)] p-4">
+      <input
+        type="checkbox"
+        name={name}
+        defaultChecked={defaultChecked}
+        className="mt-1 h-4 w-4 accent-[var(--color-accent-strong)]"
+      />
+      <span className="grid gap-1">
+        <span className="text-sm uppercase tracking-[0.16em] text-[var(--color-ink)]">{title}</span>
+        <span className="text-sm leading-6 text-black/58">{description}</span>
+      </span>
+    </label>
+  );
+}
+
+function getAccountNotificationMessage(value: string | string[] | undefined) {
+  const code = Array.isArray(value) ? value[0] : value;
+
+  if (code === "saved") {
+    return "Notification preferences updated.";
+  }
+
+  if (code === "invalid-timezone") {
+    return "Notification timezone must be a valid IANA timezone.";
+  }
+
+  return null;
 }
 
 function getDisplayName(metadata: unknown) {

@@ -146,6 +146,107 @@ async function OpsContent({ searchParams }: OpsPageProps) {
           </PanelCard>
         </section>
 
+        <section className="grid gap-4 border-t border-[var(--color-line)] py-8 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Notification prefs"
+            value={String(dashboard.notifications.preferenceTotals.all)}
+            secondary={`${dashboard.notifications.preferenceTotals.emailEnabled} email enabled`}
+          />
+          <StatCard
+            label="Digest adoption"
+            value={String(dashboard.notifications.preferenceTotals.weeklyEnabled)}
+            secondary={`${dashboard.notifications.preferenceTotals.dailyEnabled} daily / ${dashboard.notifications.preferenceTotals.instantEnabled} instant ready`}
+          />
+          <StatCard
+            label="Notification queue"
+            value={String(dashboard.notifications.jobTotals.pending)}
+            secondary={`${dashboard.notifications.jobTotals.processing} processing`}
+          />
+          <StatCard
+            label="Notification failures"
+            value={String(dashboard.notifications.jobTotals.failed)}
+            secondary={`${dashboard.notifications.jobTotals.sent} sent / ${dashboard.notifications.jobTotals.skipped} skipped`}
+          />
+        </section>
+
+        <section className="grid gap-4 border-t border-[var(--color-line)] py-8 lg:grid-cols-2">
+          <PanelCard title="Recent notification jobs">
+            <div className="grid gap-3">
+              {dashboard.notifications.recentJobs.map((job) => (
+                <div
+                  key={job.id}
+                  className="grid gap-3 border-t border-[var(--color-soft-line)] pt-3 first:border-t-0 first:pt-0 md:grid-cols-[minmax(0,1fr)_auto]"
+                >
+                  <div className="min-w-0">
+                    <p className="section-kicker text-black/43">
+                      {job.type} / {job.status}
+                    </p>
+                    <p className="mt-2 text-xl leading-tight text-[var(--color-ink)] serif-display">
+                      {job.destination || "No destination"}
+                    </p>
+                    <p className="mt-2 text-sm leading-7 text-black/62">
+                      {job.message || `${job.itemCount} queued release${job.itemCount === 1 ? "" : "s"}`}
+                    </p>
+                  </div>
+                  <div className="border border-[var(--color-line)] bg-[var(--color-paper)] px-4 py-3 text-right">
+                    <p className="section-kicker text-black/43">Period</p>
+                    <p className="mt-2 text-xs leading-6 text-black/48">{job.periodKey}</p>
+                    <p className="mt-3 section-kicker text-black/43">Queued</p>
+                    <p className="mt-2 text-sm uppercase tracking-[0.14em] text-[var(--color-ink)]">
+                      {formatRelative(job.queuedAt)}
+                    </p>
+                    <p className="mt-1 text-xs leading-6 text-black/48">
+                      {formatPubDate(job.queuedAt)}
+                    </p>
+                    <p className="mt-3 section-kicker text-black/43">Attempts</p>
+                    <p className="mt-2 text-xs leading-6 text-black/48">{job.attemptCount}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </PanelCard>
+
+          <PanelCard title="Recent notification delivery log">
+            <div className="grid gap-3">
+              {dashboard.notifications.recentDeliveries.map((delivery) => (
+                <div
+                  key={delivery.id}
+                  className="grid gap-3 border-t border-[var(--color-soft-line)] pt-3 first:border-t-0 first:pt-0 md:grid-cols-[minmax(0,1fr)_auto]"
+                >
+                  <div className="min-w-0">
+                    <p className="section-kicker text-black/43">
+                      {delivery.channel} / {delivery.outcome}
+                    </p>
+                    <p className="mt-2 text-xl leading-tight text-[var(--color-ink)] serif-display">
+                      {delivery.destination || "No destination"}
+                    </p>
+                    <p className="mt-2 text-sm leading-7 text-black/62">
+                      {delivery.message || "No delivery message."}
+                    </p>
+                  </div>
+                  <div className="border border-[var(--color-line)] bg-[var(--color-paper)] px-4 py-3 text-right">
+                    <p className="section-kicker text-black/43">Time</p>
+                    <p className="mt-2 text-sm uppercase tracking-[0.14em] text-[var(--color-ink)]">
+                      {formatRelative(delivery.createdAt)}
+                    </p>
+                    <p className="mt-1 text-xs leading-6 text-black/48">
+                      {formatPubDate(delivery.createdAt)}
+                    </p>
+                    <p className="mt-3 section-kicker text-black/43">Attempt</p>
+                    <p className="mt-2 text-xs leading-6 text-black/48">{delivery.attemptNumber}</p>
+                    {typeof delivery.responseStatus === "number" ? (
+                      <>
+                        <p className="mt-3 section-kicker text-black/43">HTTP</p>
+                        <p className="mt-2 text-xs leading-6 text-black/48">{delivery.responseStatus}</p>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </PanelCard>
+        </section>
+
         <section className="border-t border-[var(--color-line)] py-8">
           <PanelCard title="Alert digest history">
             <div className="grid gap-3">
