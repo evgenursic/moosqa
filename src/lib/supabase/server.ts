@@ -1,7 +1,11 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import type { User } from "@supabase/supabase-js";
 
-import { requireSupabaseAuthConfig } from "@/lib/supabase/config";
+import {
+  isSupabaseAuthConfigured,
+  requireSupabaseAuthConfig,
+} from "@/lib/supabase/config";
 
 export async function createSupabaseServerClient() {
   const { url, publishableKey } = requireSupabaseAuthConfig();
@@ -24,4 +28,25 @@ export async function createSupabaseServerClient() {
       },
     },
   });
+}
+
+export type SupabaseServerUserState = {
+  configured: boolean;
+  user: User | null;
+  error: string | null;
+};
+
+export async function getSupabaseServerUser(): Promise<SupabaseServerUserState> {
+  if (!isSupabaseAuthConfigured()) {
+    return { configured: false, user: null, error: null };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.auth.getUser();
+
+  if (error) {
+    return { configured: true, user: null, error: error.message };
+  }
+
+  return { configured: true, user: data.user, error: null };
 }

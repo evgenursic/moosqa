@@ -9,7 +9,7 @@ describe("robots policy", () => {
     const rule = Array.isArray(policy.rules) ? policy.rules[0] : policy.rules;
 
     assert.equal(rule.allow, "/");
-    assert.deepEqual(rule.disallow, ["/api/", "/debug", "/ops"]);
+    assert.deepEqual(rule.disallow, ["/api/", "/debug", "/ops", "/account", "/auth/"]);
     assert.match(String(policy.sitemap), /\/sitemap\.xml$/);
   });
 });

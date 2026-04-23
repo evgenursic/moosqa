@@ -18,19 +18,19 @@ This keeps saved items and follows queryable without denormalizing artists or la
 1. Configure `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 2. Keep `NEXT_PUBLIC_SUPABASE_ANON_KEY` only as a compatibility fallback for older deployments.
 3. Use the Supabase SSR client boundary in `src/lib/supabase/`.
-4. Create sign-in, sign-up, sign-out, and callback routes.
-5. On first valid session, call `ensureUserProfile()` with the Supabase user id and safe profile fields.
-6. Protect `/account` and future `/radar` data at the data-access layer, not only in UI.
+4. `/account` provides email-link sign-in, sign-out, and a setup-safe account shell.
+5. `/auth/callback` exchanges Supabase auth codes and only redirects to sanitized local paths.
+6. On first valid session, call `ensureUserProfile()` with the Supabase user id and safe profile fields.
+7. Protect future `/radar` data at the data-access layer, not only in UI.
 
 ## Product Sequencing
 
 The next safe slices are:
 
-1. Supabase Auth client and account shell.
-2. Save release and follow artist/label actions.
-3. Personal radar page using saved releases and follows.
-4. Notification preference editing.
-5. Digest job and delivery idempotency.
+1. Save release and follow artist/label actions.
+2. Personal radar page using saved releases and follows.
+3. Notification preference editing.
+4. Digest job and delivery idempotency.
 
 ## Security Notes
 
