@@ -9,7 +9,8 @@ import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleasePublicCounters } from "@/components/release-public-counters";
 import { TopEngagedVisual } from "@/components/top-engaged-visual";
-import { sanitizeExternalUrl, sanitizeInternalHref } from "@/lib/navigation";
+import { sanitizeInternalHref } from "@/lib/navigation";
+import { normalizePublicHttpUrl } from "@/lib/safe-url";
 import { getSiteUrl } from "@/lib/site";
 import { getReleaseBySlug } from "@/lib/sync-releases";
 import {
@@ -57,7 +58,10 @@ export async function generateMetadata({ params }: ReleasePageProps): Promise<Me
       : `${release.title} | MooSQA`;
     const url = new URL(`/releases/${release.slug}`, getSiteUrl()).toString();
     const socialImage = new URL(`/releases/${release.slug}/opengraph-image`, getSiteUrl()).toString();
-    const image = release.imageUrl || release.thumbnailUrl || socialImage;
+    const image =
+      normalizePublicHttpUrl(release.imageUrl) ||
+      normalizePublicHttpUrl(release.thumbnailUrl) ||
+      socialImage;
     const socialDescription = [
       getDisplayGenre(release.genreName, release.releaseType),
       summary,
@@ -136,9 +140,12 @@ function renderReleasePage(
   );
   const redditDateLabel = formatRedditDateLabel(publishedAtValue);
   const releaseUrl = new URL(`/releases/${release.slug}`, getSiteUrl()).toString();
-  const image = release.imageUrl || release.thumbnailUrl || undefined;
-  const originalSourceUrl = sanitizeExternalUrl(release.sourceUrl);
-  const redditThreadUrl = sanitizeExternalUrl(release.redditPermalink);
+  const image =
+    normalizePublicHttpUrl(release.imageUrl) ||
+    normalizePublicHttpUrl(release.thumbnailUrl) ||
+    undefined;
+  const originalSourceUrl = normalizePublicHttpUrl(release.sourceUrl);
+  const redditThreadUrl = normalizePublicHttpUrl(release.redditPermalink);
   const schemaType =
     release.releaseType === ReleaseType.ALBUM || release.releaseType === ReleaseType.EP
       ? "MusicAlbum"
@@ -178,13 +185,15 @@ function renderReleasePage(
         }
       : undefined,
     offers: [release.bandcampUrl, release.officialStoreUrl, release.officialWebsiteUrl]
-      .filter(Boolean)
+      .map(normalizePublicHttpUrl)
+      .filter((url): url is string => Boolean(url))
       .map((url) => ({
         "@type": "Offer",
         url,
       })),
     sameAs: [release.sourceUrl, release.redditPermalink, release.youtubeUrl, release.youtubeMusicUrl]
-      .filter(Boolean),
+      .map(normalizePublicHttpUrl)
+      .filter((url): url is string => Boolean(url)),
   };
 
   return (
