@@ -1,0 +1,2 @@
+ALTER TABLE "Release"
+ADD COLUMN IF NOT EXISTS "youtubeViewCount" INTEGER;

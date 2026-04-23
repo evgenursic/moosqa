@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 
-import { FollowTargetType, NotificationJobStatus } from "@/generated/prisma/enums";
+import { FollowTargetType, NotificationJobStatus, UserRole } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
 import { ensureDatabase } from "@/lib/database";
 import { applyReleaseEditorialFields, buildVisibleReleaseWhere } from "@/lib/editorial";
@@ -15,6 +15,28 @@ type CountRow = {
 type SavedGenreRow = {
   genre: string;
   count: bigint;
+};
+
+type SaveConversionByTypeRow = {
+  releaseType: string;
+  saves: bigint;
+  opens: bigint;
+};
+
+type FollowPathwayRow = {
+  pathway: string;
+  count: bigint;
+};
+
+type DailyTrendRow = {
+  dateKey: string;
+  opens: bigint;
+  saves: bigint;
+  follows: bigint;
+  notificationQueued: bigint;
+  notificationSent: bigint;
+  notificationFailed: bigint;
+  notificationSkipped: bigint;
 };
 
 type SearchReleaseRow = {
@@ -44,6 +66,14 @@ type SearchReleaseRow = {
   editorialUpdatedAt: Date | null;
 };
 
+type RoleRosterRow = {
+  id: string;
+  email: string | null;
+  displayName: string | null;
+  role: string;
+  createdAt: Date;
+};
+
 const ADMIN_SEARCH_LIMIT = 18;
 
 export async function getAdminDashboardData(query: string) {
@@ -57,6 +87,8 @@ export async function getAdminDashboardData(query: string) {
     featuredReleases,
     searchResults,
     recentAudits,
+    roleRoster,
+    recentRoleAssignments,
   ] = await Promise.all([
     getQualityDashboardData(),
     getProductAnalyticsData(),
@@ -64,6 +96,8 @@ export async function getAdminDashboardData(query: string) {
     getFeaturedReleaseRows(),
     normalizedQuery ? searchAdminReleases(normalizedQuery) : Promise.resolve([]),
     getRecentEditorialAudits(),
+    getRoleRoster(),
+    getRecentRoleAssignments(),
   ]);
 
   return {
@@ -73,6 +107,8 @@ export async function getAdminDashboardData(query: string) {
     featuredReleases,
     searchResults,
     recentAudits,
+    roleRoster,
+    recentRoleAssignments,
   };
 }
 
@@ -92,6 +128,9 @@ const getProductAnalyticsData = unstable_cache(
       topFollowArtistGroups,
       topFollowLabelGroups,
       topSavedGenres,
+      saveConversionByTypeRows,
+      followPathwayRows,
+      dailyTrendRows,
     ] = await Promise.all([
       prisma.userProfile.count(),
       prisma.userSavedRelease.count(),
@@ -186,6 +225,104 @@ const getProductAnalyticsData = unstable_cache(
         order by count(*) desc, r."genreName" asc
         limit 8
       `),
+      prisma.$queryRaw<SaveConversionByTypeRow[]>(Prisma.sql`
+        with save_counts as (
+          select usr."releaseId", count(*)::bigint as saves
+          from "UserSavedRelease" usr
+          group by usr."releaseId"
+        )
+        select
+          r."releaseType" as "releaseType",
+          coalesce(sum(save_counts.saves), 0)::bigint as saves,
+          coalesce(sum(r."openCount"), 0)::bigint as opens
+        from "Release" r
+        left join save_counts on save_counts."releaseId" = r."id"
+        where r."isHidden" = false
+        group by r."releaseType"
+        order by opens desc, saves desc, r."releaseType" asc
+      `),
+      prisma.$queryRaw<FollowPathwayRow[]>(Prisma.sql`
+        select
+          uf."targetType"::text as pathway,
+          count(*)::bigint as count
+        from "UserFollow" uf
+        group by uf."targetType"
+        order by count(*) desc, uf."targetType" asc
+      `),
+      prisma.$queryRaw<DailyTrendRow[]>(Prisma.sql`
+        with days as (
+          select to_char(day_bucket, 'YYYY-MM-DD') as "dateKey"
+          from generate_series(
+            date_trunc('day', now()) - interval '13 day',
+            date_trunc('day', now()),
+            interval '1 day'
+          ) as day_bucket
+        ),
+        opens as (
+          select to_char(date_trunc('day', ae."createdAt"), 'YYYY-MM-DD') as "dateKey", count(*)::bigint as count
+          from "AnalyticsEvent" ae
+          where ae."action" = 'OPEN'
+            and ae."createdAt" >= now() - interval '14 day'
+          group by 1
+        ),
+        saves as (
+          select to_char(date_trunc('day', usr."createdAt"), 'YYYY-MM-DD') as "dateKey", count(*)::bigint as count
+          from "UserSavedRelease" usr
+          where usr."createdAt" >= now() - interval '14 day'
+          group by 1
+        ),
+        follows as (
+          select to_char(date_trunc('day', uf."createdAt"), 'YYYY-MM-DD') as "dateKey", count(*)::bigint as count
+          from "UserFollow" uf
+          where uf."createdAt" >= now() - interval '14 day'
+          group by 1
+        ),
+        queued as (
+          select to_char(date_trunc('day', nj."queuedAt"), 'YYYY-MM-DD') as "dateKey", count(*)::bigint as count
+          from "NotificationJob" nj
+          where nj."queuedAt" >= now() - interval '14 day'
+          group by 1
+        ),
+        sent as (
+          select to_char(date_trunc('day', nj."queuedAt"), 'YYYY-MM-DD') as "dateKey", count(*)::bigint as count
+          from "NotificationJob" nj
+          where nj."queuedAt" >= now() - interval '14 day'
+            and nj."status" = 'SENT'
+          group by 1
+        ),
+        failed as (
+          select to_char(date_trunc('day', nj."queuedAt"), 'YYYY-MM-DD') as "dateKey", count(*)::bigint as count
+          from "NotificationJob" nj
+          where nj."queuedAt" >= now() - interval '14 day'
+            and nj."status" = 'FAILED'
+          group by 1
+        ),
+        skipped as (
+          select to_char(date_trunc('day', nj."queuedAt"), 'YYYY-MM-DD') as "dateKey", count(*)::bigint as count
+          from "NotificationJob" nj
+          where nj."queuedAt" >= now() - interval '14 day'
+            and nj."status" = 'SKIPPED'
+          group by 1
+        )
+        select
+          days."dateKey",
+          coalesce(opens.count, 0)::bigint as opens,
+          coalesce(saves.count, 0)::bigint as saves,
+          coalesce(follows.count, 0)::bigint as follows,
+          coalesce(queued.count, 0)::bigint as "notificationQueued",
+          coalesce(sent.count, 0)::bigint as "notificationSent",
+          coalesce(failed.count, 0)::bigint as "notificationFailed",
+          coalesce(skipped.count, 0)::bigint as "notificationSkipped"
+        from days
+        left join opens on opens."dateKey" = days."dateKey"
+        left join saves on saves."dateKey" = days."dateKey"
+        left join follows on follows."dateKey" = days."dateKey"
+        left join queued on queued."dateKey" = days."dateKey"
+        left join sent on sent."dateKey" = days."dateKey"
+        left join failed on failed."dateKey" = days."dateKey"
+        left join skipped on skipped."dateKey" = days."dateKey"
+        order by days."dateKey" desc
+      `),
     ]);
 
     const topSavedReleaseIds = topSavedReleaseGroups.map((entry) => entry.releaseId);
@@ -200,6 +337,15 @@ const getProductAnalyticsData = unstable_cache(
       ...usersWithFollows.map((entry) => entry.userId),
     ]).size;
     const notificationEligibleCount = Number(notificationEligibleRows[0]?.count || 0);
+    const detailOpenCount = await prisma.release.aggregate({
+      where: {
+        isHidden: false,
+      },
+      _sum: {
+        openCount: true,
+      },
+    });
+    const totalDetailOpens = detailOpenCount._sum.openCount || 0;
 
     return {
       funnel: {
@@ -216,6 +362,11 @@ const getProductAnalyticsData = unstable_cache(
         totalOpens,
         savesPer100Opens: totalOpens > 0 ? roundToOneDecimal((totalSaves / totalOpens) * 100) : 0,
         followsPer100Opens: totalOpens > 0 ? roundToOneDecimal((totalFollows / totalOpens) * 100) : 0,
+        detailOpens: totalDetailOpens,
+        detailToSavePer100Opens:
+          totalDetailOpens > 0 ? roundToOneDecimal((totalSaves / totalDetailOpens) * 100) : 0,
+        detailToFollowPer100Opens:
+          totalDetailOpens > 0 ? roundToOneDecimal((totalFollows / totalDetailOpens) * 100) : 0,
       },
       notifications: {
         pending: readNotificationJobCount(notificationJobGroups, NotificationJobStatus.PENDING),
@@ -241,6 +392,28 @@ const getProductAnalyticsData = unstable_cache(
       topSavedGenres: topSavedGenres.map((entry) => ({
         label: entry.genre,
         count: Number(entry.count),
+      })),
+      saveConversionByType: saveConversionByTypeRows.map((entry) => ({
+        label: formatReleaseTypeLabel(entry.releaseType),
+        saves: Number(entry.saves),
+        opens: Number(entry.opens),
+        savesPer100Opens:
+          Number(entry.opens) > 0 ? roundToOneDecimal((Number(entry.saves) / Number(entry.opens)) * 100) : 0,
+      })),
+      followPathways: followPathwayRows.map((entry) => ({
+        label: entry.pathway === "ARTIST" ? "Artist follows" : entry.pathway === "LABEL" ? "Label follows" : entry.pathway,
+        count: Number(entry.count),
+      })),
+      dailyTrends: dailyTrendRows.map((entry) => ({
+        dateKey: entry.dateKey,
+        label: formatTrendDate(entry.dateKey),
+        opens: Number(entry.opens),
+        saves: Number(entry.saves),
+        follows: Number(entry.follows),
+        notificationQueued: Number(entry.notificationQueued),
+        notificationSent: Number(entry.notificationSent),
+        notificationFailed: Number(entry.notificationFailed),
+        notificationSkipped: Number(entry.notificationSkipped),
       })),
     };
   },
@@ -398,6 +571,51 @@ async function getRecentEditorialAudits() {
   });
 }
 
+async function getRoleRoster() {
+  return prisma.userProfile.findMany({
+    where: {
+      role: {
+        in: [UserRole.EDITOR, UserRole.ADMIN],
+      },
+    },
+    orderBy: [{ role: "desc" }, { updatedAt: "desc" }],
+    take: 24,
+    select: {
+      id: true,
+      email: true,
+      displayName: true,
+      role: true,
+      createdAt: true,
+    },
+  }) satisfies Promise<RoleRosterRow[]>;
+}
+
+async function getRecentRoleAssignments() {
+  return prisma.userRoleAssignmentAudit.findMany({
+    orderBy: [{ createdAt: "desc" }],
+    take: 12,
+    select: {
+      id: true,
+      previousRole: true,
+      nextRole: true,
+      reason: true,
+      createdAt: true,
+      actor: {
+        select: {
+          email: true,
+          displayName: true,
+        },
+      },
+      target: {
+        select: {
+          email: true,
+          displayName: true,
+        },
+      },
+    },
+  });
+}
+
 function readNotificationJobCount(
   rows: Array<{ status: NotificationJobStatus; _count: { _all: number } }>,
   status: NotificationJobStatus,
@@ -407,4 +625,15 @@ function readNotificationJobCount(
 
 function roundToOneDecimal(value: number) {
   return Math.round(value * 10) / 10;
+}
+
+function formatReleaseTypeLabel(value: string) {
+  return value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatTrendDate(value: string) {
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime())
+    ? value
+    : parsed.toLocaleDateString("en-GB", { month: "short", day: "numeric", timeZone: "UTC" });
 }

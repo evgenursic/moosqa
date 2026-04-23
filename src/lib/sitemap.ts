@@ -23,6 +23,12 @@ type SitemapRelease = {
   thumbnailUrl: string | null;
 };
 
+type SitemapCollection = {
+  slug: string;
+  updatedAt: Date;
+  publishedAt: Date | null;
+};
+
 const PLATFORM_ARCHIVE_SLUGS: PlatformArchiveSlug[] = [
   "bandcamp",
   "youtube",
@@ -50,6 +56,12 @@ export function buildStaticSitemapEntries(
       lastModified,
       changeFrequency: "hourly",
       priority: 1,
+    },
+    {
+      url: absoluteUrl(siteUrl, "/picks"),
+      lastModified,
+      changeFrequency: "daily",
+      priority: 0.78,
     },
   ];
 
@@ -129,6 +141,18 @@ export function buildReleaseSitemapEntry(
     changeFrequency: "daily",
     priority: 0.7,
     images: imageUrl ? [imageUrl] : undefined,
+  };
+}
+
+export function buildCollectionSitemapEntry(
+  siteUrl: string,
+  collection: SitemapCollection,
+): MetadataRoute.Sitemap[number] {
+  return {
+    url: absoluteUrl(siteUrl, `/collections/${collection.slug}`),
+    lastModified: collection.updatedAt || collection.publishedAt || new Date(),
+    changeFrequency: "weekly",
+    priority: 0.62,
   };
 }
 

@@ -15,6 +15,7 @@ type SourceMetadata = {
   genreName?: string | null;
   labelName?: string | null;
   releaseDate?: Date | null;
+  youtubeViewCount?: number | null;
   sourceImageUrl?: string | null;
   youtubeUrl?: string | null;
   youtubeMusicUrl?: string | null;
@@ -103,6 +104,10 @@ async function resolveSourceMetadataInternal(
       extractBandcampReleaseDate(html) ||
       extractTextualReleaseDate([sourceTitle, sourceExcerpt].filter(Boolean).join(". ")) ||
       null;
+    const youtubeViewCount =
+      sourcePlatform === "youtube" || sourcePlatform === "youtube-music"
+        ? extractYouTubeViewCountFromHtml(html, jsonLd)
+        : null;
     const rawGenreCandidates = [
       sourcePlatform !== "youtube" && sourcePlatform !== "youtube-music"
         ? getMetaContent(html, "keywords")
@@ -142,6 +147,7 @@ async function resolveSourceMetadataInternal(
       genreName,
       labelName: rawLabelName,
       releaseDate,
+      youtubeViewCount,
       sourceImageUrl,
       youtubeUrl: platformLinks.youtubeUrl || platformLinkCandidates.youtubeUrl || null,
       youtubeMusicUrl:
@@ -853,12 +859,21 @@ function parseDateCandidate(value: string | null | undefined) {
     return null;
   }
 
+  if (isDateOnlyValue(normalized)) {
+    const dateOnly = new Date(normalized);
+    if (Number.isNaN(dateOnly.getTime())) {
+      return null;
+    }
+
+    return new Date(Date.UTC(dateOnly.getUTCFullYear(), dateOnly.getUTCMonth(), dateOnly.getUTCDate()));
+  }
+
   const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) {
     return null;
   }
 
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  return date;
 }
 
 function asString(value: unknown) {
@@ -893,6 +908,7 @@ function mergeSourceMetadata(base: SourceMetadata, deep: SourceMetadata): Source
         : base.genreName || null,
     labelName: deep.labelName || base.labelName || null,
     releaseDate: deep.releaseDate || base.releaseDate || null,
+    youtubeViewCount: deep.youtubeViewCount || base.youtubeViewCount || null,
     sourceImageUrl: deep.sourceImageUrl || base.sourceImageUrl || null,
     youtubeUrl: deep.youtubeUrl || base.youtubeUrl || null,
     youtubeMusicUrl: deep.youtubeMusicUrl || base.youtubeMusicUrl || null,
@@ -1172,4 +1188,110 @@ async function resolveYouTubeOEmbedMetadata(url: string) {
   } catch {
     return null;
   }
+}
+
+export function extractYouTubeViewCountFromHtml(html: string, jsonLd: unknown[] = []) {
+  const candidates = [
+    parseNumericCandidate(extractMetaItemPropNumber(html, "interactionCount")),
+    parseNumericCandidate(extractJsonFieldNumber(html, "viewCount")),
+    ...findNumericValues(jsonLd, ["interactionCount"]).map(parseNumericCandidate),
+    ...findNumericValues(jsonLd, ["userInteractionCount"]).map(parseNumericCandidate),
+  ].filter((value): value is number => typeof value === "number");
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return Math.min(Math.max(...candidates), 2_147_483_647);
+}
+
+function extractMetaItemPropNumber(html: string, itemProp: string) {
+  const escaped = itemProp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const patterns = [
+    new RegExp(
+      `<meta[^>]+itemprop=["']${escaped}["'][^>]+content=["']([^"']+)["']`,
+      "i",
+    ),
+    new RegExp(
+      `<meta[^>]+content=["']([^"']+)["'][^>]+itemprop=["']${escaped}["']`,
+      "i",
+    ),
+  ];
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
+}
+
+function extractJsonFieldNumber(html: string, fieldName: string) {
+  const escaped = fieldName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = html.match(new RegExp(`"${escaped}"\\s*:\\s*"?(\\d+)"?`, "i"));
+  return match?.[1] || null;
+}
+
+function findNumericValues(input: unknown, path: string[]): string[] {
+  if (input === null || input === undefined) {
+    return [];
+  }
+
+  if (path.length === 0) {
+    if (typeof input === "string" || typeof input === "number") {
+      return [String(input)];
+    }
+
+    if (Array.isArray(input)) {
+      return input.flatMap((item) => findNumericValues(item, []));
+    }
+
+    return [];
+  }
+
+  if (Array.isArray(input)) {
+    return input.flatMap((item) => findNumericValues(item, path));
+  }
+
+  if (typeof input !== "object") {
+    return [];
+  }
+
+  const current = input as Record<string, unknown>;
+  const [head, ...tail] = path;
+  const next = current[head];
+
+  if (next === null || next === undefined) {
+    return Object.values(current).flatMap((value) => findNumericValues(value, path));
+  }
+
+  return findNumericValues(next, tail);
+}
+
+function parseNumericCandidate(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const digits = value.replace(/[^\d]/g, "");
+  if (!digits) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(digits, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function isDateOnlyValue(value: string) {
+  return (
+    /^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    /^[a-z]+ \d{1,2}, \d{4}$/i.test(value) ||
+    /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(value)
+  );
 }

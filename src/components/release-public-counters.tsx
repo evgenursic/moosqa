@@ -1,8 +1,10 @@
 import { computeTrendingScore } from "@/lib/trending-score";
+import { formatWholeCount } from "@/lib/utils";
 
 type ReleasePublicCountersProps = {
   publishedAt?: Date | string | null;
   analyticsUpdatedAt?: Date | string | null;
+  youtubeViewCount?: number | null | undefined;
   openCount: number | null | undefined;
   listenClickCount: number | null | undefined;
   shareCount: number | null | undefined;
@@ -13,6 +15,7 @@ type ReleasePublicCountersProps = {
 export function ReleasePublicCounters({
   publishedAt = new Date(),
   analyticsUpdatedAt = null,
+  youtubeViewCount,
   openCount,
   listenClickCount,
   shareCount,
@@ -24,6 +27,7 @@ export function ReleasePublicCounters({
   const safeShareCount = sanitizeMetric(shareCount);
   const safePositiveReactionCount = sanitizeMetric(positiveReactionCount);
   const safeNegativeReactionCount = sanitizeMetric(negativeReactionCount);
+  const safeYouTubeViewCount = sanitizeMetric(youtubeViewCount);
   const trendScore = Math.round(
     computeTrendingScore({
       publishedAt,
@@ -43,6 +47,7 @@ export function ReleasePublicCounters({
     safeNegativeReactionCount;
   const items = [
     { label: "Trend score", value: trendScore },
+    ...(safeYouTubeViewCount > 0 ? [{ label: "YouTube views", value: formatWholeCount(safeYouTubeViewCount) }] : []),
     { label: "Audience actions", value: audienceActions },
     { label: "Opens", value: safeOpenCount },
     { label: "Listen clicks", value: safeListenClickCount },

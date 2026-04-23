@@ -31,8 +31,24 @@ type RecommendationCandidate = {
   shareCount: number;
   listenClickCount: number;
   positiveReactionCount: number;
+  commentCount: number | null;
   isFeatured: boolean;
   editorialRank: number;
+};
+
+type SavedReleaseSignal = {
+  artistName: string | null;
+  labelName: string | null;
+  genreName: string | null;
+  genreOverride: string | null;
+};
+
+type RecommendationSignals = {
+  followedArtists: Set<string>;
+  followedLabels: Set<string>;
+  savedArtistWeights: Map<string, number>;
+  savedLabelWeights: Map<string, number>;
+  savedGenreWeights: Map<string, number>;
 };
 
 export async function getRecommendedReleasesForUser(userId: string) {
@@ -54,7 +70,10 @@ export async function getRecommendedReleasesForUser(userId: string) {
         releaseId: true,
         release: {
           select: {
+            artistName: true,
+            labelName: true,
             genreName: true,
+            genreOverride: true,
           },
         },
       },
@@ -62,21 +81,10 @@ export async function getRecommendedReleasesForUser(userId: string) {
   ]);
 
   const savedIds = new Set(savedReleases.map((entry) => entry.releaseId));
-  const followedArtists = new Set(
-    follows
-      .filter((follow) => follow.targetType === FollowTargetType.ARTIST)
-      .map((follow) => follow.targetValue),
-  );
-  const followedLabels = new Set(
-    follows
-      .filter((follow) => follow.targetType === FollowTargetType.LABEL)
-      .map((follow) => follow.targetValue),
-  );
-  const genreSignals = new Set(
-    savedReleases
-      .map((entry) => entry.release.genreName)
-      .filter((value): value is string => Boolean(value?.trim())),
-  );
+  const signals = buildRecommendationSignals({
+    follows,
+    savedReleases: savedReleases.map((entry) => entry.release),
+  });
 
   const candidates = await prisma.release.findMany({
     where: buildVisibleReleaseWhere({
@@ -88,7 +96,7 @@ export async function getRecommendedReleasesForUser(userId: string) {
       },
     }),
     orderBy: [{ publishedAt: "desc" }],
-    take: 90,
+    take: 120,
     select: {
       id: true,
       slug: true,
@@ -104,58 +112,111 @@ export async function getRecommendedReleasesForUser(userId: string) {
       shareCount: true,
       listenClickCount: true,
       positiveReactionCount: true,
+      commentCount: true,
       isFeatured: true,
       editorialRank: true,
     },
   });
 
-  return candidates
-    .map((candidate) => scoreRecommendation(applyReleaseEditorialFields(candidate), {
-      followedArtists,
-      followedLabels,
-      genreSignals,
-    }))
+  const scored = candidates
+    .map((candidate) => scoreRecommendationCandidate(applyReleaseEditorialFields(candidate), signals))
     .filter((candidate): candidate is RadarRecommendation => Boolean(candidate))
-    .sort((left, right) => right.score - left.score || right.publishedAt.getTime() - left.publishedAt.getTime())
-    .slice(0, 8);
+    .sort((left, right) => right.score - left.score || right.publishedAt.getTime() - left.publishedAt.getTime());
+
+  return selectDiverseRecommendations(scored, 8);
 }
 
-function scoreRecommendation(
+export function buildRecommendationSignals({
+  follows,
+  savedReleases,
+}: {
+  follows: Array<{
+    targetType: FollowTargetType;
+    targetValue: string;
+  }>;
+  savedReleases: SavedReleaseSignal[];
+}): RecommendationSignals {
+  const followedArtists = new Set(
+    follows
+      .filter((follow) => follow.targetType === FollowTargetType.ARTIST)
+      .map((follow) => normalizeSignalKey(follow.targetValue))
+      .filter((value): value is string => Boolean(value)),
+  );
+  const followedLabels = new Set(
+    follows
+      .filter((follow) => follow.targetType === FollowTargetType.LABEL)
+      .map((follow) => normalizeSignalKey(follow.targetValue))
+      .filter((value): value is string => Boolean(value)),
+  );
+
+  return {
+    followedArtists,
+    followedLabels,
+    savedArtistWeights: accumulateSignalWeights(savedReleases.map((entry) => entry.artistName)),
+    savedLabelWeights: accumulateSignalWeights(savedReleases.map((entry) => entry.labelName)),
+    savedGenreWeights: accumulateSignalWeights(
+      savedReleases.map((entry) => entry.genreOverride || entry.genreName),
+    ),
+  };
+}
+
+export function scoreRecommendationCandidate(
   candidate: RecommendationCandidate,
-  signals: {
-    followedArtists: Set<string>;
-    followedLabels: Set<string>;
-    genreSignals: Set<string>;
-  },
+  signals: RecommendationSignals,
 ): RadarRecommendation | null {
-  const reasons: string[] = [];
+  const reasons = new Set<string>();
   let score = 0;
 
-  if (candidate.artistName && signals.followedArtists.has(candidate.artistName)) {
-    reasons.push("followed artist");
+  const artistKey = normalizeSignalKey(candidate.artistName);
+  const labelKey = normalizeSignalKey(candidate.labelName);
+  const genreKey = normalizeSignalKey(candidate.genreName);
+
+  if (artistKey && signals.followedArtists.has(artistKey)) {
+    reasons.add("followed artist");
     score += 420;
   }
-  if (candidate.labelName && signals.followedLabels.has(candidate.labelName)) {
-    reasons.push("followed label");
+  if (labelKey && signals.followedLabels.has(labelKey)) {
+    reasons.add("followed label");
     score += 260;
   }
-  if (candidate.genreName && signals.genreSignals.has(candidate.genreName)) {
-    reasons.push("saved genre");
-    score += 130;
+
+  const savedArtistWeight = readSignalWeight(signals.savedArtistWeights, artistKey);
+  const savedLabelWeight = readSignalWeight(signals.savedLabelWeights, labelKey);
+  const savedGenreWeight = readSignalWeight(signals.savedGenreWeights, genreKey);
+
+  if (savedArtistWeight > 0) {
+    reasons.add("saved artist lane");
+    score += Math.min(savedArtistWeight, 3) * 85;
+  }
+  if (savedLabelWeight > 0) {
+    reasons.add("saved label lane");
+    score += Math.min(savedLabelWeight, 3) * 44;
+  }
+  if (savedGenreWeight > 0) {
+    reasons.add("saved genre");
+    score += Math.min(savedGenreWeight, 3) * 58;
   }
   if (candidate.isFeatured) {
-    reasons.push("editor pick");
+    reasons.add("editor pick");
     score += 90 + candidate.editorialRank * 4;
   }
 
+  const tractionScore =
+    Math.min(candidate.openCount, 60) * 0.8 +
+    Math.min(candidate.listenClickCount, 24) * 2.2 +
+    Math.min(candidate.shareCount, 12) * 5 +
+    Math.min(candidate.positiveReactionCount, 16) * 4 +
+    Math.min(candidate.commentCount || 0, 36) * 1.5;
+
+  if (tractionScore >= 55) {
+    reasons.add("reader traction");
+  }
+
   score += Math.max(0, Math.min(candidate.qualityScore, 100));
-  score += Math.min(candidate.openCount, 40);
-  score += Math.min(candidate.listenClickCount, 20) * 2;
-  score += Math.min(candidate.shareCount, 10) * 5;
-  score += Math.min(candidate.positiveReactionCount, 12) * 4;
+  score += tractionScore;
   score += computeRecencyBonus(candidate.publishedAt);
 
-  if (reasons.length === 0 && score < 130) {
+  if (reasons.size === 0 && score < 150) {
     return null;
   }
 
@@ -168,23 +229,125 @@ function scoreRecommendation(
     labelName: candidate.labelName,
     genreName: candidate.genreName,
     publishedAt: candidate.publishedAt,
-    reasons: reasons.slice(0, 3),
-    score,
+    reasons: [...reasons].slice(0, 3),
+    score: Math.round(score),
   };
+}
+
+export function selectDiverseRecommendations(
+  candidates: RadarRecommendation[],
+  limit: number,
+): RadarRecommendation[] {
+  const remaining = [...candidates];
+  const selected: RadarRecommendation[] = [];
+
+  while (remaining.length > 0 && selected.length < limit) {
+    let bestIndex = -1;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    for (let index = 0; index < remaining.length; index += 1) {
+      const candidate = remaining[index];
+      const adjustedScore = candidate.score - computeDiversityPenalty(candidate, selected);
+      if (adjustedScore > bestScore) {
+        bestScore = adjustedScore;
+        bestIndex = index;
+      }
+    }
+
+    if (bestIndex === -1 || bestScore < 120) {
+      break;
+    }
+
+    const [next] = remaining.splice(bestIndex, 1);
+    if (!next) {
+      break;
+    }
+
+    selected.push(next);
+  }
+
+  return selected;
+}
+
+function accumulateSignalWeights(values: Array<string | null>) {
+  const weights = new Map<string, number>();
+
+  for (const value of values) {
+    const key = normalizeSignalKey(value);
+    if (!key) {
+      continue;
+    }
+
+    weights.set(key, (weights.get(key) || 0) + 1);
+  }
+
+  return weights;
+}
+
+function readSignalWeight(weights: Map<string, number>, key: string | null) {
+  if (!key) {
+    return 0;
+  }
+
+  return weights.get(key) || 0;
+}
+
+function computeDiversityPenalty(candidate: RadarRecommendation, selected: RadarRecommendation[]) {
+  const artistKey = normalizeSignalKey(candidate.artistName);
+  const labelKey = normalizeSignalKey(candidate.labelName);
+  const genreKey = normalizeSignalKey(candidate.genreName);
+
+  let penalty = 0;
+  let artistMatches = 0;
+  let genreMatches = 0;
+
+  for (const existing of selected) {
+    if (artistKey && artistKey === normalizeSignalKey(existing.artistName)) {
+      artistMatches += 1;
+      penalty += 150;
+    }
+    if (labelKey && labelKey === normalizeSignalKey(existing.labelName)) {
+      penalty += 55;
+    }
+    if (genreKey && genreKey === normalizeSignalKey(existing.genreName)) {
+      genreMatches += 1;
+      penalty += 28;
+    }
+  }
+
+  if (artistMatches >= 2) {
+    penalty += 240;
+  }
+  if (genreMatches >= 3) {
+    penalty += 120;
+  }
+
+  return penalty;
+}
+
+function normalizeSignalKey(value: string | null | undefined) {
+  if (!value || !value.trim()) {
+    return null;
+  }
+
+  return value.trim().toLowerCase();
 }
 
 function computeRecencyBonus(publishedAt: Date) {
   const ageHours = Math.max(1, (Date.now() - publishedAt.getTime()) / (1000 * 60 * 60));
 
   if (ageHours <= 24) {
-    return 70;
+    return 74;
   }
   if (ageHours <= 72) {
-    return 48;
+    return 52;
   }
   if (ageHours <= 168) {
-    return 26;
+    return 30;
+  }
+  if (ageHours <= 336) {
+    return 16;
   }
 
-  return 8;
+  return 6;
 }

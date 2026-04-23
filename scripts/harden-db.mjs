@@ -28,6 +28,7 @@ const PUBLIC_TABLES = [
   '"EditorialCollection"',
   '"EditorialCollectionEntry"',
   '"ReleaseEditorialAudit"',
+  '"UserRoleAssignmentAudit"',
 ];
 
 async function main() {

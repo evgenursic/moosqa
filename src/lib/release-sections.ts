@@ -34,6 +34,7 @@ export type ReleaseListingItem = {
   sourceUrl: string;
   youtubeUrl: string | null;
   youtubeMusicUrl: string | null;
+  youtubeViewCount: number | null;
   bandcampUrl: string | null;
   officialWebsiteUrl: string | null;
   officialStoreUrl: string | null;
@@ -142,7 +143,7 @@ export const releaseSectionDefinitions: Record<ReleaseSectionKey, ReleaseSection
     title: "Top engaged on Indieheads",
     homeId: "top-engaged",
     description:
-      "Releases ranked by Reddit score, comment activity, upvote approval, awards, crossposts, and recency.",
+      "Releases ranked by Reddit upvotes, comments, community ratings, and recency.",
     readMoreLabel: "Read more top engaged releases",
     emptyState: "No high-engagement releases are available yet.",
   },
@@ -193,6 +194,7 @@ const releaseListingSelect = {
   sourceUrl: true,
   youtubeUrl: true,
   youtubeMusicUrl: true,
+  youtubeViewCount: true,
   bandcampUrl: true,
   officialWebsiteUrl: true,
   officialStoreUrl: true,
@@ -700,6 +702,7 @@ function prepareDisplayReleases(releases: ReleaseListingRow[]) {
           sourceUrl: edited.sourceUrl,
           youtubeUrl: edited.youtubeUrl,
           youtubeMusicUrl: edited.youtubeMusicUrl,
+          youtubeViewCount: edited.youtubeViewCount,
           bandcampUrl: edited.bandcampUrl,
           officialWebsiteUrl: edited.officialWebsiteUrl,
           officialStoreUrl: edited.officialStoreUrl,

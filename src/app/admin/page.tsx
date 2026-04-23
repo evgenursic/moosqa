@@ -5,6 +5,8 @@ import { Suspense, type ReactNode } from "react";
 
 import {
   addReleaseToCollectionAction,
+  assignUserRoleAction,
+  bootstrapAdminAccessAction,
   createEditorialCollectionAction,
   updateReleaseEditorialAction,
 } from "@/app/admin/actions";
@@ -68,6 +70,28 @@ async function AdminContent({ searchParams }: AdminPageProps) {
   }
 
   if (!access.canAccess) {
+    if (access.bootstrapAllowed && access.authenticated) {
+      return (
+        <AdminNotice
+          title="Admin bootstrap"
+          message="No ADMIN user exists yet. Sign in, confirm the debug secret, and grant the first admin role explicitly."
+        >
+          <form action={bootstrapAdminAccessAction} className="mt-5 grid gap-3 border border-[var(--color-soft-line)] bg-[var(--color-paper)] p-4">
+            <LabeledInput name="bootstrapSecret" label="Debug secret" placeholder="Current DEBUG_SECRET" />
+            <LabeledInput name="reason" label="Reason" placeholder="Initial admin bootstrap" />
+            <div>
+              <button
+                type="submit"
+                className="inline-flex min-h-11 items-center justify-center border border-[var(--color-ink)] bg-[var(--color-ink)] px-4 py-3 text-xs uppercase tracking-[0.16em] text-white transition hover:bg-[var(--color-accent-strong)]"
+              >
+                Grant first admin
+              </button>
+            </div>
+          </form>
+        </AdminNotice>
+      );
+    }
+
     return <AdminNotice title="Access denied" message="This account does not have editor or admin privileges yet." />;
   }
 
@@ -126,6 +150,128 @@ async function AdminContent({ searchParams }: AdminPageProps) {
           </div>
         </PanelCard>
       </section>
+
+      <section className="mt-8 grid gap-4 lg:grid-cols-3">
+        <PanelCard title="Save conversion by release type">
+          <div className="grid gap-3">
+            {dashboard.productAnalytics.saveConversionByType.map((entry) => (
+              <MetricRow
+                key={entry.label}
+                title={entry.label}
+                subtitle={`${entry.opens} detail opens`}
+                value={`${entry.savesPer100Opens} saves / 100 opens`}
+              />
+            ))}
+          </div>
+        </PanelCard>
+
+        <PanelCard title="Follow pathways">
+          <div className="grid gap-3">
+            {dashboard.productAnalytics.followPathways.map((entry) => (
+              <MetricRow
+                key={entry.label}
+                title={entry.label}
+                subtitle="Current follow mix"
+                value={`${entry.count} follows`}
+              />
+            ))}
+          </div>
+        </PanelCard>
+
+        <PanelCard title="Detail funnel">
+          <div className="grid gap-3">
+            <MetricRow
+              title="Release detail opens"
+              subtitle="Aggregate public detail visits"
+              value={String(dashboard.productAnalytics.conversion.detailOpens)}
+            />
+            <MetricRow
+              title="Detail to save"
+              subtitle="Across all public release pages"
+              value={`${dashboard.productAnalytics.conversion.detailToSavePer100Opens} / 100 opens`}
+            />
+            <MetricRow
+              title="Detail to follow"
+              subtitle="Across all public release pages"
+              value={`${dashboard.productAnalytics.conversion.detailToFollowPer100Opens} / 100 opens`}
+            />
+          </div>
+        </PanelCard>
+      </section>
+
+      <section className="mt-8">
+        <PanelCard title="Recent product trend">
+          <div className="grid gap-3">
+            {dashboard.productAnalytics.dailyTrends.slice(0, 8).map((entry) => (
+              <MetricRow
+                key={entry.dateKey}
+                title={entry.label}
+                subtitle={`${entry.opens} opens / ${entry.saves} saves / ${entry.follows} follows`}
+                value={`${entry.notificationQueued} queued / ${entry.notificationSent} sent / ${entry.notificationFailed + entry.notificationSkipped} blocked`}
+              />
+            ))}
+          </div>
+        </PanelCard>
+      </section>
+
+      {access.isAdmin ? (
+        <section className="mt-8 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+          <PanelCard title="Role access">
+            <div id="roles" className="grid gap-5">
+              <form action={assignUserRoleAction} className="grid gap-3 border border-[var(--color-soft-line)] bg-[var(--color-paper)] p-4 md:grid-cols-2">
+                <LabeledInput name="email" label="User email" placeholder="editor@example.com" />
+                <label className="grid gap-2 text-xs uppercase tracking-[0.16em] text-black/58">
+                  Role
+                  <select
+                    name="role"
+                    defaultValue="EDITOR"
+                    className="min-h-11 border border-[var(--color-line)] bg-[var(--color-paper)] px-3 py-2 text-sm normal-case tracking-normal text-[var(--color-ink)]"
+                  >
+                    <option value="EDITOR">Editor</option>
+                    <option value="ADMIN">Admin</option>
+                    <option value="USER">User</option>
+                  </select>
+                </label>
+                <div className="md:col-span-2">
+                  <LabeledInput name="reason" label="Reason" placeholder="Why this role is changing." />
+                </div>
+                <div className="md:col-span-2">
+                  <button
+                    type="submit"
+                    className="inline-flex min-h-11 items-center justify-center border border-[var(--color-ink)] bg-[var(--color-ink)] px-4 py-3 text-xs uppercase tracking-[0.16em] text-white transition hover:bg-[var(--color-accent-strong)]"
+                  >
+                    Save role
+                  </button>
+                </div>
+              </form>
+
+              <div className="grid gap-3">
+                {dashboard.roleRoster.map((entry) => (
+                  <MetricRow
+                    key={entry.id}
+                    title={entry.displayName || entry.email || entry.id}
+                    subtitle={entry.email || "No email"}
+                    value={entry.role}
+                  />
+                ))}
+              </div>
+            </div>
+          </PanelCard>
+
+          <PanelCard title="Recent role activity">
+            <div className="grid gap-3">
+              {dashboard.recentRoleAssignments.map((entry) => (
+                <MetricRow
+                  key={entry.id}
+                  title={entry.target.displayName || entry.target.email || "Unknown user"}
+                  subtitle={`${entry.previousRole || "none"} -> ${entry.nextRole} / ${entry.actor?.displayName || entry.actor?.email || "bootstrap"}`}
+                  value={formatRelative(entry.createdAt)}
+                />
+              ))}
+            </div>
+          </PanelCard>
+        </section>
+      ) : null}
 
       <section className="mt-8 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <PanelCard title="Curated collections">

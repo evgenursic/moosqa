@@ -5,6 +5,23 @@
 - `/admin` is private and marked `noindex`.
 - Access requires a signed-in Supabase user whose `UserProfile.role` is `EDITOR` or `ADMIN`.
 - Unconfigured auth shows a setup state instead of a broken page.
+- If no `ADMIN` exists yet, `/admin` exposes a one-time bootstrap form gated by `DEBUG_SECRET`.
+
+## Role assignment
+
+- First admin bootstrap:
+  - sign in with the account that should become the first admin
+  - open `/admin`
+  - submit the current `DEBUG_SECRET` plus a short reason
+  - MooSQA upgrades that exact signed-in user to `ADMIN` and records an audit row
+- Ongoing role changes:
+  - only current `ADMIN` users can assign `EDITOR`, `ADMIN`, or revert to `USER`
+  - every role change writes `UserRoleAssignmentAudit`
+  - the last remaining admin cannot demote themselves out of `ADMIN`
+- If role changes fail, check:
+  - the target user already has a local `UserProfile`
+  - the acting user is still `ADMIN`
+  - `DEBUG_SECRET` is present only for bootstrap, not routine role edits
 
 ## Core uses
 
@@ -13,6 +30,7 @@
 - hide irrelevant cards without deleting the release row
 - feature priority releases with `isFeatured` plus `editorialRank`
 - create lightweight editorial collections and attach releases to them
+- publish editor-facing work through `/picks` and `/collections/[slug]`
 - inspect recent editorial audit history and weak-card repair candidates
 
 ## Release override rules
@@ -25,6 +43,7 @@
   - notification digest selection
   - recommendation candidates
 - editorial changes revalidate the homepage, radar, admin surface, and the affected release detail path
+- published collections and picks are revalidated through the shared `editorial` tag and public editorial routes
 
 ## Operational notes
 

@@ -24,6 +24,7 @@ type ReleaseBriefProps = {
     sourceUrl: string;
     youtubeUrl?: string | null;
     youtubeMusicUrl?: string | null;
+    youtubeViewCount?: number | null;
     bandcampUrl?: string | null;
     officialWebsiteUrl?: string | null;
     officialStoreUrl?: string | null;

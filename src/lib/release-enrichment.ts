@@ -103,6 +103,14 @@ function needsEnrichment(release: EnrichableRelease, wantsAi: boolean) {
     return true;
   }
 
+  if (
+    isStale &&
+    !release.youtubeViewCount &&
+    (detectPlatform(release.sourceUrl) === "youtube" || Boolean(release.youtubeUrl))
+  ) {
+    return true;
+  }
+
   if (isStale && (!release.youtubeUrl || !release.youtubeMusicUrl || !release.bandcampUrl)) {
     return true;
   }
@@ -338,6 +346,12 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
       fallbackBandcampMetadata?.releaseDate ||
       searchedBandcampMetadata?.releaseDate ||
       release.releaseDate ||
+      null,
+    youtubeViewCount:
+      sourceMetadata.youtubeViewCount ||
+      fallbackBandcampMetadata?.youtubeViewCount ||
+      searchedBandcampMetadata?.youtubeViewCount ||
+      release.youtubeViewCount ||
       null,
     youtubeUrl:
       directYouTube ||

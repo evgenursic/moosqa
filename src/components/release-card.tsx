@@ -10,6 +10,7 @@ import {
   formatRedditDateLabel,
   formatReleaseTypeLabel,
   formatScore,
+  formatYouTubeViewsLabel,
   getDisplayGenre,
   getDisplaySummary,
 } from "@/lib/utils";
@@ -29,6 +30,7 @@ type ReleaseCardProps = {
     sourceUrl: string;
     youtubeUrl?: string | null;
     youtubeMusicUrl?: string | null;
+    youtubeViewCount?: number | null;
     bandcampUrl?: string | null;
     officialWebsiteUrl?: string | null;
     officialStoreUrl?: string | null;
@@ -195,6 +197,7 @@ function getMetaItems(
       release.outletName || null,
     ),
     formatRedditDateLabel(release.publishedAt),
+    formatYouTubeViewsLabel(release.youtubeViewCount),
     release.outletName || "Source pending",
   ].filter((item): item is string => Boolean(item));
 

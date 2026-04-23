@@ -4,7 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { EditorialCollectionType } from "@/generated/prisma/enums";
+import { EditorialCollectionType, UserRole } from "@/generated/prisma/enums";
 import { getAdminAccessState } from "@/lib/admin-session";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
@@ -36,6 +36,17 @@ const collectionEntrySchema = z.object({
   releaseId: z.string().min(1),
   position: z.coerce.number().int().min(0).max(999).default(0),
   note: z.string().max(200).optional(),
+});
+
+const bootstrapSchema = z.object({
+  bootstrapSecret: z.string().min(1).max(200),
+  reason: z.string().max(200).optional(),
+});
+
+const roleAssignmentSchema = z.object({
+  email: z.string().email().max(160),
+  role: z.nativeEnum(UserRole),
+  reason: z.string().max(200).optional(),
 });
 
 export async function updateReleaseEditorialAction(formData: FormData) {
@@ -152,6 +163,9 @@ export async function createEditorialCollectionAction(formData: FormData) {
   }).catch(() => undefined);
 
   revalidatePath("/admin");
+  revalidatePath("/picks");
+  revalidatePath(`/collections/${collection.slug}`);
+  revalidateTag("editorial", "max");
   redirect(`/admin?collection=${encodeURIComponent(collection.slug)}#collections`);
 }
 
@@ -167,6 +181,10 @@ export async function addReleaseToCollectionAction(formData: FormData) {
 
   const release = await prisma.release.findUnique({
     where: { id: parsed.releaseId },
+    select: { slug: true },
+  });
+  const collection = await prisma.editorialCollection.findUnique({
+    where: { id: parsed.collectionId },
     select: { slug: true },
   });
 
@@ -203,7 +221,142 @@ export async function addReleaseToCollectionAction(formData: FormData) {
   });
 
   revalidateReleaseSurfaces(release?.slug || "");
+  revalidatePath("/picks");
+  if (collection?.slug) {
+    revalidatePath(`/collections/${collection.slug}`);
+  }
   redirect(`/admin?q=${encodeURIComponent(release?.slug || parsed.releaseId)}#collections`);
+}
+
+export async function bootstrapAdminAccessAction(formData: FormData) {
+  const access = await getAdminAccessState();
+  if (!access.configured) {
+    redirect("/account?auth=unconfigured");
+  }
+  if (!access.authenticated || !access.user) {
+    redirect("/account?next=%2Fadmin");
+  }
+  if (!access.bootstrapAllowed) {
+    redirect("/admin?bootstrap=closed");
+  }
+
+  const parsed = bootstrapSchema.parse({
+    bootstrapSecret: readString(formData, "bootstrapSecret"),
+    reason: readOptionalString(formData, "reason"),
+  });
+  const expectedSecret = process.env.DEBUG_SECRET?.trim() || "";
+  if (!expectedSecret || parsed.bootstrapSecret.trim() !== expectedSecret) {
+    redirect("/admin?bootstrap=invalid");
+  }
+
+  await ensureDatabase();
+
+  const result = await prisma.$transaction(async (tx) => {
+    const adminCount = await tx.userProfile.count({
+      where: {
+        role: UserRole.ADMIN,
+      },
+    });
+    if (adminCount > 0) {
+      return { ok: false as const };
+    }
+
+    const current = await tx.userProfile.findUnique({
+      where: { id: access.user!.id },
+      select: { role: true },
+    });
+
+    await tx.userProfile.update({
+      where: { id: access.user!.id },
+      data: {
+        role: UserRole.ADMIN,
+      },
+    });
+
+    await tx.userRoleAssignmentAudit.create({
+      data: {
+        actorUserId: access.user!.id,
+        targetUserId: access.user!.id,
+        previousRole: current?.role || UserRole.USER,
+        nextRole: UserRole.ADMIN,
+        reason: parsed.reason?.trim() || "Initial admin bootstrap via debug secret.",
+      },
+    });
+
+    return { ok: true as const };
+  });
+
+  if (!result.ok) {
+    redirect("/admin?bootstrap=closed");
+  }
+
+  revalidatePath("/admin");
+  redirect("/admin?bootstrap=granted");
+}
+
+export async function assignUserRoleAction(formData: FormData) {
+  const admin = await requireAdminRoleActionUser();
+  const parsed = roleAssignmentSchema.parse({
+    email: readString(formData, "email").toLowerCase(),
+    role: readString(formData, "role"),
+    reason: readOptionalString(formData, "reason"),
+  });
+  await ensureDatabase();
+
+  const target = await prisma.userProfile.findUnique({
+    where: {
+      email: parsed.email,
+    },
+    select: {
+      id: true,
+      role: true,
+    },
+  });
+
+  if (!target) {
+    redirect(`/admin?roles=missing-user&email=${encodeURIComponent(parsed.email)}#roles`);
+  }
+
+  if (target.role === parsed.role) {
+    redirect(`/admin?roles=unchanged&email=${encodeURIComponent(parsed.email)}#roles`);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    if (target.id === admin.id && parsed.role !== UserRole.ADMIN) {
+      const adminCount = await tx.userProfile.count({
+        where: {
+          role: UserRole.ADMIN,
+        },
+      });
+
+      if (adminCount <= 1) {
+        throw new Error("Cannot demote the last admin.");
+      }
+    }
+
+    await tx.userProfile.update({
+      where: { id: target.id },
+      data: {
+        role: parsed.role,
+      },
+    });
+
+    await tx.userRoleAssignmentAudit.create({
+      data: {
+        actorUserId: admin.id,
+        targetUserId: target.id,
+        previousRole: target.role,
+        nextRole: parsed.role,
+        reason: parsed.reason?.trim() || null,
+      },
+    });
+  }).catch((error) => {
+    console.error("Role assignment failed.", error);
+    redirect(`/admin?roles=blocked&email=${encodeURIComponent(parsed.email)}#roles`);
+  });
+
+  revalidatePath("/admin");
+  redirect(`/admin?roles=saved&email=${encodeURIComponent(parsed.email)}#roles`);
 }
 
 async function requireAdminActionUser() {
@@ -221,14 +374,31 @@ async function requireAdminActionUser() {
   return access.user;
 }
 
+async function requireAdminRoleActionUser() {
+  const access = await getAdminAccessState();
+  if (!access.configured) {
+    redirect("/account?auth=unconfigured");
+  }
+  if (!access.authenticated || !access.user) {
+    redirect("/account?next=%2Fadmin");
+  }
+  if (!access.isAdmin) {
+    redirect("/admin?roles=forbidden#roles");
+  }
+
+  return access.user;
+}
+
 function revalidateReleaseSurfaces(slug: string) {
   revalidatePath("/");
+  revalidatePath("/picks");
   revalidatePath("/radar");
   revalidatePath("/admin");
   if (slug) {
     revalidatePath(`/releases/${slug}`);
   }
   revalidateTag("releases", "max");
+  revalidateTag("editorial", "max");
   revalidateTag("ops-dashboard", "max");
 }
 

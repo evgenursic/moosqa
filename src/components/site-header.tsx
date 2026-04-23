@@ -59,6 +59,7 @@ const rightLinks: NavLink[] = [
   { href: "/browse/albums", label: "Albums" },
   { href: "/browse/eps", label: "EPs" },
   { href: "/browse/live", label: "Live" },
+  { href: "/picks", label: "Picks" },
   { href: "/account", label: "Account" },
 ];
 

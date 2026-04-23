@@ -69,6 +69,7 @@ const getCachedArtworkPayload = unstable_cache(
         sourceUrl: true,
         youtubeUrl: true,
         youtubeMusicUrl: true,
+        youtubeViewCount: true,
         bandcampUrl: true,
         officialWebsiteUrl: true,
         officialStoreUrl: true,
@@ -106,6 +107,7 @@ const getCachedArtworkPayload = unstable_cache(
     let discoveredBandcampUrl = release.bandcampUrl || null;
     let discoveredYoutubeUrl = release.youtubeUrl || null;
     let discoveredYoutubeMusicUrl = release.youtubeMusicUrl || null;
+    let discoveredYoutubeViewCount = release.youtubeViewCount || null;
     let discoveredOfficialWebsiteUrl = release.officialWebsiteUrl || null;
     let discoveredOfficialStoreUrl = release.officialStoreUrl || null;
     let discoveredReleaseDate = release.releaseDate || null;
@@ -136,6 +138,7 @@ const getCachedArtworkPayload = unstable_cache(
       discoveredYoutubeUrl = discoveredYoutubeUrl || normalizeUrl(metadata?.youtubeUrl || null);
       discoveredYoutubeMusicUrl =
         discoveredYoutubeMusicUrl || normalizeUrl(metadata?.youtubeMusicUrl || null);
+      discoveredYoutubeViewCount = discoveredYoutubeViewCount || metadata?.youtubeViewCount || null;
       discoveredOfficialWebsiteUrl =
         discoveredOfficialWebsiteUrl || normalizeUrl(metadata?.officialWebsiteUrl || null);
       discoveredOfficialStoreUrl =
@@ -153,6 +156,7 @@ const getCachedArtworkPayload = unstable_cache(
       discoveredBandcampUrl,
       discoveredYoutubeUrl,
       discoveredYoutubeMusicUrl,
+      discoveredYoutubeViewCount,
       discoveredOfficialWebsiteUrl,
       discoveredOfficialStoreUrl,
       discoveredReleaseDate,
@@ -220,6 +224,8 @@ async function persistResolvedArtworkCandidate(
   const nextYoutubeUrl = artworkPayload.discoveredYoutubeUrl || artworkPayload.release.youtubeUrl;
   const nextYoutubeMusicUrl =
     artworkPayload.discoveredYoutubeMusicUrl || artworkPayload.release.youtubeMusicUrl;
+  const nextYoutubeViewCount =
+    artworkPayload.discoveredYoutubeViewCount || artworkPayload.release.youtubeViewCount;
   const nextBandcampUrl = artworkPayload.discoveredBandcampUrl || artworkPayload.release.bandcampUrl;
   const nextOfficialWebsiteUrl =
     artworkPayload.discoveredOfficialWebsiteUrl || artworkPayload.release.officialWebsiteUrl;
@@ -237,6 +243,7 @@ async function persistResolvedArtworkCandidate(
     nextLabelName !== artworkPayload.release.labelName ||
     nextYoutubeUrl !== artworkPayload.release.youtubeUrl ||
     nextYoutubeMusicUrl !== artworkPayload.release.youtubeMusicUrl ||
+    nextYoutubeViewCount !== artworkPayload.release.youtubeViewCount ||
     nextBandcampUrl !== artworkPayload.release.bandcampUrl ||
     nextOfficialWebsiteUrl !== artworkPayload.release.officialWebsiteUrl ||
     nextOfficialStoreUrl !== artworkPayload.release.officialStoreUrl ||
@@ -276,6 +283,7 @@ async function persistResolvedArtworkCandidate(
       releaseDate: nextReleaseDate,
       youtubeUrl: nextYoutubeUrl,
       youtubeMusicUrl: nextYoutubeMusicUrl,
+      youtubeViewCount: nextYoutubeViewCount,
       bandcampUrl: nextBandcampUrl,
       officialWebsiteUrl: nextOfficialWebsiteUrl,
       officialStoreUrl: nextOfficialStoreUrl,

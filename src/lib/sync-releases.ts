@@ -1031,6 +1031,7 @@ async function upsertNormalizedReleases(
       thumbnailUrl: true,
       youtubeUrl: true,
       youtubeMusicUrl: true,
+      youtubeViewCount: true,
       bandcampUrl: true,
       officialWebsiteUrl: true,
       officialStoreUrl: true,
@@ -1145,6 +1146,7 @@ async function buildReleaseDataForUpsert(
     thumbnailUrl: string | null;
     youtubeUrl: string | null;
     youtubeMusicUrl: string | null;
+    youtubeViewCount: number | null;
     bandcampUrl: string | null;
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
@@ -1184,6 +1186,10 @@ async function buildReleaseDataForUpsert(
       (!release.imageUrl && !existing?.imageUrl && !existing?.thumbnailUrl) ||
       !existing?.genreName ||
       !isSpecificGenreProfile(existing.genreName) ||
+      (
+        !existing?.youtubeViewCount &&
+        (release.sourceUrl.includes("youtube.com") || Boolean(existing?.youtubeUrl))
+      ) ||
       !hasStableListeningLinks ||
       !hasStablePurchaseLink ||
       !recentlyEnriched;
@@ -1261,6 +1267,10 @@ async function buildReleaseDataForUpsert(
         existing?.releaseDate ||
         effectiveSourceMetadata?.releaseDate ||
         release.releaseDate ||
+        null,
+      youtubeViewCount:
+        effectiveSourceMetadata?.youtubeViewCount ||
+        existing?.youtubeViewCount ||
         null,
       imageUrl:
         release.imageUrl ||
@@ -1378,6 +1388,7 @@ async function buildReleaseDataForUpsert(
     labelName: sourceMetadata?.labelName || existing?.labelName || null,
     youtubeUrl: sourceMetadata?.youtubeUrl || existing?.youtubeUrl || null,
     youtubeMusicUrl: sourceMetadata?.youtubeMusicUrl || existing?.youtubeMusicUrl || null,
+    youtubeViewCount: sourceMetadata?.youtubeViewCount || existing?.youtubeViewCount || null,
     bandcampUrl: sourceMetadata?.bandcampUrl || existing?.bandcampUrl || null,
     officialWebsiteUrl: sourceMetadata?.officialWebsiteUrl || existing?.officialWebsiteUrl || null,
     officialStoreUrl: sourceMetadata?.officialStoreUrl || existing?.officialStoreUrl || null,
@@ -1595,6 +1606,7 @@ function mergeSourceMetadataHints(
         genreName?: string | null;
         labelName?: string | null;
         releaseDate?: Date | null;
+        youtubeViewCount?: number | null;
         sourceImageUrl?: string | null;
         youtubeUrl?: string | null;
         youtubeMusicUrl?: string | null;
@@ -1611,6 +1623,7 @@ function mergeSourceMetadataHints(
         genreName?: string | null;
         labelName?: string | null;
         releaseDate?: Date | null;
+        youtubeViewCount?: number | null;
         sourceImageUrl?: string | null;
         youtubeUrl?: string | null;
         youtubeMusicUrl?: string | null;
@@ -1632,6 +1645,7 @@ function mergeSourceMetadataHints(
       pickPreferredGenreProfile(primary?.genreName || null, fallback?.genreName || null) || null,
     labelName: primary?.labelName || fallback?.labelName || null,
     releaseDate: primary?.releaseDate || fallback?.releaseDate || null,
+    youtubeViewCount: primary?.youtubeViewCount || fallback?.youtubeViewCount || null,
     sourceImageUrl: primary?.sourceImageUrl || fallback?.sourceImageUrl || null,
     youtubeUrl: primary?.youtubeUrl || fallback?.youtubeUrl || null,
     youtubeMusicUrl: primary?.youtubeMusicUrl || fallback?.youtubeMusicUrl || null,
@@ -1702,6 +1716,7 @@ function hasCoreReleaseDataChanges(
     thumbnailUrl: string | null;
     youtubeUrl: string | null;
     youtubeMusicUrl: string | null;
+    youtubeViewCount: number | null;
     bandcampUrl: string | null;
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
@@ -1735,6 +1750,7 @@ function hasCoreReleaseDataChanges(
     thumbnailUrl: string | null;
     youtubeUrl: string | null;
     youtubeMusicUrl: string | null;
+    youtubeViewCount: number | null;
     bandcampUrl: string | null;
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
@@ -1769,6 +1785,7 @@ function hasCoreReleaseDataChanges(
     existing.thumbnailUrl !== next.thumbnailUrl ||
     existing.youtubeUrl !== next.youtubeUrl ||
     existing.youtubeMusicUrl !== next.youtubeMusicUrl ||
+    existing.youtubeViewCount !== next.youtubeViewCount ||
     existing.bandcampUrl !== next.bandcampUrl ||
     existing.officialWebsiteUrl !== next.officialWebsiteUrl ||
     existing.officialStoreUrl !== next.officialStoreUrl ||

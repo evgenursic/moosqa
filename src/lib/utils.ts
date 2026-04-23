@@ -2,6 +2,28 @@ import { clsx, type ClassValue } from "clsx";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { ReleaseType } from "@/generated/prisma/enums";
 
+const UTC_DATE_ONLY_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: "UTC",
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+  year: "numeric",
+});
+
+const UTC_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "UTC",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+const WHOLE_NUMBER_FORMATTER = new Intl.NumberFormat("en-US");
+
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
 }
@@ -42,6 +64,14 @@ export function formatPubDate(date: Date) {
   return format(date, "MMM dd, yyyy");
 }
 
+export function formatDetailedUtcDate(date: Date) {
+  return UTC_DATE_ONLY_FORMATTER.format(date);
+}
+
+export function formatDetailedUtcTimestamp(date: Date) {
+  return `${formatDetailedUtcDate(date)} at ${UTC_TIME_FORMATTER.format(date)} UTC`;
+}
+
 export function formatRelative(date: Date) {
   return formatDistanceToNowStrict(date, { addSuffix: true });
 }
@@ -79,10 +109,10 @@ export function formatPrimaryReleaseDateLabel(
   }
 
   if (releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION) {
-    return `Performance ${formatPubDate(releaseDate)}`;
+    return `Performance ${formatReleaseMoment(releaseDate)}`;
   }
 
-  return `Release ${formatPubDate(releaseDate)}`;
+  return `Release ${formatReleaseMoment(releaseDate)}`;
 }
 
 export function formatContextualReleaseDateLabel(
@@ -115,7 +145,35 @@ export function formatRedditDateLabel(publishedAt: Date | null | undefined) {
     return null;
   }
 
-  return `Reddit ${formatPubDate(publishedAt)}`;
+  return `Published ${formatDetailedUtcTimestamp(publishedAt)}`;
+}
+
+export function formatYouTubeViewsLabel(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  return `YouTube ${COMPACT_NUMBER_FORMATTER.format(Math.round(value))} views`;
+}
+
+export function formatWholeCount(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "0";
+  }
+
+  return WHOLE_NUMBER_FORMATTER.format(Math.max(0, Math.round(value)));
+}
+
+export function formatDiscussionShare(score: number | null | undefined, comments: number | null | undefined) {
+  const safeScore = Math.max(0, Math.round(score ?? 0));
+  const safeComments = Math.max(0, Math.round(comments ?? 0));
+  const total = safeScore + safeComments;
+
+  if (total <= 0) {
+    return null;
+  }
+
+  return Math.round((safeComments / total) * 100);
 }
 
 export function getDisplayGenre(
@@ -354,4 +412,14 @@ function hashSummaryValue(value: string) {
   }
 
   return hash;
+}
+
+function formatReleaseMoment(date: Date) {
+  return hasMeaningfulUtcTime(date)
+    ? formatDetailedUtcTimestamp(date)
+    : formatDetailedUtcDate(date);
+}
+
+function hasMeaningfulUtcTime(date: Date) {
+  return date.getUTCHours() !== 0 || date.getUTCMinutes() !== 0;
 }

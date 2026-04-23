@@ -11,6 +11,9 @@ export type AdminAccessState = {
   configured: boolean;
   authenticated: boolean;
   canAccess: boolean;
+  isAdmin: boolean;
+  bootstrapAllowed: boolean;
+  adminCount: number;
   error: string | null;
   user: {
     id: string;
@@ -25,6 +28,9 @@ export async function getAdminAccessState(): Promise<AdminAccessState> {
       configured: false,
       authenticated: false,
       canAccess: false,
+      isAdmin: false,
+      bootstrapAllowed: false,
+      adminCount: 0,
       error: null,
       user: null,
     };
@@ -36,6 +42,9 @@ export async function getAdminAccessState(): Promise<AdminAccessState> {
       configured: true,
       authenticated: false,
       canAccess: false,
+      isAdmin: false,
+      bootstrapAllowed: false,
+      adminCount: 0,
       error: authState.error,
       user: null,
     };
@@ -46,6 +55,9 @@ export async function getAdminAccessState(): Promise<AdminAccessState> {
       configured: true,
       authenticated: false,
       canAccess: false,
+      isAdmin: false,
+      bootstrapAllowed: false,
+      adminCount: 0,
       error: null,
       user: null,
     };
@@ -58,14 +70,21 @@ export async function getAdminAccessState(): Promise<AdminAccessState> {
   });
   await ensureDatabase();
 
-  const profile = await prisma.userProfile.findUnique({
-    where: { id: authState.user.id },
-    select: {
-      id: true,
-      email: true,
-      role: true,
-    },
-  });
+  const [profile, adminCount] = await Promise.all([
+    prisma.userProfile.findUnique({
+      where: { id: authState.user.id },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+      },
+    }),
+    prisma.userProfile.count({
+      where: {
+        role: UserRole.ADMIN,
+      },
+    }),
+  ]);
 
   const role = profile?.role || UserRole.USER;
 
@@ -73,6 +92,9 @@ export async function getAdminAccessState(): Promise<AdminAccessState> {
     configured: true,
     authenticated: true,
     canAccess: isEditorialRole(role),
+    isAdmin: role === UserRole.ADMIN,
+    bootstrapAllowed: adminCount === 0,
+    adminCount,
     error: null,
     user: profile
       ? {

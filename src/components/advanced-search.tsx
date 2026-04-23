@@ -9,7 +9,7 @@ import { ReleaseLink } from "@/components/release-link";
 import { loadSearchIndex, readCachedSearchIndex } from "@/lib/client-search-index";
 import { type SearchOverlayIndexItem } from "@/lib/search-overlay";
 import { filterAndRankReleaseListings } from "@/lib/release-search";
-import { formatPubDate, formatReleaseTypeLabel, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
+import { formatRedditDateLabel, formatReleaseTypeLabel, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
 
 const ACTIVE_RESULTS_LIMIT = 12;
 
@@ -617,7 +617,7 @@ function SearchLiveResults({
               <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
                 <span>{getDisplayGenre(result.genreName, result.releaseType)}</span>
                 <span>{formatReleaseTypeLabel(result.releaseType)}</span>
-                <span>{formatPubDate(new Date(result.publishedAt))}</span>
+                <span>{formatRedditDateLabel(new Date(result.publishedAt))}</span>
               </div>
 
               <h3 className="mt-3 text-[1.9rem] leading-[0.94] text-white serif-display md:text-[2.25rem]">

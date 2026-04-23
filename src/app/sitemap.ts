@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getSearchGenreFacets } from "@/lib/release-sections";
 import { getSiteUrl } from "@/lib/site";
 import {
+  buildCollectionSitemapEntry,
   buildReleaseSitemapEntry,
   buildStaticSitemapEntries,
   buildTrendingGenreSitemapEntries,
@@ -18,6 +19,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticEntries = buildStaticSitemapEntries(siteUrl, generatedAt);
   let releaseEntries: MetadataRoute.Sitemap = [];
   let genreEntries: MetadataRoute.Sitemap = [];
+  let collectionEntries: MetadataRoute.Sitemap = [];
 
   try {
     await ensureDatabase();
@@ -43,6 +45,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     releaseEntries = releases.map((release) =>
       buildReleaseSitemapEntry(siteUrl, applyReleaseEditorialFields(release)),
     );
+
+    const collections = await prisma.editorialCollection.findMany({
+      where: {
+        isPublished: true,
+      },
+      select: {
+        slug: true,
+        updatedAt: true,
+        publishedAt: true,
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+      take: 120,
+    });
+
+    collectionEntries = collections.map((collection) => buildCollectionSitemapEntry(siteUrl, collection));
   } catch (error) {
     console.error("Release sitemap entries failed to load.", error);
   }
@@ -54,5 +73,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error("Trending genre sitemap entries failed to load.", error);
   }
 
-  return [...staticEntries, ...genreEntries, ...releaseEntries];
+  return [...staticEntries, ...genreEntries, ...collectionEntries, ...releaseEntries];
 }

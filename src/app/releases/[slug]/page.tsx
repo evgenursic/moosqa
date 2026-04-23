@@ -17,9 +17,9 @@ import { getSiteUrl } from "@/lib/site";
 import { getReleaseBySlug } from "@/lib/sync-releases";
 import {
   formatContextualReleaseDateLabel,
-  formatPubDate,
   formatRedditDateLabel,
   formatReleaseTypeLabel,
+  formatYouTubeViewsLabel,
   getDisplayGenre,
   getDisplaySummary,
 } from "@/lib/utils";
@@ -141,6 +141,7 @@ function renderReleasePage(
     release.outletName,
   );
   const redditDateLabel = formatRedditDateLabel(publishedAtValue);
+  const youtubeViewsLabel = formatYouTubeViewsLabel(release.youtubeViewCount);
   const releaseUrl = new URL(`/releases/${release.slug}`, getSiteUrl()).toString();
   const image =
     normalizePublicHttpUrl(release.imageUrl) ||
@@ -320,10 +321,14 @@ function renderReleasePage(
                 {release.labelName ? (
                   <span className="border border-[var(--color-line)] px-3 py-2">{release.labelName}</span>
                 ) : null}
-                {release.releaseDate ? (
-                  <span className="border border-[var(--color-line)] px-3 py-2">
-                    Release date {formatPubDate(release.releaseDate)}
-                  </span>
+                {releaseDateLabel ? (
+                  <span className="border border-[var(--color-line)] px-3 py-2">{releaseDateLabel}</span>
+                ) : null}
+                {redditDateLabel ? (
+                  <span className="border border-[var(--color-line)] px-3 py-2">{redditDateLabel}</span>
+                ) : null}
+                {youtubeViewsLabel ? (
+                  <span className="border border-[var(--color-line)] px-3 py-2">{youtubeViewsLabel}</span>
                 ) : null}
               </div>
             </div>
@@ -369,6 +374,7 @@ function renderReleasePublicCounters(
       <ReleasePublicCounters
         publishedAt={release.publishedAt}
         analyticsUpdatedAt={release.analyticsUpdatedAt}
+        youtubeViewCount={release.youtubeViewCount}
         openCount={release.openCount}
         listenClickCount={release.listenClickCount}
         shareCount={release.shareCount}
