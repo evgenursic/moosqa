@@ -11,6 +11,7 @@ Current foundation:
 - `UserSavedRelease` stores bookmarked releases with a unique `(userId, releaseId)` key.
 - `UserFollow` stores artist, label, and genre follows with a normalized unique target key.
 - Release detail pages expose server-side save, artist follow, and label follow actions when Supabase Auth is configured.
+- `/radar` shows saved releases, followed artist/label matches, and current follows for signed-in listeners.
 
 This keeps saved items and follows queryable without denormalizing artists or labels too early. Artist and label names still come from release metadata until there is enough editorial need for canonical artist/label tables.
 
@@ -28,9 +29,8 @@ This keeps saved items and follows queryable without denormalizing artists or la
 
 The next safe slices are:
 
-1. Personal radar page using saved releases and follows.
-2. Notification preference editing.
-3. Digest job and delivery idempotency.
+1. Notification preference editing.
+2. Digest job and delivery idempotency.
 
 ## Security Notes
 

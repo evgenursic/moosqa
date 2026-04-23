@@ -178,6 +178,12 @@ function SignedInAccountState({
       <div className="mt-6 grid gap-3 border-t border-[var(--color-soft-line)] pt-5 text-sm leading-7 text-black/64">
         <p>Saved releases, follows, and digest preferences are ready for the next product slice.</p>
         <Link
+          href="/radar"
+          className="inline-flex w-fit border border-[var(--color-accent-strong)] bg-[var(--color-accent-strong)] px-4 py-3 text-xs uppercase tracking-[0.16em] text-white transition hover:opacity-90"
+        >
+          Open radar
+        </Link>
+        <Link
           href="/#latest"
           className="inline-flex w-fit border border-[var(--color-line)] px-4 py-3 text-xs uppercase tracking-[0.16em] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
         >

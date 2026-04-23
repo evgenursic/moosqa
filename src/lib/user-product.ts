@@ -58,6 +58,17 @@ export type ReleaseFollowTarget = {
   normalizedValue: string;
 };
 
+export type PersonalRadarRelease = {
+  id: string;
+  slug: string;
+  title: string;
+  artistName: string | null;
+  projectTitle: string | null;
+  labelName: string | null;
+  genreName: string | null;
+  publishedAt: Date;
+};
+
 export function buildReleaseFollowTargets(input: {
   artistName?: string | null;
   labelName?: string | null;
@@ -195,6 +206,70 @@ export async function getReleaseUserActionState(input: {
     })),
   };
 }
+
+export async function getPersonalRadarForUser(userId: string) {
+  await ensureDatabase();
+  const [savedReleases, follows] = await Promise.all([
+    prisma.userSavedRelease.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 12,
+      select: {
+        release: {
+          select: personalRadarReleaseSelect,
+        },
+      },
+    }),
+    prisma.userFollow.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 24,
+      select: {
+        targetType: true,
+        targetValue: true,
+        normalizedValue: true,
+        createdAt: true,
+      },
+    }),
+  ]);
+  const artistTargets = follows
+    .filter((follow) => follow.targetType === FollowTargetType.ARTIST)
+    .map((follow) => follow.targetValue);
+  const labelTargets = follows
+    .filter((follow) => follow.targetType === FollowTargetType.LABEL)
+    .map((follow) => follow.targetValue);
+  const followedReleases =
+    artistTargets.length > 0 || labelTargets.length > 0
+      ? await prisma.release.findMany({
+          where: {
+            OR: [
+              ...artistTargets.map((artistName) => ({ artistName })),
+              ...labelTargets.map((labelName) => ({ labelName })),
+            ],
+          },
+          orderBy: { publishedAt: "desc" },
+          take: 12,
+          select: personalRadarReleaseSelect,
+        })
+      : [];
+
+  return {
+    savedReleases: savedReleases.map((entry) => entry.release),
+    followedReleases,
+    follows,
+  };
+}
+
+const personalRadarReleaseSelect = {
+  id: true,
+  slug: true,
+  title: true,
+  artistName: true,
+  projectTitle: true,
+  labelName: true,
+  genreName: true,
+  publishedAt: true,
+} satisfies Record<keyof PersonalRadarRelease, true>;
 
 export async function followTargetForUser(
   userId: string,
