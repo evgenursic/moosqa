@@ -60,20 +60,40 @@ export function trimText(value: string | null | undefined, maxLength = 220) {
   return `${normalized.slice(0, maxLength - 1).trimEnd()}...`;
 }
 
-export function formatPubDate(date: Date) {
-  return format(date, "MMM dd, yyyy");
+export function formatPubDate(date: Date | string | null | undefined) {
+  const safeDate = coerceDateValue(date);
+  if (!safeDate) {
+    return "Date unavailable";
+  }
+
+  return format(safeDate, "MMM dd, yyyy");
 }
 
-export function formatDetailedUtcDate(date: Date) {
-  return UTC_DATE_ONLY_FORMATTER.format(date);
+export function formatDetailedUtcDate(date: Date | string | null | undefined) {
+  const safeDate = coerceDateValue(date);
+  if (!safeDate) {
+    return "Date unavailable";
+  }
+
+  return UTC_DATE_ONLY_FORMATTER.format(safeDate);
 }
 
-export function formatDetailedUtcTimestamp(date: Date) {
-  return `${formatDetailedUtcDate(date)} at ${UTC_TIME_FORMATTER.format(date)} UTC`;
+export function formatDetailedUtcTimestamp(date: Date | string | null | undefined) {
+  const safeDate = coerceDateValue(date);
+  if (!safeDate) {
+    return "Date unavailable";
+  }
+
+  return `${formatDetailedUtcDate(safeDate)} at ${UTC_TIME_FORMATTER.format(safeDate)} UTC`;
 }
 
-export function formatRelative(date: Date) {
-  return formatDistanceToNowStrict(date, { addSuffix: true });
+export function formatRelative(date: Date | string | null | undefined) {
+  const safeDate = coerceDateValue(date);
+  if (!safeDate) {
+    return "Unknown time";
+  }
+
+  return formatDistanceToNowStrict(safeDate, { addSuffix: true });
 }
 
 export function formatScore(score: number) {
@@ -102,50 +122,53 @@ export function formatReleaseTypeLabel(releaseType: ReleaseType) {
 
 export function formatPrimaryReleaseDateLabel(
   releaseType: ReleaseType,
-  releaseDate: Date | null | undefined,
+  releaseDate: Date | string | null | undefined,
 ) {
-  if (!releaseDate) {
+  const safeDate = coerceDateValue(releaseDate);
+  if (!safeDate) {
     return null;
   }
 
   if (releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION) {
-    return `Performance ${formatReleaseMoment(releaseDate)}`;
+    return `Performance ${formatReleaseMoment(safeDate)}`;
   }
 
-  return `Release ${formatReleaseMoment(releaseDate)}`;
+  return `Release ${formatReleaseMoment(safeDate)}`;
 }
 
 export function formatContextualReleaseDateLabel(
   releaseType: ReleaseType,
-  releaseDate: Date | null | undefined,
+  releaseDate: Date | string | null | undefined,
   outletName: string | null | undefined,
 ) {
-  if (!releaseDate) {
+  const safeDate = coerceDateValue(releaseDate);
+  if (!safeDate) {
     return null;
   }
 
   const outlet = (outletName || "").trim().toLowerCase();
   if (outlet === "youtube") {
-    return `YouTube ${formatPubDate(releaseDate)}`;
+    return `YouTube ${formatPubDate(safeDate)}`;
   }
 
   if (outlet === "youtube music") {
-    return `YouTube Music ${formatPubDate(releaseDate)}`;
+    return `YouTube Music ${formatPubDate(safeDate)}`;
   }
 
   if (outlet === "bandcamp") {
-    return `Bandcamp ${formatPubDate(releaseDate)}`;
+    return `Bandcamp ${formatPubDate(safeDate)}`;
   }
 
-  return formatPrimaryReleaseDateLabel(releaseType, releaseDate);
+  return formatPrimaryReleaseDateLabel(releaseType, safeDate);
 }
 
-export function formatRedditDateLabel(publishedAt: Date | null | undefined) {
-  if (!publishedAt) {
+export function formatRedditDateLabel(publishedAt: Date | string | null | undefined) {
+  const safeDate = coerceDateValue(publishedAt);
+  if (!safeDate) {
     return null;
   }
 
-  return `Published ${formatDetailedUtcTimestamp(publishedAt)}`;
+  return `Published ${formatDetailedUtcTimestamp(safeDate)}`;
 }
 
 export function formatYouTubeViewsLabel(value: number | null | undefined) {
@@ -414,12 +437,39 @@ function hashSummaryValue(value: string) {
   return hash;
 }
 
-function formatReleaseMoment(date: Date) {
+function formatReleaseMoment(date: Date | string | null | undefined) {
+  const safeDate = coerceDateValue(date);
+  if (!safeDate) {
+    return "Date unavailable";
+  }
+
   return hasMeaningfulUtcTime(date)
-    ? formatDetailedUtcTimestamp(date)
-    : formatDetailedUtcDate(date);
+    ? formatDetailedUtcTimestamp(safeDate)
+    : formatDetailedUtcDate(safeDate);
 }
 
-function hasMeaningfulUtcTime(date: Date) {
-  return date.getUTCHours() !== 0 || date.getUTCMinutes() !== 0;
+function hasMeaningfulUtcTime(date: Date | string | null | undefined) {
+  const safeDate = coerceDateValue(date);
+  if (!safeDate) {
+    return false;
+  }
+
+  return safeDate.getUTCHours() !== 0 || safeDate.getUTCMinutes() !== 0;
+}
+
+function coerceDateValue(date: Date | string | null | undefined) {
+  if (!date) {
+    return null;
+  }
+
+  if (date instanceof Date) {
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  if (typeof date !== "string" || !date.trim()) {
+    return null;
+  }
+
+  const parsed = new Date(date);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }

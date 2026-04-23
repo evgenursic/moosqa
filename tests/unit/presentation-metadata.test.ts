@@ -5,9 +5,11 @@ import { extractYouTubeViewCountFromHtml } from "../../src/lib/source-metadata";
 import {
   formatDetailedUtcTimestamp,
   formatDiscussionShare,
+  formatPrimaryReleaseDateLabel,
   formatRedditDateLabel,
   formatYouTubeViewsLabel,
 } from "../../src/lib/utils";
+import { ReleaseType } from "../../src/generated/prisma/enums";
 
 describe("presentation metadata helpers", () => {
   it("formats published timestamps with weekday, full date, and UTC time", () => {
@@ -27,6 +29,18 @@ describe("presentation metadata helpers", () => {
     assert.equal(formatYouTubeViewsLabel(24321), "YouTube 24.3K views");
     assert.equal(formatDiscussionShare(120, 30), 20);
     assert.equal(formatDiscussionShare(0, 0), null);
+  });
+
+  it("fails safe for invalid or string-based cached date values", () => {
+    assert.equal(
+      formatRedditDateLabel("2026-04-24T14:00:00.000Z"),
+      "Published Friday, April 24, 2026 at 14:00 UTC",
+    );
+    assert.equal(formatRedditDateLabel("not-a-date"), null);
+    assert.equal(
+      formatPrimaryReleaseDateLabel(ReleaseType.SINGLE, "2026-04-24T00:00:00.000Z"),
+      "Release Friday, April 24, 2026",
+    );
   });
 
   it("extracts youtube view count from source html", () => {
