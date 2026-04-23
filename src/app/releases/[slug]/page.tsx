@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { ReleaseType } from "@/generated/prisma/enums";
 import { BackToHomeButton } from "@/components/back-to-home-button";
@@ -8,6 +9,7 @@ import { MobileReleaseNav } from "@/components/mobile-release-nav";
 import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleasePublicCounters } from "@/components/release-public-counters";
+import { ReleaseUserActions } from "@/components/release-user-actions";
 import { TopEngagedVisual } from "@/components/top-engaged-visual";
 import { sanitizeInternalHref } from "@/lib/navigation";
 import { normalizePublicHttpUrl } from "@/lib/safe-url";
@@ -325,6 +327,22 @@ function renderReleasePage(
                 ) : null}
               </div>
             </div>
+
+            <Suspense
+              fallback={
+                <div className="border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
+                  <p className="section-kicker text-black/45">Personal radar</p>
+                  <div className="mt-4 h-11 animate-pulse bg-[var(--color-paper)]" />
+                </div>
+              }
+            >
+              <ReleaseUserActions
+                releaseId={release.id}
+                slug={release.slug}
+                artistName={release.artistName}
+                labelName={release.labelName}
+              />
+            </Suspense>
 
             <ClientWidgetBoundary
               widgetName="rating-meter"

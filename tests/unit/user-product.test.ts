@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   DEFAULT_USER_PREFERENCES,
   buildUserProfileSeed,
+  buildReleaseFollowTargets,
   normalizeDisplayName,
   normalizeFollowTargetValue,
   normalizeUserEmail,
@@ -34,6 +35,28 @@ describe("user product foundations", () => {
     assert.equal(normalizeFollowTargetValue("  Déhd & Friends!! "), "dehd & friends");
     assert.equal(normalizeFollowTargetValue("Dream   Pop"), "dream pop");
     assert.equal(normalizeFollowTargetValue(""), "");
+  });
+
+  it("builds release follow targets without empty or duplicate entries", () => {
+    assert.deepEqual(
+      buildReleaseFollowTargets({
+        artistName: "  Dehd  ",
+        labelName: "DEHD",
+      }),
+      [
+        {
+          targetType: "ARTIST",
+          targetValue: "Dehd",
+          normalizedValue: "dehd",
+        },
+        {
+          targetType: "LABEL",
+          targetValue: "DEHD",
+          normalizedValue: "dehd",
+        },
+      ],
+    );
+    assert.deepEqual(buildReleaseFollowTargets({ artistName: "", labelName: " " }), []);
   });
 
   it("defaults notifications to a low-noise product posture", () => {

@@ -17,6 +17,7 @@ describe("auth flow helpers", () => {
 
   it("keeps safe relative callback destinations", () => {
     assert.equal(normalizeAuthNextPath("/account?tab=saved#top"), "/account?tab=saved#top");
+    assert.equal(normalizeAuthNextPath("/releases/laufey-1spov0b"), "/releases/laufey-1spov0b");
     assert.equal(normalizeAuthNextPath("/"), "/");
   });
 

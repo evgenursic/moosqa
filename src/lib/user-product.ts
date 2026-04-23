@@ -52,6 +52,43 @@ export function buildUserProfileSeed(input: AuthUserProfileInput) {
   };
 }
 
+export type ReleaseFollowTarget = {
+  targetType: FollowTargetType;
+  targetValue: string;
+  normalizedValue: string;
+};
+
+export function buildReleaseFollowTargets(input: {
+  artistName?: string | null;
+  labelName?: string | null;
+}) {
+  const seeds = [
+    { targetType: FollowTargetType.ARTIST, targetValue: input.artistName },
+    { targetType: FollowTargetType.LABEL, targetValue: input.labelName },
+  ];
+  const seen = new Set<string>();
+  const targets: ReleaseFollowTarget[] = [];
+
+  for (const seed of seeds) {
+    const targetValue = seed.targetValue?.trim() || "";
+    const normalizedValue = normalizeFollowTargetValue(targetValue);
+    const key = `${seed.targetType}:${normalizedValue}`;
+
+    if (!targetValue || !normalizedValue || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    targets.push({
+      targetType: seed.targetType,
+      targetValue,
+      normalizedValue,
+    });
+  }
+
+  return targets;
+}
+
 export async function ensureUserProfile(input: AuthUserProfileInput) {
   await ensureDatabase();
   const profile = buildUserProfileSeed(input);
@@ -108,6 +145,55 @@ export async function unsaveReleaseForUser(userId: string, releaseId: string) {
       releaseId,
     },
   });
+}
+
+export async function getReleaseUserActionState(input: {
+  userId: string;
+  releaseId: string;
+  artistName?: string | null;
+  labelName?: string | null;
+}) {
+  await ensureDatabase();
+  const followTargets = buildReleaseFollowTargets(input);
+  const [savedRelease, follows] = await Promise.all([
+    prisma.userSavedRelease.findUnique({
+      where: {
+        userId_releaseId: {
+          userId: input.userId,
+          releaseId: input.releaseId,
+        },
+      },
+      select: {
+        releaseId: true,
+      },
+    }),
+    followTargets.length > 0
+      ? prisma.userFollow.findMany({
+          where: {
+            userId: input.userId,
+            OR: followTargets.map((target) => ({
+              targetType: target.targetType,
+              normalizedValue: target.normalizedValue,
+            })),
+          },
+          select: {
+            targetType: true,
+            normalizedValue: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+  const followedKeys = new Set(
+    follows.map((follow) => `${follow.targetType}:${follow.normalizedValue}`),
+  );
+
+  return {
+    isSaved: Boolean(savedRelease),
+    followTargets: followTargets.map((target) => ({
+      ...target,
+      isFollowing: followedKeys.has(`${target.targetType}:${target.normalizedValue}`),
+    })),
+  };
 }
 
 export async function followTargetForUser(

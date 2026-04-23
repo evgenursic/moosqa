@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import { requestSignInLink, signOut } from "@/app/account/actions";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { getAccountAuthMessage } from "@/lib/auth-flow";
+import { getAccountAuthMessage, normalizeAuthNextPath } from "@/lib/auth-flow";
 import { getSiteUrl } from "@/lib/site";
 import { isSupabaseAuthConfigured } from "@/lib/supabase/config";
 import { getSupabaseServerUser } from "@/lib/supabase/server";
@@ -51,6 +51,11 @@ async function AccountContent({ searchParams }: AccountPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const authMessage = getAccountAuthMessage(resolvedSearchParams.auth);
   const isSignedOut = resolvedSearchParams.signedOut === "1";
+  const nextPath = normalizeAuthNextPath(
+    Array.isArray(resolvedSearchParams.next)
+      ? resolvedSearchParams.next[0]
+      : resolvedSearchParams.next,
+  );
   const authConfigured = isSupabaseAuthConfigured();
   const authState = authConfigured
     ? await getSupabaseServerUser()
@@ -100,7 +105,7 @@ async function AccountContent({ searchParams }: AccountPageProps) {
               profileError={profileError}
             />
           ) : (
-            <SignedOutAccountState />
+                <SignedOutAccountState nextPath={nextPath} />
           )}
         </div>
       </div>
@@ -123,12 +128,12 @@ function AccountSkeleton() {
   );
 }
 
-function SignedOutAccountState() {
+function SignedOutAccountState({ nextPath }: { nextPath: string }) {
   return (
     <div>
       <p className="section-kicker text-black/44">Sign in</p>
       <form action={requestSignInLink} className="mt-5 grid gap-4">
-        <input type="hidden" name="next" value="/account" />
+        <input type="hidden" name="next" value={nextPath} />
         <label className="grid gap-2 text-xs uppercase tracking-[0.16em] text-black/58">
           Email
           <input

@@ -13,7 +13,7 @@ export function isValidAuthEmail(value: string) {
 }
 
 export function normalizeAuthNextPath(
-  value: FormDataEntryValue | string | null,
+  value: FormDataEntryValue | string | null | undefined,
   fallback = AUTH_NEXT_FALLBACK,
 ) {
   if (typeof value !== "string") {
