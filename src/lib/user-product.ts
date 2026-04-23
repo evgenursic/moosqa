@@ -19,6 +19,14 @@ export const DEFAULT_USER_PREFERENCES = {
   preferredGenres: [] as string[],
 };
 
+const LEGACY_USER_PREFERENCE_FIELDS = {
+  emailNotifications: DEFAULT_USER_PREFERENCES.emailNotifications,
+  dailyDigest: DEFAULT_USER_PREFERENCES.dailyDigest,
+  weeklyDigest: DEFAULT_USER_PREFERENCES.weeklyDigest,
+  instantAlerts: DEFAULT_USER_PREFERENCES.instantAlerts,
+  preferredGenres: DEFAULT_USER_PREFERENCES.preferredGenres,
+};
+
 export function normalizeUserEmail(value: string | null | undefined) {
   const normalized = value?.trim().toLowerCase() || "";
   return normalized || null;
@@ -128,6 +136,19 @@ export async function ensureUserProfile(input: AuthUserProfileInput) {
       userId: user.id,
       ...DEFAULT_USER_PREFERENCES,
     },
+  }).catch(async (error) => {
+    if (!isNotificationPreferenceSchemaError(error)) {
+      throw error;
+    }
+
+    await prisma.userPreference.upsert({
+      where: { userId: user.id },
+      update: {},
+      create: {
+        userId: user.id,
+        ...LEGACY_USER_PREFERENCE_FIELDS,
+      },
+    });
   });
 
   return user;
@@ -322,4 +343,17 @@ export async function unfollowTargetForUser(
       normalizedValue,
     },
   });
+}
+
+function isNotificationPreferenceSchemaError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.message.includes("digestTimezone") ||
+    error.message.includes("digestHourLocal") ||
+    error.message.includes("The column") ||
+    error.message.includes("does not exist")
+  );
 }

@@ -177,23 +177,8 @@ export function buildNotificationPreferencePatch(input: {
 
 export async function getNotificationPreferenceState(userId: string): Promise<NotificationPreferenceState> {
   await ensureDatabase();
-  const user = await prisma.userProfile.findUnique({
-    where: { id: userId },
-    select: {
-      email: true,
-      preferences: {
-        select: {
-          emailNotifications: true,
-          dailyDigest: true,
-          weeklyDigest: true,
-          instantAlerts: true,
-          digestTimezone: true,
-          digestHourLocal: true,
-        },
-      },
-    },
-  });
-  const preferences = user?.preferences;
+  const user = await readNotificationPreferenceUser(userId);
+  const preferences = user?.preferences || null;
 
   return {
     emailNotifications:
@@ -215,23 +200,57 @@ export async function updateUserNotificationPreferences(
 ) {
   await ensureDatabase();
 
-  return prisma.userPreference.upsert({
-    where: { userId },
-    update: input,
-    create: {
-      userId,
-      ...input,
-    },
-    select: {
-      emailNotifications: true,
-      dailyDigest: true,
-      weeklyDigest: true,
-      instantAlerts: true,
-      digestTimezone: true,
-      digestHourLocal: true,
-      updatedAt: true,
-    },
-  });
+  try {
+    return await prisma.userPreference.upsert({
+      where: { userId },
+      update: input,
+      create: {
+        userId,
+        ...input,
+      },
+      select: {
+        emailNotifications: true,
+        dailyDigest: true,
+        weeklyDigest: true,
+        instantAlerts: true,
+        digestTimezone: true,
+        digestHourLocal: true,
+        updatedAt: true,
+      },
+    });
+  } catch (error) {
+    if (!isNotificationSchemaError(error)) {
+      throw error;
+    }
+
+    return prisma.userPreference.upsert({
+      where: { userId },
+      update: {
+        emailNotifications: input.emailNotifications,
+        dailyDigest: input.dailyDigest,
+        weeklyDigest: input.weeklyDigest,
+        instantAlerts: input.instantAlerts,
+      },
+      create: {
+        userId,
+        emailNotifications: input.emailNotifications,
+        dailyDigest: input.dailyDigest,
+        weeklyDigest: input.weeklyDigest,
+        instantAlerts: input.instantAlerts,
+      },
+      select: {
+        emailNotifications: true,
+        dailyDigest: true,
+        weeklyDigest: true,
+        instantAlerts: true,
+        updatedAt: true,
+      },
+    }).then((preferences) => ({
+      ...preferences,
+      digestTimezone: DEFAULT_NOTIFICATION_PREFERENCES.digestTimezone,
+      digestHourLocal: DEFAULT_NOTIFICATION_PREFERENCES.digestHourLocal,
+    }));
+  }
 }
 
 export async function runNotificationDigestCycle(options?: {
@@ -244,26 +263,46 @@ export async function runNotificationDigestCycle(options?: {
   const phase = options?.phase || "all";
   const mode = options?.mode || "all";
 
-  const enqueueSummary =
-    phase === "send"
-      ? { evaluated: 0, queued: 0, skipped: 0, existing: 0 }
-      : await enqueueDueNotificationJobs({ now, mode });
-  const processSummary =
-    phase === "enqueue"
-      ? { processed: 0, sent: 0, failed: 0, skipped: 0 }
-      : await processNotificationQueue({
-          now,
-          limit: options?.limit,
-          mode,
-        });
+  try {
+    const enqueueSummary =
+      phase === "send"
+        ? { evaluated: 0, queued: 0, skipped: 0, existing: 0 }
+        : await enqueueDueNotificationJobs({ now, mode });
+    const processSummary =
+      phase === "enqueue"
+        ? { processed: 0, sent: 0, failed: 0, skipped: 0 }
+        : await processNotificationQueue({
+            now,
+            limit: options?.limit,
+            mode,
+          });
 
-  return {
-    ok: true,
-    mode,
-    phase,
-    ...enqueueSummary,
-    ...processSummary,
-  };
+    return {
+      ok: true,
+      mode,
+      phase,
+      ...enqueueSummary,
+      ...processSummary,
+    };
+  } catch (error) {
+    if (!isNotificationSchemaError(error)) {
+      throw error;
+    }
+
+    return {
+      ok: false,
+      mode,
+      phase,
+      evaluated: 0,
+      queued: 0,
+      skipped: 0,
+      existing: 0,
+      processed: 0,
+      sent: 0,
+      failed: 0,
+      message: "Notification schema is not ready in the current database.",
+    };
+  }
 }
 
 export async function enqueueDueNotificationJobs(options?: {
@@ -273,29 +312,7 @@ export async function enqueueDueNotificationJobs(options?: {
   await ensureDatabase();
   const now = options?.now || new Date();
   const mode = options?.mode || "all";
-  const preferences = await prisma.userPreference.findMany({
-    where: {
-      emailNotifications: true,
-      OR: [
-        ...(mode !== "weekly" ? [{ dailyDigest: true }] : []),
-        ...(mode !== "daily" ? [{ weeklyDigest: true }] : []),
-      ],
-    },
-    select: {
-      userId: true,
-      emailNotifications: true,
-      dailyDigest: true,
-      weeklyDigest: true,
-      instantAlerts: true,
-      digestTimezone: true,
-      digestHourLocal: true,
-      user: {
-        select: {
-          email: true,
-        },
-      },
-    },
-  });
+  const preferences = await listDigestEligiblePreferences(mode);
 
   const summary = {
     evaluated: 0,
@@ -561,86 +578,111 @@ export async function processNotificationQueue(options?: {
 export async function getNotificationOpsSnapshot() {
   await ensureDatabase();
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const [preferenceCounts, jobCounts, recentJobs, recentDeliveries] = await Promise.all([
-    prisma.userPreference.aggregate({
-      _count: {
-        _all: true,
-      },
-      where: {},
-    }),
-    prisma.notificationJob.groupBy({
-      by: ["status"],
-      _count: {
-        _all: true,
-      },
-      where: {
-        queuedAt: {
-          gte: cutoff,
+  try {
+    const [preferenceCounts, jobCounts, recentJobs, recentDeliveries] = await Promise.all([
+      prisma.userPreference.aggregate({
+        _count: {
+          _all: true,
         },
+        where: {},
+      }),
+      prisma.notificationJob.groupBy({
+        by: ["status"],
+        _count: {
+          _all: true,
+        },
+        where: {
+          queuedAt: {
+            gte: cutoff,
+          },
+        },
+      }),
+      prisma.notificationJob.findMany({
+        orderBy: [{ queuedAt: "desc" }],
+        take: 16,
+        select: {
+          id: true,
+          userId: true,
+          type: true,
+          channel: true,
+          periodKey: true,
+          status: true,
+          destination: true,
+          itemCount: true,
+          attemptCount: true,
+          queuedAt: true,
+          processedAt: true,
+          message: true,
+        },
+      }),
+      prisma.notificationDeliveryLog.findMany({
+        orderBy: [{ createdAt: "desc" }],
+        take: 16,
+        select: {
+          id: true,
+          jobId: true,
+          userId: true,
+          type: true,
+          channel: true,
+          outcome: true,
+          destination: true,
+          attemptNumber: true,
+          responseStatus: true,
+          latencyMs: true,
+          message: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+    const adoptionCounts = await prisma.userPreference.groupBy({
+      by: ["emailNotifications", "dailyDigest", "weeklyDigest", "instantAlerts"],
+      _count: {
+        _all: true,
       },
-    }),
-    prisma.notificationJob.findMany({
-      orderBy: [{ queuedAt: "desc" }],
-      take: 16,
-      select: {
-        id: true,
-        userId: true,
-        type: true,
-        channel: true,
-        periodKey: true,
-        status: true,
-        destination: true,
-        itemCount: true,
-        attemptCount: true,
-        queuedAt: true,
-        processedAt: true,
-        message: true,
-      },
-    }),
-    prisma.notificationDeliveryLog.findMany({
-      orderBy: [{ createdAt: "desc" }],
-      take: 16,
-      select: {
-        id: true,
-        jobId: true,
-        userId: true,
-        type: true,
-        channel: true,
-        outcome: true,
-        destination: true,
-        attemptNumber: true,
-        responseStatus: true,
-        latencyMs: true,
-        message: true,
-        createdAt: true,
-      },
-    }),
-  ]);
-  const adoptionCounts = await prisma.userPreference.groupBy({
-    by: ["emailNotifications", "dailyDigest", "weeklyDigest", "instantAlerts"],
-    _count: {
-      _all: true,
-    },
-  });
+    });
 
-  return {
-    preferenceTotals: {
-      all: preferenceCounts._count._all,
-      emailEnabled: countAdoption(adoptionCounts, "emailNotifications"),
-      dailyEnabled: countAdoption(adoptionCounts, "dailyDigest"),
-      weeklyEnabled: countAdoption(adoptionCounts, "weeklyDigest"),
-      instantEnabled: countAdoption(adoptionCounts, "instantAlerts"),
-    },
-    jobTotals: {
-      pending: readJobCount(jobCounts, NotificationJobStatus.PENDING),
-      processing: readJobCount(jobCounts, NotificationJobStatus.PROCESSING),
-      sent: readJobCount(jobCounts, NotificationJobStatus.SENT),
-      failed: readJobCount(jobCounts, NotificationJobStatus.FAILED),
-      skipped: readJobCount(jobCounts, NotificationJobStatus.SKIPPED),
-    },
-    recentJobs,
-    recentDeliveries,
-  };
+    return {
+      preferenceTotals: {
+        all: preferenceCounts._count._all,
+        emailEnabled: countAdoption(adoptionCounts, "emailNotifications"),
+        dailyEnabled: countAdoption(adoptionCounts, "dailyDigest"),
+        weeklyEnabled: countAdoption(adoptionCounts, "weeklyDigest"),
+        instantEnabled: countAdoption(adoptionCounts, "instantAlerts"),
+      },
+      jobTotals: {
+        pending: readJobCount(jobCounts, NotificationJobStatus.PENDING),
+        processing: readJobCount(jobCounts, NotificationJobStatus.PROCESSING),
+        sent: readJobCount(jobCounts, NotificationJobStatus.SENT),
+        failed: readJobCount(jobCounts, NotificationJobStatus.FAILED),
+        skipped: readJobCount(jobCounts, NotificationJobStatus.SKIPPED),
+      },
+      recentJobs,
+      recentDeliveries,
+    };
+  } catch (error) {
+    if (!isNotificationSchemaError(error)) {
+      throw error;
+    }
+
+    return {
+      preferenceTotals: {
+        all: 0,
+        emailEnabled: 0,
+        dailyEnabled: 0,
+        weeklyEnabled: 0,
+        instantEnabled: 0,
+      },
+      jobTotals: {
+        pending: 0,
+        processing: 0,
+        sent: 0,
+        failed: 0,
+        skipped: 0,
+      },
+      recentJobs: [],
+      recentDeliveries: [],
+    };
+  }
 }
 
 export function getDigestScheduleContext(
@@ -745,6 +787,115 @@ function getNotificationEmailTransport() {
   }
 
   return { apiKey, from };
+}
+
+async function readNotificationPreferenceUser(userId: string) {
+  try {
+    return await prisma.userProfile.findUnique({
+      where: { id: userId },
+      select: {
+        email: true,
+        preferences: {
+          select: {
+            emailNotifications: true,
+            dailyDigest: true,
+            weeklyDigest: true,
+            instantAlerts: true,
+            digestTimezone: true,
+            digestHourLocal: true,
+          },
+        },
+      },
+    });
+  } catch (error) {
+    if (!isNotificationSchemaError(error)) {
+      throw error;
+    }
+
+    return prisma.userProfile.findUnique({
+      where: { id: userId },
+      select: {
+        email: true,
+        preferences: {
+          select: {
+            emailNotifications: true,
+            dailyDigest: true,
+            weeklyDigest: true,
+            instantAlerts: true,
+          },
+        },
+      },
+    }).then((user) =>
+      user
+        ? {
+            email: user.email,
+            preferences: user.preferences
+              ? {
+                  ...user.preferences,
+                  digestTimezone: DEFAULT_NOTIFICATION_PREFERENCES.digestTimezone,
+                  digestHourLocal: DEFAULT_NOTIFICATION_PREFERENCES.digestHourLocal,
+                }
+              : null,
+          }
+        : null,
+    );
+  }
+}
+
+async function listDigestEligiblePreferences(mode: "daily" | "weekly" | "all") {
+  const where = {
+    emailNotifications: true,
+    OR: [
+      ...(mode !== "weekly" ? [{ dailyDigest: true }] : []),
+      ...(mode !== "daily" ? [{ weeklyDigest: true }] : []),
+    ],
+  };
+
+  try {
+    return await prisma.userPreference.findMany({
+      where,
+      select: {
+        userId: true,
+        emailNotifications: true,
+        dailyDigest: true,
+        weeklyDigest: true,
+        instantAlerts: true,
+        digestTimezone: true,
+        digestHourLocal: true,
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
+    });
+  } catch (error) {
+    if (!isNotificationSchemaError(error)) {
+      throw error;
+    }
+
+    return prisma.userPreference.findMany({
+      where,
+      select: {
+        userId: true,
+        emailNotifications: true,
+        dailyDigest: true,
+        weeklyDigest: true,
+        instantAlerts: true,
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
+    }).then((preferences) =>
+      preferences.map((preference) => ({
+        ...preference,
+        digestTimezone: DEFAULT_NOTIFICATION_PREFERENCES.digestTimezone,
+        digestHourLocal: DEFAULT_NOTIFICATION_PREFERENCES.digestHourLocal,
+      })),
+    );
+  }
 }
 
 async function buildDueJobDrafts(
@@ -1267,4 +1418,21 @@ function escapeHtml(value: string) {
 
 function isNonEmptyString(value: string | null | undefined): value is string {
   return Boolean(value?.trim());
+}
+
+function isNotificationSchemaError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.message.includes("NotificationJob") ||
+    error.message.includes("NotificationDeliveryLog") ||
+    error.message.includes("digestTimezone") ||
+    error.message.includes("digestHourLocal") ||
+    error.message.includes("UserPreference") ||
+    error.message.includes("The table") ||
+    error.message.includes("The column") ||
+    error.message.includes("does not exist")
+  );
 }

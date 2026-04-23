@@ -50,10 +50,15 @@ export async function GET(request: Request) {
   revalidateTag("ops-dashboard", "max");
 
   return withRateLimitHeaders(
-    NextResponse.json({
-      ...result,
-      triggeredAt: new Date().toISOString(),
-    }),
+    NextResponse.json(
+      {
+        ...result,
+        triggeredAt: new Date().toISOString(),
+      },
+      {
+        status: result.ok ? 200 : 503,
+      },
+    ),
     rateLimit,
   );
 }
