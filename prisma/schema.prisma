@@ -83,6 +83,18 @@ enum AlertDeliveryChannel {
   EMAIL
 }
 
+enum UserRole {
+  USER
+  EDITOR
+  ADMIN
+}
+
+enum FollowTargetType {
+  ARTIST
+  LABEL
+  GENRE
+}
+
 model Release {
   id              String        @id @default(cuid())
   source          ReleaseSource @default(REDDIT)
@@ -143,10 +155,64 @@ model Release {
   analyticsEvents AnalyticsEvent[]
   reactions       ReleaseReaction[]
   analyticsLocks  AnalyticsActionLock[]
+  savedBy         UserSavedRelease[]
 
   @@index([publishedAt(sort: Desc)])
   @@index([releaseType, publishedAt(sort: Desc)])
   @@index([qualityScore(sort: Desc), publishedAt(sort: Desc)])
+}
+
+model UserProfile {
+  id          String       @id
+  email       String?      @unique
+  displayName String?
+  role        UserRole     @default(USER)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  preferences UserPreference?
+  savedReleases UserSavedRelease[]
+  follows     UserFollow[]
+
+  @@index([role, createdAt(sort: Desc)])
+}
+
+model UserPreference {
+  userId             String      @id
+  emailNotifications Boolean     @default(false)
+  dailyDigest        Boolean     @default(false)
+  weeklyDigest       Boolean     @default(true)
+  instantAlerts      Boolean     @default(false)
+  preferredGenres    Json?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  user               UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserSavedRelease {
+  id        String      @id @default(cuid())
+  userId    String
+  releaseId String
+  createdAt DateTime    @default(now())
+  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  release   Release     @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, releaseId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([releaseId, createdAt(sort: Desc)])
+}
+
+model UserFollow {
+  id              String           @id @default(cuid())
+  userId          String
+  targetType      FollowTargetType
+  targetValue     String
+  normalizedValue String
+  createdAt       DateTime         @default(now())
+  user            UserProfile      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, targetType, normalizedValue])
+  @@index([userId, targetType, createdAt(sort: Desc)])
+  @@index([targetType, normalizedValue])
 }
 
 model Vote {
