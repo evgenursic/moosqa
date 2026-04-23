@@ -2,7 +2,7 @@ import { after } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
-import { readRequestSecret } from "@/lib/admin-auth";
+import { getRequiredCronSecret, isValidRequestSecret, readRequestSecret } from "@/lib/admin-auth";
 import { evaluateProductionAlerts } from "@/lib/analytics";
 import { warmCriticalCaches } from "@/lib/cache-warming";
 import {
@@ -24,21 +24,26 @@ const SYNC_RATE_LIMIT = {
 } as const;
 
 export async function GET(request: Request) {
+  const secret = readRequestSecret(request, {
+    queryParam: "secret",
+    headerName: "x-cron-secret",
+  });
+  const allowedSecret = getRequiredCronSecret();
+
+  if (!allowedSecret) {
+    return NextResponse.json({ error: "Cron secret is not configured." }, { status: 503 });
+  }
+
+  if (!isValidRequestSecret(secret, allowedSecret)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const rateLimit = await takeRateLimit(SYNC_RATE_LIMIT, getRateLimitIdentity(request));
   if (!rateLimit.allowed) {
     return createRateLimitResponse(rateLimit, "Too many sync requests.");
   }
 
   const { searchParams } = new URL(request.url);
-  const secret = readRequestSecret(request, {
-    queryParam: "secret",
-    headerName: "x-cron-secret",
-  });
-
-  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const wantsQualityOnly =
     searchParams.get("quality") === "1" || searchParams.get("deep") === "1";
   const wantsRepairOnly = searchParams.get("repair") === "1";

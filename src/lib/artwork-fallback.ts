@@ -1,4 +1,5 @@
 import { detectPlatform } from "@/lib/listening-links";
+import { normalizePublicHttpUrl } from "@/lib/safe-url";
 
 type ArtworkCandidateInput = {
   releaseId?: string | null;
@@ -97,7 +98,7 @@ function normalizeUrl(value: string | null | undefined) {
       return `${parsed.pathname}${parsed.search}`;
     }
 
-    return parsed.toString();
+    return normalizePublicHttpUrl(parsed.toString());
   } catch {
     return normalized.startsWith("/") ? normalized : null;
   }

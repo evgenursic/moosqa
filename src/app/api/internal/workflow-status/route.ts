@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { readRequestSecret } from "@/lib/admin-auth";
+import { getRequiredCronSecret, isValidRequestSecret, readRequestSecret } from "@/lib/admin-auth";
 import { updateWorkflowRunState } from "@/lib/analytics";
 
 const workflowStatusSchema = z.object({
@@ -19,8 +19,13 @@ export async function POST(request: Request) {
     queryParam: "secret",
     headerName: "x-cron-secret",
   });
+  const allowedSecret = getRequiredCronSecret();
 
-  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+  if (!allowedSecret) {
+    return NextResponse.json({ error: "Cron secret is not configured." }, { status: 503 });
+  }
+
+  if (!isValidRequestSecret(secret, allowedSecret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -1,5 +1,6 @@
 import { detectPlatform } from "@/lib/listening-links";
 import { buildGenreProfile } from "@/lib/genre-profile";
+import { fetchPublicHttpUrl, normalizePublicHttpUrl } from "@/lib/safe-url";
 
 const USER_AGENT =
   process.env.SOURCE_FETCH_USER_AGENT ||
@@ -45,13 +46,15 @@ async function resolveSourceMetadataInternal(
   }
 
   try {
-    const response = await fetch(sourceUrl, {
+    const response = await fetchPublicHttpUrl(sourceUrl, {
       headers: {
         "User-Agent": USER_AGENT,
       },
-      redirect: "follow",
       cache: "no-store",
     });
+    if (!response) {
+      return {};
+    }
 
     const finalUrl = response.url;
     const contentType = response.headers.get("content-type") || "";
@@ -297,7 +300,9 @@ async function resolvePlatformCandidates(candidates: Array<{ href: string; text:
 
   for (const candidate of prioritized.slice(0, 8)) {
     const resolvedUrl = await resolveFinalUrl(candidate.href);
-    const directLinks = detectDirectPlatformUrls([candidate.href, resolvedUrl]);
+    const directLinks = detectDirectPlatformUrls(
+      [candidate.href, resolvedUrl].filter((url): url is string => Boolean(url)),
+    );
 
     result.youtubeUrl = result.youtubeUrl || directLinks.youtubeUrl || null;
     result.youtubeMusicUrl = result.youtubeMusicUrl || directLinks.youtubeMusicUrl || null;
@@ -361,17 +366,16 @@ function resolveOfficialSiteCandidates(
 
 async function resolveFinalUrl(url: string) {
   try {
-    const response = await fetch(url, {
+    const response = await fetchPublicHttpUrl(url, {
       method: "HEAD",
-      redirect: "follow",
       headers: {
         "User-Agent": USER_AGENT,
       },
       cache: "no-store",
     });
-    return response.url;
+    return response?.url || null;
   } catch {
-    return url;
+    return null;
   }
 }
 
@@ -961,7 +965,7 @@ function resolveUrl(href: string, baseUrl: string) {
   }
 
   try {
-    return new URL(href, baseUrl).toString();
+    return normalizePublicHttpUrl(new URL(href, baseUrl).toString());
   } catch {
     return null;
   }
@@ -1163,7 +1167,7 @@ async function resolveYouTubeOEmbedMetadata(url: string) {
       title: sanitizeText(payload.title || "") || null,
       artistName:
         sanitizeText((payload.author_name || "").replace(/\s+-\s+Topic$/i, "")) || null,
-      thumbnailUrl: payload.thumbnail_url || null,
+      thumbnailUrl: normalizePublicHttpUrl(payload.thumbnail_url) || null,
     };
   } catch {
     return null;

@@ -1,3 +1,5 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+
 export function readRequestSecret(
   request: Request,
   options?: {
@@ -23,4 +25,20 @@ export function readRequestSecret(
 
 export function getRequiredDebugSecret() {
   return process.env.DEBUG_SECRET || "";
+}
+
+export function getRequiredCronSecret() {
+  return process.env.CRON_SECRET || "";
+}
+
+export function isValidRequestSecret(secret: string | null, expectedSecret: string) {
+  if (!secret || !expectedSecret) {
+    return false;
+  }
+
+  return timingSafeEqual(hashSecret(secret), hashSecret(expectedSecret));
+}
+
+function hashSecret(value: string) {
+  return createHash("sha256").update(value).digest();
 }

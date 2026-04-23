@@ -8,6 +8,7 @@ import { resolveGenreDecision } from "@/lib/genre-resolution";
 import { clearReleaseDataCaches } from "@/lib/release-sections";
 import { assessReleaseQuality } from "@/lib/release-quality";
 import { prisma } from "@/lib/prisma";
+import { fetchPublicHttpUrl, normalizePublicHttpUrl } from "@/lib/safe-url";
 import { getSiteUrl } from "@/lib/site";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
 
@@ -170,15 +171,14 @@ const getCachedArtworkPayload = unstable_cache(
 
 async function fetchArtworkCandidate(url: string) {
   try {
-    const response = await fetch(url, {
+    const response = await fetchPublicHttpUrl(url, {
       headers: {
         "User-Agent": ARTWORK_FETCH_USER_AGENT,
       },
-      redirect: "follow",
       cache: "no-store",
     });
 
-    if (!response.ok) {
+    if (!response?.ok) {
       return null;
     }
 
@@ -333,16 +333,17 @@ function normalizeUrl(value: string | null | undefined) {
   }
 
   try {
-    const parsed = new URL(normalized);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    const publicUrl = normalizePublicHttpUrl(normalized);
+    if (!publicUrl) {
       return null;
     }
 
+    const parsed = new URL(publicUrl);
     if (isArtworkProxyUrl(parsed)) {
       return null;
     }
 
-    return parsed.toString();
+    return publicUrl;
   } catch {
     return null;
   }

@@ -1,17 +1,19 @@
+import { fetchPublicHttpUrl } from "@/lib/safe-url";
+
 export async function resolveSocialImageDataUrl(sourceUrl: string | null) {
   if (!sourceUrl) {
     return null;
   }
 
   try {
-    const response = await fetch(sourceUrl, {
+    const response = await fetchPublicHttpUrl(sourceUrl, {
       cache: "force-cache",
       headers: {
         "user-agent": "MooSQA/1.0 (+https://moosqa-ci4e.vercel.app)",
       },
     });
 
-    if (!response.ok) {
+    if (!response?.ok) {
       return null;
     }
 
