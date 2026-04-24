@@ -32,6 +32,7 @@
 - hide irrelevant cards without deleting the release row
 - feature priority releases with `isFeatured` plus `editorialRank`
 - create or edit lightweight editorial collections and attach releases to them
+- reorder, annotate, or remove collection entries directly from the collection list
 - run a bounded weak-card repair pass from admin after reviewing the repair queue
 - publish editor-facing work through `/picks` and `/collections/[slug]`
 - inspect recent editorial audit history and weak-card repair candidates
@@ -54,6 +55,7 @@
 - keep summaries short and specific; do not reintroduce generic fallback copy
 - use `editorialNotes` for internal reasoning that should survive future repairs
 - collections are intentionally lightweight; they are not a full CMS
+- collection entry updates and removals are audited as `collection.entry.update` and `collection.entry.remove`
 - run admin-triggered repair in small batches; use the scheduled repair workflow for routine background maintenance
 
 ## Debugging

@@ -8,7 +8,9 @@ import {
   assignUserRoleAction,
   bootstrapAdminAccessAction,
   createEditorialCollectionAction,
+  removeCollectionEntryAction,
   runWeakCardRepairAction,
+  updateCollectionEntryAction,
   updateReleaseEditorialAction,
 } from "@/app/admin/actions";
 import { SiteFooter } from "@/components/site-footer";
@@ -392,19 +394,51 @@ async function AdminContent({ searchParams }: AdminPageProps) {
                   </div>
                 </form>
                 <div className="mt-4 grid gap-2">
-                  {collection.entries.map((entry) => (
-                    <div key={entry.id} className="flex items-center justify-between gap-4 border-t border-[var(--color-soft-line)] pt-2 first:border-t-0 first:pt-0">
-                      <div className="min-w-0">
-                        <p className="truncate text-lg text-[var(--color-ink)] serif-display">
-                          {entry.release.artistName || entry.release.projectTitle || entry.release.title}
-                        </p>
-                        <p className="truncate text-xs uppercase tracking-[0.16em] text-black/48">
-                          {entry.release.genreName || "Genre pending"}
-                        </p>
+                  {collection.entries.length > 0 ? (
+                    collection.entries.map((entry) => (
+                      <div key={entry.id} className="grid gap-3 border-t border-[var(--color-soft-line)] pt-3 first:border-t-0 first:pt-0">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="min-w-0">
+                            <p className="truncate text-lg text-[var(--color-ink)] serif-display">
+                              {entry.release.artistName || entry.release.projectTitle || entry.release.title}
+                            </p>
+                            <p className="truncate text-xs uppercase tracking-[0.16em] text-black/48">
+                              {entry.release.genreName || "Genre pending"}
+                            </p>
+                          </div>
+                          <span className="text-xs uppercase tracking-[0.16em] text-black/48">#{entry.position}</span>
+                        </div>
+                        <div className="grid gap-2 md:grid-cols-[7rem_minmax(0,1fr)_auto_auto]">
+                          <form action={updateCollectionEntryAction} className="contents">
+                            <input type="hidden" name="entryId" value={entry.id} />
+                            <LabeledInput name="position" label="Position" type="number" defaultValue={String(entry.position)} placeholder="0" />
+                            <LabeledInput name="note" label="Entry note" defaultValue={entry.note || ""} placeholder="Optional note" />
+                            <div className="flex items-end">
+                              <button
+                                type="submit"
+                                className="inline-flex min-h-11 items-center justify-center border border-[var(--color-line)] px-4 py-3 text-xs uppercase tracking-[0.16em] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+                              >
+                                Update entry
+                              </button>
+                            </div>
+                          </form>
+                          <form action={removeCollectionEntryAction} className="flex items-end">
+                            <input type="hidden" name="entryId" value={entry.id} />
+                            <button
+                              type="submit"
+                              className="inline-flex min-h-11 items-center justify-center border border-[var(--color-line)] px-4 py-3 text-xs uppercase tracking-[0.16em] text-black/58 transition hover:border-red-700 hover:text-red-700"
+                            >
+                              Remove
+                            </button>
+                          </form>
+                        </div>
                       </div>
-                      <span className="text-xs uppercase tracking-[0.16em] text-black/48">#{entry.position}</span>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <p className="border-t border-[var(--color-soft-line)] pt-3 text-sm leading-7 text-black/56">
+                      No releases in this collection yet. Add one from release search below.
+                    </p>
+                  )}
                 </div>
               </article>
             ))}

@@ -49,6 +49,16 @@ const collectionEntrySchema = z.object({
   note: z.string().max(200).optional(),
 });
 
+const collectionEntryUpdateSchema = z.object({
+  entryId: z.string().min(1),
+  position: z.coerce.number().int().min(0).max(999).default(0),
+  note: z.string().max(200).optional(),
+});
+
+const collectionEntryDeleteSchema = z.object({
+  entryId: z.string().min(1),
+});
+
 const bootstrapSchema = z.object({
   bootstrapSecret: z.string().min(1).max(200),
   reason: z.string().max(200).optional(),
@@ -308,6 +318,134 @@ export async function addReleaseToCollectionAction(formData: FormData) {
     revalidatePath(`/collections/${collection.slug}`);
   }
   redirect(`/admin?q=${encodeURIComponent(release?.slug || parsed.releaseId)}#collections`);
+}
+
+export async function updateCollectionEntryAction(formData: FormData) {
+  const admin = await requireAdminActionUser();
+  const parsed = collectionEntryUpdateSchema.parse({
+    entryId: readString(formData, "entryId"),
+    position: readOptionalString(formData, "position") || "0",
+    note: readOptionalString(formData, "note"),
+  });
+  await ensureDatabase();
+
+  const entry = await prisma.editorialCollectionEntry.findUnique({
+    where: { id: parsed.entryId },
+    select: {
+      id: true,
+      releaseId: true,
+      position: true,
+      note: true,
+      collection: {
+        select: {
+          id: true,
+          slug: true,
+        },
+      },
+      release: {
+        select: {
+          slug: true,
+        },
+      },
+    },
+  });
+
+  if (!entry) {
+    redirect("/admin?collectionEntry=missing#collections");
+  }
+
+  await prisma.editorialCollectionEntry.update({
+    where: { id: parsed.entryId },
+    data: {
+      position: parsed.position,
+      note: parsed.note?.trim() || null,
+    },
+  });
+
+  await prisma.releaseEditorialAudit.create({
+    data: {
+      releaseId: entry.releaseId,
+      editorUserId: admin.id,
+      action: "collection.entry.update",
+      detailsJson: JSON.stringify({
+        collectionId: entry.collection.id,
+        collectionSlug: entry.collection.slug,
+        before: {
+          position: entry.position,
+          note: entry.note,
+        },
+        after: {
+          position: parsed.position,
+          note: parsed.note?.trim() || null,
+        },
+      }),
+    },
+  });
+
+  revalidateReleaseSurfaces(entry.release.slug);
+  revalidatePath("/picks");
+  revalidatePath(`/collections/${entry.collection.slug}`);
+  revalidateTag("editorial", "max");
+  redirect(`/admin?collection=${encodeURIComponent(entry.collection.slug)}#collections`);
+}
+
+export async function removeCollectionEntryAction(formData: FormData) {
+  const admin = await requireAdminActionUser();
+  const parsed = collectionEntryDeleteSchema.parse({
+    entryId: readString(formData, "entryId"),
+  });
+  await ensureDatabase();
+
+  const entry = await prisma.editorialCollectionEntry.findUnique({
+    where: { id: parsed.entryId },
+    select: {
+      id: true,
+      releaseId: true,
+      position: true,
+      note: true,
+      collection: {
+        select: {
+          id: true,
+          slug: true,
+        },
+      },
+      release: {
+        select: {
+          slug: true,
+        },
+      },
+    },
+  });
+
+  if (!entry) {
+    redirect("/admin?collectionEntry=missing#collections");
+  }
+
+  await prisma.editorialCollectionEntry.delete({
+    where: { id: parsed.entryId },
+  });
+
+  await prisma.releaseEditorialAudit.create({
+    data: {
+      releaseId: entry.releaseId,
+      editorUserId: admin.id,
+      action: "collection.entry.remove",
+      detailsJson: JSON.stringify({
+        collectionId: entry.collection.id,
+        collectionSlug: entry.collection.slug,
+        removed: {
+          position: entry.position,
+          note: entry.note,
+        },
+      }),
+    },
+  });
+
+  revalidateReleaseSurfaces(entry.release.slug);
+  revalidatePath("/picks");
+  revalidatePath(`/collections/${entry.collection.slug}`);
+  revalidateTag("editorial", "max");
+  redirect(`/admin?collection=${encodeURIComponent(entry.collection.slug)}#collections`);
 }
 
 export async function bootstrapAdminAccessAction(formData: FormData) {
