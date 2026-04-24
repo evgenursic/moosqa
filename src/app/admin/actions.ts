@@ -111,6 +111,7 @@ export async function updateReleaseEditorialAction(formData: FormData) {
       youtubeMusicUrl: true,
       youtubeViewCount: true,
       youtubePublishedAt: true,
+      youtubeMetadataUpdatedAt: true,
       bandcampUrl: true,
       officialWebsiteUrl: true,
       officialStoreUrl: true,
@@ -144,6 +145,11 @@ export async function updateReleaseEditorialAction(formData: FormData) {
   const nextSourceOverride = readNormalizedOptionalPublicUrl(parsed.sourceUrlOverride, parsed.slug);
 
   const checkedAt = new Date();
+  const youtubeMetadataChanged =
+    nextYoutubeUrl !== before.youtubeUrl ||
+    nextYoutubeMusicUrl !== before.youtubeMusicUrl ||
+    (parsed.youtubeViewCount ?? null) !== before.youtubeViewCount ||
+    !datesEqual(parsed.youtubePublishedAt ?? null, before.youtubePublishedAt);
   const qualitySnapshot = assessReleaseQuality({
     releaseType: before.releaseType,
     genreName: parsed.genreOverride?.trim() || before.genreName,
@@ -170,6 +176,9 @@ export async function updateReleaseEditorialAction(formData: FormData) {
     youtubeMusicUrl: nextYoutubeMusicUrl || null,
     youtubeViewCount: parsed.youtubeViewCount ?? null,
     youtubePublishedAt: parsed.youtubePublishedAt ?? null,
+    youtubeMetadataUpdatedAt: youtubeMetadataChanged
+      ? checkedAt
+      : before.youtubeMetadataUpdatedAt,
     bandcampUrl: nextBandcampUrl || null,
     officialWebsiteUrl: nextOfficialWebsiteUrl || null,
     officialStoreUrl: nextOfficialStoreUrl || null,
@@ -691,6 +700,18 @@ function readOptionalDate(formData: FormData, key: string) {
 
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function datesEqual(left: Date | null, right: Date | null) {
+  if (!left && !right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return left.getTime() === right.getTime();
 }
 
 function readNormalizedOptionalPublicUrl(value: string | null | undefined, slug: string) {

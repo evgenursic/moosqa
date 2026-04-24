@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { fetchPublicHttpUrl, normalizePublicHttpUrl } from "@/lib/safe-url";
 import { getSiteUrl } from "@/lib/site";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
+import { shouldRefreshYouTubeMetadata } from "@/lib/youtube-metadata";
 
 const ARTWORK_PROXY_REVALIDATE_SECONDS = 60 * 60;
 const ARTWORK_PROXY_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=86400";
@@ -71,6 +72,7 @@ const getCachedArtworkPayload = unstable_cache(
         youtubeMusicUrl: true,
         youtubeViewCount: true,
         youtubePublishedAt: true,
+        youtubeMetadataUpdatedAt: true,
         bandcampUrl: true,
         officialWebsiteUrl: true,
         officialStoreUrl: true,
@@ -235,6 +237,21 @@ async function persistResolvedArtworkCandidate(
     artworkPayload.discoveredYoutubeViewCount || artworkPayload.release.youtubeViewCount;
   const nextYouTubePublishedAt =
     artworkPayload.discoveredYouTubePublishedAt || artworkPayload.release.youtubePublishedAt;
+  const youtubeMetadataChanged =
+    nextYoutubeViewCount !== artworkPayload.release.youtubeViewCount ||
+    !datesEqual(nextYouTubePublishedAt, artworkPayload.release.youtubePublishedAt);
+  const shouldStampYouTubeMetadataRefresh = shouldRefreshYouTubeMetadata({
+    sourceUrl: artworkPayload.release.sourceUrl,
+    youtubeUrl: nextYoutubeUrl,
+    youtubeMusicUrl: nextYoutubeMusicUrl,
+    youtubeViewCount: nextYoutubeViewCount,
+    youtubePublishedAt: nextYouTubePublishedAt,
+    youtubeMetadataUpdatedAt: artworkPayload.release.youtubeMetadataUpdatedAt,
+    metadataEnrichedAt: artworkPayload.release.metadataEnrichedAt,
+  }) || youtubeMetadataChanged;
+  const nextYouTubeMetadataUpdatedAt = shouldStampYouTubeMetadataRefresh
+    ? new Date()
+    : artworkPayload.release.youtubeMetadataUpdatedAt;
   const nextBandcampUrl = artworkPayload.discoveredBandcampUrl || artworkPayload.release.bandcampUrl;
   const nextOfficialWebsiteUrl =
     artworkPayload.discoveredOfficialWebsiteUrl || artworkPayload.release.officialWebsiteUrl;
@@ -254,6 +271,7 @@ async function persistResolvedArtworkCandidate(
     nextYoutubeMusicUrl !== artworkPayload.release.youtubeMusicUrl ||
     nextYoutubeViewCount !== artworkPayload.release.youtubeViewCount ||
     !datesEqual(nextYouTubePublishedAt, artworkPayload.release.youtubePublishedAt) ||
+    !datesEqual(nextYouTubeMetadataUpdatedAt, artworkPayload.release.youtubeMetadataUpdatedAt) ||
     nextBandcampUrl !== artworkPayload.release.bandcampUrl ||
     nextOfficialWebsiteUrl !== artworkPayload.release.officialWebsiteUrl ||
     nextOfficialStoreUrl !== artworkPayload.release.officialStoreUrl ||
@@ -295,6 +313,7 @@ async function persistResolvedArtworkCandidate(
       youtubeMusicUrl: nextYoutubeMusicUrl,
       youtubeViewCount: nextYoutubeViewCount,
       youtubePublishedAt: nextYouTubePublishedAt,
+      youtubeMetadataUpdatedAt: nextYouTubeMetadataUpdatedAt,
       bandcampUrl: nextBandcampUrl,
       officialWebsiteUrl: nextOfficialWebsiteUrl,
       officialStoreUrl: nextOfficialStoreUrl,

@@ -13,6 +13,10 @@ import { assessReleaseQuality } from "@/lib/release-quality";
 import { scoreSummaryQuality } from "@/lib/summary-quality";
 import { detectPlatform } from "@/lib/listening-links";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
+import {
+  hasYouTubeMetadataSource,
+  shouldRefreshYouTubeMetadata,
+} from "@/lib/youtube-metadata";
 
 type EnrichableRelease = Awaited<ReturnType<typeof prisma.release.findMany>>[number];
 
@@ -103,15 +107,7 @@ function needsEnrichment(release: EnrichableRelease, wantsAi: boolean) {
     return true;
   }
 
-  if (
-    isStale &&
-    (
-      detectPlatform(release.sourceUrl) === "youtube" ||
-      detectPlatform(release.sourceUrl) === "youtube-music" ||
-      Boolean(release.youtubeUrl) ||
-      Boolean(release.youtubeMusicUrl)
-    )
-  ) {
+  if (shouldRefreshYouTubeMetadata(release)) {
     return true;
   }
 
@@ -343,6 +339,46 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
     title: release.title,
   });
 
+  const youtubeUrl =
+    directYouTube ||
+    supplementalYouTubeMetadata?.youtubeUrl ||
+    sourceMetadata.youtubeUrl ||
+    fallbackBandcampMetadata?.youtubeUrl ||
+    searchedBandcampMetadata?.youtubeUrl ||
+    musicMetadata.youtubeUrl ||
+    release.youtubeUrl ||
+    null;
+  const youtubeMusicUrl =
+    directYouTubeMusic ||
+    supplementalYouTubeMetadata?.youtubeMusicUrl ||
+    sourceMetadata.youtubeMusicUrl ||
+    fallbackBandcampMetadata?.youtubeMusicUrl ||
+    searchedBandcampMetadata?.youtubeMusicUrl ||
+    musicMetadata.youtubeMusicUrl ||
+    release.youtubeMusicUrl ||
+    null;
+  const youtubeViewCount =
+    supplementalYouTubeMetadata?.youtubeViewCount ||
+    sourceMetadata.youtubeViewCount ||
+    fallbackBandcampMetadata?.youtubeViewCount ||
+    searchedBandcampMetadata?.youtubeViewCount ||
+    release.youtubeViewCount ||
+    null;
+  const youtubePublishedAt =
+    supplementalYouTubeMetadata?.youtubePublishedAt ||
+    sourceMetadata.youtubePublishedAt ||
+    fallbackBandcampMetadata?.youtubePublishedAt ||
+    searchedBandcampMetadata?.youtubePublishedAt ||
+    release.youtubePublishedAt ||
+    null;
+  const youtubeMetadataUpdatedAt = hasYouTubeMetadataSource({
+    sourceUrl: release.sourceUrl,
+    youtubeUrl,
+    youtubeMusicUrl,
+  })
+    ? new Date()
+    : release.youtubeMetadataUpdatedAt || null;
+
   return {
     aiSummary,
     labelName,
@@ -358,38 +394,11 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
       searchedBandcampMetadata?.releaseDate ||
       release.releaseDate ||
       null,
-    youtubeViewCount:
-      supplementalYouTubeMetadata?.youtubeViewCount ||
-      sourceMetadata.youtubeViewCount ||
-      fallbackBandcampMetadata?.youtubeViewCount ||
-      searchedBandcampMetadata?.youtubeViewCount ||
-      release.youtubeViewCount ||
-      null,
-    youtubePublishedAt:
-      supplementalYouTubeMetadata?.youtubePublishedAt ||
-      sourceMetadata.youtubePublishedAt ||
-      fallbackBandcampMetadata?.youtubePublishedAt ||
-      searchedBandcampMetadata?.youtubePublishedAt ||
-      release.youtubePublishedAt ||
-      null,
-    youtubeUrl:
-      directYouTube ||
-      supplementalYouTubeMetadata?.youtubeUrl ||
-      sourceMetadata.youtubeUrl ||
-      fallbackBandcampMetadata?.youtubeUrl ||
-      searchedBandcampMetadata?.youtubeUrl ||
-      musicMetadata.youtubeUrl ||
-      release.youtubeUrl ||
-      null,
-    youtubeMusicUrl:
-      directYouTubeMusic ||
-      supplementalYouTubeMetadata?.youtubeMusicUrl ||
-      sourceMetadata.youtubeMusicUrl ||
-      fallbackBandcampMetadata?.youtubeMusicUrl ||
-      searchedBandcampMetadata?.youtubeMusicUrl ||
-      musicMetadata.youtubeMusicUrl ||
-      release.youtubeMusicUrl ||
-      null,
+    youtubeViewCount,
+    youtubePublishedAt,
+    youtubeMetadataUpdatedAt,
+    youtubeUrl,
+    youtubeMusicUrl,
     bandcampUrl:
       directBandcamp ||
       sourceMetadata.bandcampUrl ||
@@ -475,7 +484,14 @@ async function resolveSupplementalYouTubeMetadata(
     artistName: release.artistName,
     projectTitle: release.projectTitle,
     title: release.title,
-  }).catch(() => null);
+  }).catch((error) => {
+    console.warn("YouTube metadata refresh failed.", {
+      releaseId: release.id,
+      slug: release.slug,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+    return null;
+  });
 }
 
 function normalizeGenre(value: string | null | undefined) {
@@ -536,7 +552,7 @@ function scoreEnrichmentPriority(release: EnrichableRelease, wantsAi: boolean) {
     score += 7;
   }
 
-  if (!release.youtubeViewCount || !release.youtubePublishedAt) {
+  if (shouldRefreshYouTubeMetadata(release)) {
     score += 5;
   }
 

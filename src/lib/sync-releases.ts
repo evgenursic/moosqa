@@ -19,6 +19,10 @@ import { buildReleaseEnrichment, enrichRecentReleases } from "@/lib/release-enri
 import { clearReleaseDataCaches } from "@/lib/release-sections";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
 import { scoreSummaryQuality } from "@/lib/summary-quality";
+import {
+  hasYouTubeMetadataSource,
+  shouldRefreshYouTubeMetadata,
+} from "@/lib/youtube-metadata";
 
 export type SyncResult = {
   scanned: number;
@@ -1033,6 +1037,7 @@ async function upsertNormalizedReleases(
       youtubeMusicUrl: true,
       youtubeViewCount: true,
       youtubePublishedAt: true,
+      youtubeMetadataUpdatedAt: true,
       bandcampUrl: true,
       officialWebsiteUrl: true,
       officialStoreUrl: true,
@@ -1149,6 +1154,7 @@ async function buildReleaseDataForUpsert(
     youtubeMusicUrl: string | null;
     youtubeViewCount: number | null;
     youtubePublishedAt: Date | null;
+    youtubeMetadataUpdatedAt: Date | null;
     bandcampUrl: string | null;
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
@@ -1184,14 +1190,20 @@ async function buildReleaseDataForUpsert(
     const recentlyEnriched =
       existing?.metadataEnrichedAt &&
       Date.now() - existing.metadataEnrichedAt.getTime() < 1000 * 60 * 20;
+    const shouldRefreshYoutubeMetadataNow = shouldRefreshYouTubeMetadata({
+      sourceUrl: release.sourceUrl,
+      youtubeUrl: existing?.youtubeUrl || null,
+      youtubeMusicUrl: existing?.youtubeMusicUrl || null,
+      youtubeViewCount: existing?.youtubeViewCount || null,
+      youtubePublishedAt: existing?.youtubePublishedAt || null,
+      youtubeMetadataUpdatedAt: existing?.youtubeMetadataUpdatedAt || null,
+      metadataEnrichedAt: existing?.metadataEnrichedAt || null,
+    });
     const shouldHydrateSourceMetadata =
       (!release.imageUrl && !existing?.imageUrl && !existing?.thumbnailUrl) ||
       !existing?.genreName ||
       !isSpecificGenreProfile(existing.genreName) ||
-      (
-        (!existing?.youtubeViewCount || !existing?.youtubePublishedAt) &&
-        (release.sourceUrl.includes("youtube.com") || Boolean(existing?.youtubeUrl))
-      ) ||
+      shouldRefreshYoutubeMetadataNow ||
       !hasStableListeningLinks ||
       !hasStablePurchaseLink ||
       !recentlyEnriched;
@@ -1263,6 +1275,26 @@ async function buildReleaseDataForUpsert(
           title: release.title,
         })
       : 0;
+    const nextYoutubeUrl = effectiveSourceMetadata?.youtubeUrl || existing?.youtubeUrl || null;
+    const nextYoutubeMusicUrl =
+      effectiveSourceMetadata?.youtubeMusicUrl || existing?.youtubeMusicUrl || null;
+    const nextYoutubeViewCount =
+      effectiveSourceMetadata?.youtubeViewCount || existing?.youtubeViewCount || null;
+    const nextYoutubePublishedAt =
+      existing?.youtubePublishedAt || effectiveSourceMetadata?.youtubePublishedAt || null;
+    const youtubeMetadataChanged =
+      nextYoutubeViewCount !== (existing?.youtubeViewCount || null) ||
+      !datesEqual(nextYoutubePublishedAt, existing?.youtubePublishedAt || null);
+    const nextYoutubeMetadataUpdatedAt =
+      shouldLookupSourceMetadata &&
+      hasYouTubeMetadataSource({
+        sourceUrl: release.sourceUrl,
+        youtubeUrl: nextYoutubeUrl,
+        youtubeMusicUrl: nextYoutubeMusicUrl,
+      }) &&
+      (shouldRefreshYoutubeMetadataNow || youtubeMetadataChanged)
+        ? new Date()
+        : existing?.youtubeMetadataUpdatedAt || null;
     const nextReleaseData = {
       ...release,
       releaseDate:
@@ -1270,14 +1302,9 @@ async function buildReleaseDataForUpsert(
         effectiveSourceMetadata?.releaseDate ||
         release.releaseDate ||
         null,
-      youtubeViewCount:
-        effectiveSourceMetadata?.youtubeViewCount ||
-        existing?.youtubeViewCount ||
-        null,
-      youtubePublishedAt:
-        existing?.youtubePublishedAt ||
-        effectiveSourceMetadata?.youtubePublishedAt ||
-        null,
+      youtubeViewCount: nextYoutubeViewCount,
+      youtubePublishedAt: nextYoutubePublishedAt,
+      youtubeMetadataUpdatedAt: nextYoutubeMetadataUpdatedAt,
       imageUrl:
         release.imageUrl ||
         existing?.imageUrl ||
@@ -1294,14 +1321,8 @@ async function buildReleaseDataForUpsert(
       genreName: resolvedGenreDecision.genre,
       genreConfidence: resolvedGenreDecision.confidence,
       labelName: effectiveSourceMetadata?.labelName || existing?.labelName || null,
-      youtubeUrl:
-        effectiveSourceMetadata?.youtubeUrl ||
-        existing?.youtubeUrl ||
-        null,
-      youtubeMusicUrl:
-        effectiveSourceMetadata?.youtubeMusicUrl ||
-        existing?.youtubeMusicUrl ||
-        null,
+      youtubeUrl: nextYoutubeUrl,
+      youtubeMusicUrl: nextYoutubeMusicUrl,
       bandcampUrl:
         effectiveSourceMetadata?.bandcampUrl ||
         existing?.bandcampUrl ||
@@ -1373,6 +1394,33 @@ async function buildReleaseDataForUpsert(
     limit: 3,
   });
   const summaryCheckedAt = new Date();
+  const shouldRefreshYoutubeMetadataNow = shouldRefreshYouTubeMetadata({
+    sourceUrl: release.sourceUrl,
+    youtubeUrl: existing?.youtubeUrl || null,
+    youtubeMusicUrl: existing?.youtubeMusicUrl || null,
+    youtubeViewCount: existing?.youtubeViewCount || null,
+    youtubePublishedAt: existing?.youtubePublishedAt || null,
+    youtubeMetadataUpdatedAt: existing?.youtubeMetadataUpdatedAt || null,
+    metadataEnrichedAt: existing?.metadataEnrichedAt || null,
+  });
+  const nextYoutubeUrl = sourceMetadata?.youtubeUrl || existing?.youtubeUrl || null;
+  const nextYoutubeMusicUrl = sourceMetadata?.youtubeMusicUrl || existing?.youtubeMusicUrl || null;
+  const nextYoutubeViewCount = sourceMetadata?.youtubeViewCount || existing?.youtubeViewCount || null;
+  const nextYoutubePublishedAt =
+    existing?.youtubePublishedAt || sourceMetadata?.youtubePublishedAt || null;
+  const youtubeMetadataChanged =
+    nextYoutubeViewCount !== (existing?.youtubeViewCount || null) ||
+    !datesEqual(nextYoutubePublishedAt, existing?.youtubePublishedAt || null);
+  const nextYoutubeMetadataUpdatedAt =
+    sourceMetadata &&
+    hasYouTubeMetadataSource({
+      sourceUrl: release.sourceUrl,
+      youtubeUrl: nextYoutubeUrl,
+      youtubeMusicUrl: nextYoutubeMusicUrl,
+    }) &&
+    (shouldRefreshYoutubeMetadataNow || youtubeMetadataChanged)
+      ? new Date()
+      : existing?.youtubeMetadataUpdatedAt || null;
 
   return withQualityFields({
     ...release,
@@ -1392,11 +1440,11 @@ async function buildReleaseDataForUpsert(
     genreName: fallbackGenreDecision.genre,
     genreConfidence: fallbackGenreDecision.confidence,
     labelName: sourceMetadata?.labelName || existing?.labelName || null,
-    youtubeUrl: sourceMetadata?.youtubeUrl || existing?.youtubeUrl || null,
-    youtubeMusicUrl: sourceMetadata?.youtubeMusicUrl || existing?.youtubeMusicUrl || null,
-    youtubeViewCount: sourceMetadata?.youtubeViewCount || existing?.youtubeViewCount || null,
-    youtubePublishedAt:
-      existing?.youtubePublishedAt || sourceMetadata?.youtubePublishedAt || null,
+    youtubeUrl: nextYoutubeUrl,
+    youtubeMusicUrl: nextYoutubeMusicUrl,
+    youtubeViewCount: nextYoutubeViewCount,
+    youtubePublishedAt: nextYoutubePublishedAt,
+    youtubeMetadataUpdatedAt: nextYoutubeMetadataUpdatedAt,
     bandcampUrl: sourceMetadata?.bandcampUrl || existing?.bandcampUrl || null,
     officialWebsiteUrl: sourceMetadata?.officialWebsiteUrl || existing?.officialWebsiteUrl || null,
     officialStoreUrl: sourceMetadata?.officialStoreUrl || existing?.officialStoreUrl || null,
@@ -1729,6 +1777,7 @@ function hasCoreReleaseDataChanges(
     youtubeMusicUrl: string | null;
     youtubeViewCount: number | null;
     youtubePublishedAt: Date | null;
+    youtubeMetadataUpdatedAt: Date | null;
     bandcampUrl: string | null;
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
@@ -1764,6 +1813,7 @@ function hasCoreReleaseDataChanges(
     youtubeMusicUrl: string | null;
     youtubeViewCount: number | null;
     youtubePublishedAt: Date | null;
+    youtubeMetadataUpdatedAt: Date | null;
     bandcampUrl: string | null;
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
@@ -1800,6 +1850,7 @@ function hasCoreReleaseDataChanges(
     existing.youtubeMusicUrl !== next.youtubeMusicUrl ||
     existing.youtubeViewCount !== next.youtubeViewCount ||
     !datesEqual(existing.youtubePublishedAt, next.youtubePublishedAt) ||
+    !datesEqual(existing.youtubeMetadataUpdatedAt, next.youtubeMetadataUpdatedAt) ||
     existing.bandcampUrl !== next.bandcampUrl ||
     existing.officialWebsiteUrl !== next.officialWebsiteUrl ||
     existing.officialStoreUrl !== next.officialStoreUrl ||

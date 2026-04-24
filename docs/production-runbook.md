@@ -53,6 +53,14 @@ Do not claim migration success unless `db:inspect` shows the required tables on 
 4. Run `Repair weak cards` manually.
 5. Use `/debug?secret=<DEBUG_SECRET>` to inspect weak-card reasons before broad code changes.
 
+## YouTube Metadata Refresh
+
+- Public cards read stored `Release.youtubeViewCount` and `Release.youtubePublishedAt`; they must not fetch YouTube data during page or card rendering.
+- `Release.youtubeMetadataUpdatedAt` records the last pipeline/manual attempt to refresh YouTube metadata.
+- Sync, enrichment, artwork repair, and admin overrides may update the stored YouTube fields. Complete metadata is considered fresh for about one week; incomplete metadata retries after a short cooldown to avoid quota or source-fetch storms.
+- If source metadata fetching fails or YouTube data is missing, preserve the last known stored values and keep cards renderable with omitted metrics.
+- If YouTube extraction behavior changes, fix the metadata parser or repair/enrichment job first, then run the normal smoke flow.
+
 ## Failed Notification Processing
 
 1. Check `/ops?secret=<DEBUG_SECRET>` for queued, sent, failed, and skipped notification totals.

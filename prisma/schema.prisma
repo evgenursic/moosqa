@@ -160,6 +160,7 @@ model Release {
   youtubeMusicUrl String?
   youtubeViewCount Int?
   youtubePublishedAt DateTime?
+  youtubeMetadataUpdatedAt DateTime?
   bandcampUrl     String?
   officialWebsiteUrl String?
   officialStoreUrl   String?

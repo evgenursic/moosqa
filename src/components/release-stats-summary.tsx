@@ -12,6 +12,7 @@ type ReleaseStatsSummaryProps = {
 type SummaryItem = {
   label: string;
   value: string;
+  ariaLabel?: string;
 };
 
 export function ReleaseStatsSummary({
@@ -35,9 +36,10 @@ export function ReleaseStatsSummary({
 
   return (
     <dl
+      aria-label={buildSummaryAriaLabel(items)}
       className={cn(
         "border border-[var(--color-line)] bg-[var(--color-panel)]/85",
-        compact ? "grid gap-0.5 px-3 py-2" : "grid gap-1 px-4 py-3",
+        compact ? "grid max-w-full gap-0.5 px-3 py-2" : "grid gap-1 px-4 py-3",
         className,
       )}
     >
@@ -75,11 +77,19 @@ function buildSummaryItems(input: {
   const discussionShare = formatDiscussionShare(input.redditUpvotes, input.redditComments);
 
   if (youtubeViews) {
-    items.push({ label: "YouTube", value: `${youtubeViews} views` });
+    items.push({
+      label: "YouTube",
+      value: `${youtubeViews} views`,
+      ariaLabel: `${youtubeViews} YouTube views`,
+    });
   }
 
   if (youtubePublished) {
-    items.push({ label: "Published", value: youtubePublished });
+    items.push({
+      label: "Published",
+      value: youtubePublished,
+      ariaLabel: `Published on YouTube ${youtubePublished}`,
+    });
   }
 
   if (redditUpvotes) {
@@ -91,8 +101,14 @@ function buildSummaryItems(input: {
   }
 
   if (discussionShare !== null && items.length < 4) {
-    items.push({ label: "Discussion", value: `${discussionShare}%` });
+    items.push({ label: "Discussion share", value: `${discussionShare}%` });
   }
 
   return items;
+}
+
+function buildSummaryAriaLabel(items: SummaryItem[]) {
+  return `Release statistics: ${items
+    .map((item) => item.ariaLabel || `${item.label} ${item.value}`)
+    .join("; ")}`;
 }
