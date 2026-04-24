@@ -75,7 +75,21 @@ async function CollectionContent({ params }: CollectionPageProps) {
           Collection unavailable.
         </h1>
         <div className="mt-8 max-w-2xl border border-[var(--color-line)] bg-[var(--color-panel)] p-5 text-sm leading-7 text-black/64">
-          This collection is not published or no longer available.
+          This collection is not published, has no visible public releases, or is no longer available.
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link
+              href="/picks"
+              className="inline-flex min-h-11 items-center border border-[var(--color-line)] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+            >
+              Back to picks
+            </Link>
+            <Link
+              href="/browse/latest"
+              className="inline-flex min-h-11 items-center border border-[var(--color-line)] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+            >
+              Browse latest
+            </Link>
+          </div>
         </div>
       </section>
     );
@@ -115,7 +129,7 @@ async function CollectionContent({ params }: CollectionPageProps) {
       <div className="mt-8">
         <Link
           href="/picks"
-          className="inline-flex items-center border border-[var(--color-line)] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+          className="inline-flex min-h-11 items-center border border-[var(--color-line)] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
         >
           Back to picks
         </Link>

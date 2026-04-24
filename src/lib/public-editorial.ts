@@ -62,16 +62,20 @@ const getCachedPublicEditorialHubData = unstable_cache(
     const featuredById = new Map(featuredReleases.map((release) => [release.id, release]));
     const collectionReleaseById = new Map(collectionReleases.map((release) => [release.id, release]));
 
-    return {
-      featuredReleases: featuredIds
-        .map((releaseId) => featuredById.get(releaseId) || null)
-        .filter((release): release is ReleaseListingItem => Boolean(release)),
-      collections: collections.map((collection) => ({
+    const publicCollections = collections
+      .map((collection) => ({
         ...collection,
         entries: collection.entries
           .map((entry) => collectionReleaseById.get(entry.releaseId) || null)
           .filter((release): release is ReleaseListingItem => Boolean(release)),
-      })),
+      }))
+      .filter((collection) => Boolean(collection.publishedAt) && collection.entries.length > 0);
+
+    return {
+      featuredReleases: featuredIds
+        .map((releaseId) => featuredById.get(releaseId) || null)
+        .filter((release): release is ReleaseListingItem => Boolean(release)),
+      collections: publicCollections,
     };
   },
   ["public-editorial-hub"],

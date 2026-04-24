@@ -38,8 +38,8 @@ export function ReleasePublicCounters({
     ...(compactYouTubePublishedAt
       ? [{ label: "YouTube published", value: compactYouTubePublishedAt }]
       : []),
-    ...(safeRedditUpvotes > 0 ? [{ label: "Reddit upvotes", value: formatWholeCount(safeRedditUpvotes) }] : []),
-    ...(safeRedditComments > 0 ? [{ label: "Reddit comments", value: formatWholeCount(safeRedditComments) }] : []),
+    ...(safeRedditUpvotes > 0 ? [{ label: "Upvotes", value: formatWholeCount(safeRedditUpvotes) }] : []),
+    ...(safeRedditComments > 0 ? [{ label: "Comments", value: formatWholeCount(safeRedditComments) }] : []),
     ...(discussionShare !== null ? [{ label: "Discussion share", value: `${discussionShare}%` }] : []),
     ...(safeOpenCount > 0 ? [{ label: "MooSQA opens", value: formatWholeCount(safeOpenCount) }] : []),
     ...(safeListenClickCount > 0 ? [{ label: "Listen clicks", value: formatWholeCount(safeListenClickCount) }] : []),

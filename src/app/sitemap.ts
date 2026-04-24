@@ -49,6 +49,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const collections = await prisma.editorialCollection.findMany({
       where: {
         isPublished: true,
+        publishedAt: {
+          not: null,
+        },
+        entries: {
+          some: {
+            release: {
+              isHidden: false,
+            },
+          },
+        },
       },
       select: {
         slug: true,
