@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { FollowTargetType } from "@/generated/prisma/enums";
+import { FollowTargetType, ReleaseType } from "@/generated/prisma/enums";
 import {
   buildRecommendationSignals,
   scoreRecommendationCandidate,
@@ -39,11 +39,14 @@ test("recommendation scoring prefers strong follow and save signals", () => {
       title: "Example",
       artistName: "Laufey",
       projectTitle: "A Matter of Time",
+      releaseType: ReleaseType.ALBUM,
       labelName: "AWAL",
       genreName: "Chamber pop",
       genreOverride: null,
       publishedAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
       qualityScore: 84,
+      score: 80,
+      youtubeViewCount: 120_000,
       openCount: 28,
       shareCount: 5,
       listenClickCount: 9,
@@ -59,6 +62,49 @@ test("recommendation scoring prefers strong follow and save signals", () => {
   assert.equal(recommendation?.reasons.includes("followed artist"), true);
   assert.equal(recommendation?.reasons.includes("saved artist lane"), true);
   assert.equal(recommendation?.score > 500, true);
+});
+
+test("recommendation scoring uses genre follows and external traction without requiring runtime fetches", () => {
+  const signals = buildRecommendationSignals({
+    follows: [
+      {
+        targetType: FollowTargetType.GENRE,
+        targetValue: "Dream pop",
+      },
+    ],
+    savedReleases: [],
+  });
+
+  const recommendation = scoreRecommendationCandidate(
+    {
+      id: "release-genre",
+      slug: "dream-pop-example",
+      title: "Example",
+      artistName: "New Artist",
+      projectTitle: "New Album",
+      releaseType: ReleaseType.EP,
+      labelName: null,
+      genreName: "Dream pop",
+      genreOverride: null,
+      publishedAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
+      qualityScore: 76,
+      score: 38,
+      youtubeViewCount: 52_000,
+      openCount: 6,
+      shareCount: 0,
+      listenClickCount: 3,
+      positiveReactionCount: 1,
+      commentCount: 11,
+      isFeatured: false,
+      editorialRank: 0,
+    },
+    signals,
+  );
+
+  assert.ok(recommendation);
+  assert.equal(recommendation?.reasons.includes("followed genre"), true);
+  assert.equal(recommendation?.reasons.includes("Reddit traction"), true);
+  assert.equal(recommendation?.reasons.includes("YouTube traction"), true);
 });
 
 test("recommendation diversity avoids repeating the same artist when a strong alternative exists", () => {

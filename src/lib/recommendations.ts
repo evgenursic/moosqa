@@ -1,4 +1,4 @@
-import { FollowTargetType } from "@/generated/prisma/enums";
+import { FollowTargetType, ReleaseType } from "@/generated/prisma/enums";
 import { ensureDatabase } from "@/lib/database";
 import { applyReleaseEditorialFields, buildVisibleReleaseWhere } from "@/lib/editorial";
 import { prisma } from "@/lib/prisma";
@@ -22,11 +22,14 @@ type RecommendationCandidate = {
   title: string;
   artistName: string | null;
   projectTitle: string | null;
+  releaseType: ReleaseType;
   labelName: string | null;
   genreName: string | null;
   genreOverride: string | null;
   publishedAt: Date;
   qualityScore: number;
+  score: number | null;
+  youtubeViewCount: number | null;
   openCount: number;
   shareCount: number;
   listenClickCount: number;
@@ -46,6 +49,7 @@ type SavedReleaseSignal = {
 type RecommendationSignals = {
   followedArtists: Set<string>;
   followedLabels: Set<string>;
+  followedGenres: Set<string>;
   savedArtistWeights: Map<string, number>;
   savedLabelWeights: Map<string, number>;
   savedGenreWeights: Map<string, number>;
@@ -103,11 +107,14 @@ export async function getRecommendedReleasesForUser(userId: string) {
       title: true,
       artistName: true,
       projectTitle: true,
+      releaseType: true,
       labelName: true,
       genreName: true,
       genreOverride: true,
       publishedAt: true,
       qualityScore: true,
+      score: true,
+      youtubeViewCount: true,
       openCount: true,
       shareCount: true,
       listenClickCount: true,
@@ -148,10 +155,17 @@ export function buildRecommendationSignals({
       .map((follow) => normalizeSignalKey(follow.targetValue))
       .filter((value): value is string => Boolean(value)),
   );
+  const followedGenres = new Set(
+    follows
+      .filter((follow) => follow.targetType === FollowTargetType.GENRE)
+      .map((follow) => normalizeSignalKey(follow.targetValue))
+      .filter((value): value is string => Boolean(value)),
+  );
 
   return {
     followedArtists,
     followedLabels,
+    followedGenres,
     savedArtistWeights: accumulateSignalWeights(savedReleases.map((entry) => entry.artistName)),
     savedLabelWeights: accumulateSignalWeights(savedReleases.map((entry) => entry.labelName)),
     savedGenreWeights: accumulateSignalWeights(
@@ -179,6 +193,10 @@ export function scoreRecommendationCandidate(
     reasons.add("followed label");
     score += 260;
   }
+  if (genreKey && signals.followedGenres.has(genreKey)) {
+    reasons.add("followed genre");
+    score += 170;
+  }
 
   const savedArtistWeight = readSignalWeight(signals.savedArtistWeights, artistKey);
   const savedLabelWeight = readSignalWeight(signals.savedLabelWeights, labelKey);
@@ -201,19 +219,31 @@ export function scoreRecommendationCandidate(
     score += 90 + candidate.editorialRank * 4;
   }
 
-  const tractionScore =
+  const productTractionScore =
     Math.min(candidate.openCount, 60) * 0.8 +
     Math.min(candidate.listenClickCount, 24) * 2.2 +
     Math.min(candidate.shareCount, 12) * 5 +
-    Math.min(candidate.positiveReactionCount, 16) * 4 +
+    Math.min(candidate.positiveReactionCount, 16) * 4;
+  const redditTractionScore =
+    Math.log1p(Math.max(candidate.score || 0, 0)) * 12 +
     Math.min(candidate.commentCount || 0, 36) * 1.5;
+  const youtubeTractionScore = Math.min(Math.log1p(Math.max(candidate.youtubeViewCount || 0, 0)) * 5, 72);
 
-  if (tractionScore >= 55) {
-    reasons.add("reader traction");
+  if (candidate.openCount >= 18 || candidate.listenClickCount >= 8 || candidate.shareCount >= 4) {
+    reasons.add("detail interest");
+  }
+  if ((candidate.score || 0) >= 25 || (candidate.commentCount || 0) >= 8) {
+    reasons.add("Reddit traction");
+  }
+  if ((candidate.youtubeViewCount || 0) >= 25_000) {
+    reasons.add("YouTube traction");
   }
 
   score += Math.max(0, Math.min(candidate.qualityScore, 100));
-  score += tractionScore;
+  score += productTractionScore;
+  score += redditTractionScore;
+  score += youtubeTractionScore;
+  score += computeReleaseTypeBonus(candidate.releaseType);
   score += computeRecencyBonus(candidate.publishedAt);
 
   if (reasons.size === 0 && score < 150) {
@@ -350,4 +380,20 @@ function computeRecencyBonus(publishedAt: Date) {
   }
 
   return 6;
+}
+
+function computeReleaseTypeBonus(releaseType: ReleaseType) {
+  switch (releaseType) {
+    case ReleaseType.ALBUM:
+      return 32;
+    case ReleaseType.EP:
+      return 22;
+    case ReleaseType.SINGLE:
+      return 14;
+    case ReleaseType.PERFORMANCE:
+    case ReleaseType.LIVE_SESSION:
+      return 10;
+    default:
+      return 0;
+  }
 }
