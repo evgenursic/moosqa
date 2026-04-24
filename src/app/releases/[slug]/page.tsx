@@ -9,6 +9,7 @@ import { MobileReleaseNav } from "@/components/mobile-release-nav";
 import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleasePublicCounters } from "@/components/release-public-counters";
+import { ReleaseStatsSummary } from "@/components/release-stats-summary";
 import { ReleaseUserActions } from "@/components/release-user-actions";
 import { TopEngagedVisual } from "@/components/top-engaged-visual";
 import { sanitizeInternalHref } from "@/lib/navigation";
@@ -19,7 +20,6 @@ import {
   formatContextualReleaseDateLabel,
   formatRedditDateLabel,
   formatReleaseTypeLabel,
-  formatYouTubeViewsLabel,
   getDisplayGenre,
   getDisplaySummary,
 } from "@/lib/utils";
@@ -141,7 +141,6 @@ function renderReleasePage(
     release.outletName,
   );
   const redditDateLabel = formatRedditDateLabel(publishedAtValue);
-  const youtubeViewsLabel = formatYouTubeViewsLabel(release.youtubeViewCount);
   const releaseUrl = new URL(`/releases/${release.slug}`, getSiteUrl()).toString();
   const image =
     normalizePublicHttpUrl(release.imageUrl) ||
@@ -316,6 +315,14 @@ function renderReleasePage(
 
             <div className="border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
               <p className="section-kicker text-black/45">At a glance</p>
+              <div className="mt-4">
+                <ReleaseStatsSummary
+                  youtubeViewCount={release.youtubeViewCount}
+                  youtubePublishedAt={release.youtubePublishedAt}
+                  redditUpvotes={release.score}
+                  redditComments={release.commentCount}
+                />
+              </div>
               <div className="mt-4 flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.18em] text-black/55">
                 <span className="border border-[var(--color-line)] px-3 py-2">{displayGenre}</span>
                 {release.labelName ? (
@@ -326,9 +333,6 @@ function renderReleasePage(
                 ) : null}
                 {redditDateLabel ? (
                   <span className="border border-[var(--color-line)] px-3 py-2">{redditDateLabel}</span>
-                ) : null}
-                {youtubeViewsLabel ? (
-                  <span className="border border-[var(--color-line)] px-3 py-2">{youtubeViewsLabel}</span>
                 ) : null}
               </div>
             </div>
@@ -372,9 +376,10 @@ function renderReleasePublicCounters(
   try {
     return (
       <ReleasePublicCounters
-        publishedAt={release.publishedAt}
-        analyticsUpdatedAt={release.analyticsUpdatedAt}
         youtubeViewCount={release.youtubeViewCount}
+        youtubePublishedAt={release.youtubePublishedAt}
+        redditUpvotes={release.score}
+        redditComments={release.commentCount}
         openCount={release.openCount}
         listenClickCount={release.listenClickCount}
         shareCount={release.shareCount}

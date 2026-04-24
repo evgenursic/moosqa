@@ -12,8 +12,9 @@ type CountRow = {
   count: bigint;
 };
 
-type SavedGenreRow = {
+type GenrePerformanceRow = {
   genre: string;
+  opens: bigint;
   count: bigint;
 };
 
@@ -21,6 +22,21 @@ type SaveConversionByTypeRow = {
   releaseType: string;
   saves: bigint;
   opens: bigint;
+};
+
+type SourcePerformanceRow = {
+  source: string;
+  opens: bigint;
+  listenClicks: bigint;
+  shares: bigint;
+  saves: bigint;
+};
+
+type EditorialPerformanceRow = {
+  status: string;
+  releaseCount: bigint;
+  opens: bigint;
+  saves: bigint;
 };
 
 type FollowPathwayRow = {
@@ -127,8 +143,10 @@ const getProductAnalyticsData = unstable_cache(
       topSavedReleaseGroups,
       topFollowArtistGroups,
       topFollowLabelGroups,
-      topSavedGenres,
+      genrePerformanceRows,
       saveConversionByTypeRows,
+      sourcePerformanceRows,
+      editorialPerformanceRows,
       followPathwayRows,
       dailyTrendRows,
     ] = await Promise.all([
@@ -216,13 +234,22 @@ const getProductAnalyticsData = unstable_cache(
         },
         take: 8,
       }),
-      prisma.$queryRaw<SavedGenreRow[]>(Prisma.sql`
-        select r."genreName" as genre, count(*) as count
-        from "UserSavedRelease" usr
-        join "Release" r on r."id" = usr."releaseId"
-        where r."genreName" is not null
-        group by r."genreName"
-        order by count(*) desc, r."genreName" asc
+      prisma.$queryRaw<GenrePerformanceRow[]>(Prisma.sql`
+        with save_counts as (
+          select usr."releaseId", count(*)::bigint as saves
+          from "UserSavedRelease" usr
+          group by usr."releaseId"
+        )
+        select
+          coalesce(nullif(trim(coalesce(r."genreOverride", r."genreName")), ''), 'Genre pending') as genre,
+          coalesce(sum(r."openCount"), 0)::bigint as opens,
+          coalesce(sum(save_counts.saves), 0)::bigint as count
+        from "Release" r
+        left join save_counts on save_counts."releaseId" = r."id"
+        where r."isHidden" = false
+        group by coalesce(nullif(trim(coalesce(r."genreOverride", r."genreName")), ''), 'Genre pending')
+        having coalesce(sum(r."openCount"), 0) > 0 or coalesce(sum(save_counts.saves), 0) > 0
+        order by count desc, opens desc, genre asc
         limit 8
       `),
       prisma.$queryRaw<SaveConversionByTypeRow[]>(Prisma.sql`
@@ -240,6 +267,55 @@ const getProductAnalyticsData = unstable_cache(
         where r."isHidden" = false
         group by r."releaseType"
         order by opens desc, saves desc, r."releaseType" asc
+      `),
+      prisma.$queryRaw<SourcePerformanceRow[]>(Prisma.sql`
+        with save_counts as (
+          select usr."releaseId", count(*)::bigint as saves
+          from "UserSavedRelease" usr
+          group by usr."releaseId"
+        )
+        select
+          coalesce(nullif(trim(r."outletName"), ''), 'Source pending') as source,
+          coalesce(sum(r."openCount"), 0)::bigint as opens,
+          coalesce(sum(r."listenClickCount"), 0)::bigint as "listenClicks",
+          coalesce(sum(r."shareCount"), 0)::bigint as shares,
+          coalesce(sum(save_counts.saves), 0)::bigint as saves
+        from "Release" r
+        left join save_counts on save_counts."releaseId" = r."id"
+        where r."isHidden" = false
+        group by coalesce(nullif(trim(r."outletName"), ''), 'Source pending')
+        having
+          coalesce(sum(r."openCount"), 0) > 0 or
+          coalesce(sum(r."listenClickCount"), 0) > 0 or
+          coalesce(sum(save_counts.saves), 0) > 0
+        order by opens desc, "listenClicks" desc, saves desc, source asc
+        limit 8
+      `),
+      prisma.$queryRaw<EditorialPerformanceRow[]>(Prisma.sql`
+        with save_counts as (
+          select usr."releaseId", count(*)::bigint as saves
+          from "UserSavedRelease" usr
+          group by usr."releaseId"
+        )
+        select
+          case
+            when r."isFeatured" = true then 'Featured'
+            when r."editorialRank" > 0 then 'Ranked editorial'
+            else 'Standard feed'
+          end as status,
+          count(*)::bigint as "releaseCount",
+          coalesce(sum(r."openCount"), 0)::bigint as opens,
+          coalesce(sum(save_counts.saves), 0)::bigint as saves
+        from "Release" r
+        left join save_counts on save_counts."releaseId" = r."id"
+        where r."isHidden" = false
+        group by
+          case
+            when r."isFeatured" = true then 'Featured'
+            when r."editorialRank" > 0 then 'Ranked editorial'
+            else 'Standard feed'
+          end
+        order by opens desc, saves desc, status asc
       `),
       prisma.$queryRaw<FollowPathwayRow[]>(Prisma.sql`
         select
@@ -355,6 +431,10 @@ const getProductAnalyticsData = unstable_cache(
         radarUsers: radarUserCount,
         notificationUsers: notificationPreferenceUsers,
         notificationEligibleUsers: notificationEligibleCount,
+        notificationAdoptionRate:
+          radarUserCount > 0 ? roundToOneDecimal((notificationPreferenceUsers / radarUserCount) * 100) : 0,
+        notificationEligibleRate:
+          radarUserCount > 0 ? roundToOneDecimal((notificationEligibleCount / radarUserCount) * 100) : 0,
       },
       conversion: {
         totalSaves,
@@ -389,14 +469,34 @@ const getProductAnalyticsData = unstable_cache(
         label: entry.targetValue,
         count: entry._count._all,
       })),
-      topSavedGenres: topSavedGenres.map((entry) => ({
+      genrePerformance: genrePerformanceRows.map((entry) => ({
         label: entry.genre,
+        opens: Number(entry.opens),
         count: Number(entry.count),
+        savesPer100Opens:
+          Number(entry.opens) > 0 ? roundToOneDecimal((Number(entry.count) / Number(entry.opens)) * 100) : 0,
       })),
       saveConversionByType: saveConversionByTypeRows.map((entry) => ({
         label: formatReleaseTypeLabel(entry.releaseType),
         saves: Number(entry.saves),
         opens: Number(entry.opens),
+        savesPer100Opens:
+          Number(entry.opens) > 0 ? roundToOneDecimal((Number(entry.saves) / Number(entry.opens)) * 100) : 0,
+      })),
+      sourcePerformance: sourcePerformanceRows.map((entry) => ({
+        label: entry.source,
+        opens: Number(entry.opens),
+        listenClicks: Number(entry.listenClicks),
+        shares: Number(entry.shares),
+        saves: Number(entry.saves),
+        savesPer100Opens:
+          Number(entry.opens) > 0 ? roundToOneDecimal((Number(entry.saves) / Number(entry.opens)) * 100) : 0,
+      })),
+      editorialPerformance: editorialPerformanceRows.map((entry) => ({
+        label: entry.status,
+        releaseCount: Number(entry.releaseCount),
+        opens: Number(entry.opens),
+        saves: Number(entry.saves),
         savesPer100Opens:
           Number(entry.opens) > 0 ? roundToOneDecimal((Number(entry.saves) / Number(entry.opens)) * 100) : 0,
       })),

@@ -3,6 +3,7 @@ import { ListeningLinks } from "@/components/listening-links";
 import { ReleaseCardActions } from "@/components/release-card-actions";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
+import { ReleaseStatsSummary } from "@/components/release-stats-summary";
 import { TopEngagedVisual } from "@/components/top-engaged-visual";
 import { TopRatedVisual } from "@/components/top-rated-visual";
 import {
@@ -10,7 +11,6 @@ import {
   formatRedditDateLabel,
   formatReleaseTypeLabel,
   formatScore,
-  formatYouTubeViewsLabel,
   getDisplayGenre,
   getDisplaySummary,
 } from "@/lib/utils";
@@ -31,6 +31,7 @@ type ReleaseCardProps = {
     youtubeUrl?: string | null;
     youtubeMusicUrl?: string | null;
     youtubeViewCount?: number | null;
+    youtubePublishedAt?: Date | null;
     bandcampUrl?: string | null;
     officialWebsiteUrl?: string | null;
     officialStoreUrl?: string | null;
@@ -65,7 +66,7 @@ export function ReleaseCard({
 }: ReleaseCardProps) {
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
   const metaItems = getMetaItems(release, context);
-  const showEngagementVisual = hasEngagementData(release);
+  const showEngagementVisual = context === "top-engaged" && hasEngagementData(release);
 
   return (
     <article className="group min-w-0 border-t border-[var(--color-line)] pt-6">
@@ -108,27 +109,38 @@ export function ReleaseCard({
         <p className="section-kicker text-black/43">
           {formatReleaseTypeLabel(release.releaseType)}
         </p>
-        <ReleaseLink
-          releaseId={release.id}
-          slug={release.slug}
-          fromHref={fromHref}
-          className="block cursor-pointer"
-        >
-          <h3
-            className={
-              compact
-                ? "mt-3 break-words text-[2rem] leading-[0.94] text-[var(--color-ink)] serif-display md:text-[2.15rem]"
-                : "mt-3 break-words text-[2.35rem] leading-[0.94] text-[var(--color-ink)] serif-display md:text-[3rem]"
-            }
+        <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <ReleaseLink
+            releaseId={release.id}
+            slug={release.slug}
+            fromHref={fromHref}
+            className="block min-w-0 flex-1 cursor-pointer"
           >
-            <span className="card-title-underline">
-              {release.artistName || release.projectTitle || release.title}
-            </span>
-          </h3>
-          <p className="mt-3 break-words text-lg leading-7 text-black/68 serif-display">
-            {release.artistName && release.projectTitle ? release.projectTitle : release.title}
-          </p>
-        </ReleaseLink>
+            <h3
+              className={
+                compact
+                  ? "break-words text-[2rem] leading-[0.94] text-[var(--color-ink)] serif-display md:text-[2.15rem]"
+                  : "break-words text-[2.35rem] leading-[0.94] text-[var(--color-ink)] serif-display md:text-[3rem]"
+              }
+            >
+              <span className="card-title-underline">
+                {release.artistName || release.projectTitle || release.title}
+              </span>
+            </h3>
+            <p className="mt-3 break-words text-lg leading-7 text-black/68 serif-display">
+              {release.artistName && release.projectTitle ? release.projectTitle : release.title}
+            </p>
+          </ReleaseLink>
+
+          <ReleaseStatsSummary
+            youtubeViewCount={release.youtubeViewCount}
+            youtubePublishedAt={release.youtubePublishedAt}
+            redditUpvotes={release.score}
+            redditComments={release.commentCount}
+            compact
+            className="w-full md:w-[13.5rem] md:shrink-0"
+          />
+        </div>
 
         <div className="mt-4 flex flex-wrap gap-3 break-words text-[11px] uppercase tracking-[0.18em] text-black/55">
           {metaItems.map((item) => (
@@ -197,7 +209,6 @@ function getMetaItems(
       release.outletName || null,
     ),
     formatRedditDateLabel(release.publishedAt),
-    formatYouTubeViewsLabel(release.youtubeViewCount),
     release.outletName || "Source pending",
   ].filter((item): item is string => Boolean(item));
 

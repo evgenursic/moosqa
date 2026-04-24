@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { extractYouTubeViewCountFromHtml } from "../../src/lib/source-metadata";
 import {
+  extractYouTubePublishedAtFromHtml,
+  extractYouTubeViewCountFromHtml,
+} from "../../src/lib/source-metadata";
+import {
+  formatCompactUtcDate,
+  formatCompactWholeCount,
   formatDetailedUtcTimestamp,
   formatDiscussionShare,
   formatContextualReleaseDateLabel,
@@ -28,6 +33,8 @@ describe("presentation metadata helpers", () => {
 
   it("formats youtube views compactly and discussion share cleanly", () => {
     assert.equal(formatYouTubeViewsLabel(24321), "YouTube 24.3K views");
+    assert.equal(formatCompactWholeCount(24321), "24.3K");
+    assert.equal(formatCompactUtcDate("2026-04-24T14:00:00.000Z"), "Fri, Apr 24, 2026");
     assert.equal(formatDiscussionShare(120, 30), 20);
     assert.equal(formatDiscussionShare(0, 0), null);
   });
@@ -57,13 +64,18 @@ describe("presentation metadata helpers", () => {
       <html>
         <head>
           <meta itemprop="interactionCount" content="34567" />
+          <meta itemprop="uploadDate" content="2026-04-24T14:00:00.000Z" />
           <script type="application/ld+json">
-            {"@type":"VideoObject","interactionCount":"34567","name":"Test"}
+            {"@type":"VideoObject","interactionCount":"34567","uploadDate":"2026-04-24T14:00:00.000Z","name":"Test"}
           </script>
         </head>
       </html>
     `;
 
     assert.equal(extractYouTubeViewCountFromHtml(html), 34567);
+    assert.equal(
+      extractYouTubePublishedAtFromHtml(html)?.toISOString(),
+      "2026-04-24T14:00:00.000Z",
+    );
   });
 });

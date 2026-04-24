@@ -1,10 +1,10 @@
-import { computeTrendingScore } from "@/lib/trending-score";
-import { formatWholeCount } from "@/lib/utils";
+import { formatCompactUtcDate, formatDiscussionShare, formatWholeCount } from "@/lib/utils";
 
 type ReleasePublicCountersProps = {
-  publishedAt?: Date | string | null;
-  analyticsUpdatedAt?: Date | string | null;
   youtubeViewCount?: number | null | undefined;
+  youtubePublishedAt?: Date | string | null;
+  redditUpvotes?: number | null | undefined;
+  redditComments?: number | null | undefined;
   openCount: number | null | undefined;
   listenClickCount: number | null | undefined;
   shareCount: number | null | undefined;
@@ -13,9 +13,10 @@ type ReleasePublicCountersProps = {
 };
 
 export function ReleasePublicCounters({
-  publishedAt = new Date(),
-  analyticsUpdatedAt = null,
   youtubeViewCount,
+  youtubePublishedAt,
+  redditUpvotes,
+  redditComments,
   openCount,
   listenClickCount,
   shareCount,
@@ -28,38 +29,33 @@ export function ReleasePublicCounters({
   const safePositiveReactionCount = sanitizeMetric(positiveReactionCount);
   const safeNegativeReactionCount = sanitizeMetric(negativeReactionCount);
   const safeYouTubeViewCount = sanitizeMetric(youtubeViewCount);
-  const trendScore = Math.round(
-    computeTrendingScore({
-      publishedAt,
-      analyticsUpdatedAt,
-      openCount: safeOpenCount,
-      listenClickCount: safeListenClickCount,
-      shareCount: safeShareCount,
-      positiveReactionCount: safePositiveReactionCount,
-      negativeReactionCount: safeNegativeReactionCount,
-    }),
-  );
-  const audienceActions =
-    safeOpenCount +
-    safeListenClickCount +
-    safeShareCount +
-    safePositiveReactionCount +
-    safeNegativeReactionCount;
+  const safeRedditUpvotes = sanitizeMetric(redditUpvotes);
+  const safeRedditComments = sanitizeMetric(redditComments);
+  const discussionShare = formatDiscussionShare(safeRedditUpvotes, safeRedditComments);
+  const compactYouTubePublishedAt = formatCompactUtcDate(youtubePublishedAt);
   const items = [
-    { label: "Trend score", value: trendScore },
     ...(safeYouTubeViewCount > 0 ? [{ label: "YouTube views", value: formatWholeCount(safeYouTubeViewCount) }] : []),
-    { label: "Audience actions", value: audienceActions },
-    { label: "Opens", value: safeOpenCount },
-    { label: "Listen clicks", value: safeListenClickCount },
-    { label: "Shares", value: safeShareCount },
-    { label: "Likes", value: safePositiveReactionCount },
-    { label: "Dislikes", value: safeNegativeReactionCount },
+    ...(compactYouTubePublishedAt
+      ? [{ label: "YouTube published", value: compactYouTubePublishedAt }]
+      : []),
+    ...(safeRedditUpvotes > 0 ? [{ label: "Reddit upvotes", value: formatWholeCount(safeRedditUpvotes) }] : []),
+    ...(safeRedditComments > 0 ? [{ label: "Reddit comments", value: formatWholeCount(safeRedditComments) }] : []),
+    ...(discussionShare !== null ? [{ label: "Discussion share", value: `${discussionShare}%` }] : []),
+    ...(safeOpenCount > 0 ? [{ label: "MooSQA opens", value: formatWholeCount(safeOpenCount) }] : []),
+    ...(safeListenClickCount > 0 ? [{ label: "Listen clicks", value: formatWholeCount(safeListenClickCount) }] : []),
+    ...(safeShareCount > 0 ? [{ label: "Shares", value: formatWholeCount(safeShareCount) }] : []),
+    ...(safePositiveReactionCount > 0 ? [{ label: "Likes", value: formatWholeCount(safePositiveReactionCount) }] : []),
+    ...(safeNegativeReactionCount > 0 ? [{ label: "Dislikes", value: formatWholeCount(safeNegativeReactionCount) }] : []),
   ];
+
+  if (items.length === 0) {
+    return null;
+  }
 
   return (
     <div className="border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
       <p className="section-kicker text-black/45">Audience signals</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {items.map((item) => (
           <div key={item.label} className="border border-[var(--color-line)] bg-[var(--color-paper)] px-4 py-3">
             <p className="section-kicker text-black/43">{item.label}</p>

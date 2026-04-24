@@ -3,6 +3,7 @@ import { ListeningLinks } from "@/components/listening-links";
 import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
+import { ReleaseStatsSummary } from "@/components/release-stats-summary";
 import {
   formatContextualReleaseDateLabel,
   formatRedditDateLabel,
@@ -31,11 +32,14 @@ type HeroFeatureProps = {
     qualityScore: number;
     scoreAverage: number;
     scoreCount: number;
+    score?: number | null;
+    commentCount?: number | null;
     redditPermalink: string;
     sourceUrl: string;
     youtubeUrl: string | null;
     youtubeMusicUrl: string | null;
     youtubeViewCount?: number | null;
+    youtubePublishedAt?: Date | null;
     bandcampUrl: string | null;
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
@@ -138,6 +142,13 @@ export function HeroFeature({ release, fromHref = null }: HeroFeatureProps) {
         </div>
 
         <div>
+          <ReleaseStatsSummary
+            youtubeViewCount={release.youtubeViewCount}
+            youtubePublishedAt={release.youtubePublishedAt}
+            redditUpvotes={release.score}
+            redditComments={release.commentCount}
+          />
+
           <RatingMeter
             releaseId={release.id}
             initialAverage={release.scoreAverage}

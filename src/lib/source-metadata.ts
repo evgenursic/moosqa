@@ -16,6 +16,7 @@ type SourceMetadata = {
   labelName?: string | null;
   releaseDate?: Date | null;
   youtubeViewCount?: number | null;
+  youtubePublishedAt?: Date | null;
   sourceImageUrl?: string | null;
   youtubeUrl?: string | null;
   youtubeMusicUrl?: string | null;
@@ -104,6 +105,10 @@ async function resolveSourceMetadataInternal(
       extractBandcampReleaseDate(html) ||
       extractTextualReleaseDate([sourceTitle, sourceExcerpt].filter(Boolean).join(". ")) ||
       null;
+    const youtubePublishedAt =
+      sourcePlatform === "youtube" || sourcePlatform === "youtube-music"
+        ? extractYouTubePublishedAtFromHtml(html, jsonLd) || releaseDate
+        : null;
     const youtubeViewCount =
       sourcePlatform === "youtube" || sourcePlatform === "youtube-music"
         ? extractYouTubeViewCountFromHtml(html, jsonLd)
@@ -148,6 +153,7 @@ async function resolveSourceMetadataInternal(
       labelName: rawLabelName,
       releaseDate,
       youtubeViewCount,
+      youtubePublishedAt,
       sourceImageUrl,
       youtubeUrl: platformLinks.youtubeUrl || platformLinkCandidates.youtubeUrl || null,
       youtubeMusicUrl:
@@ -704,6 +710,40 @@ function extractMetaReleaseDate(html: string) {
   return null;
 }
 
+export function extractYouTubePublishedAtFromHtml(html: string, jsonLd: unknown[] = []) {
+  const structuredDate = findReleaseDateInJsonLdNode(
+    jsonLd,
+    new Set(["VideoObject", "MusicRecording", "MusicAlbum", "MusicRelease"]),
+    "youtube",
+  );
+  if (structuredDate) {
+    return structuredDate;
+  }
+
+  const candidates = [
+    getMetaContent(html, "video:release_date"),
+    getMetaContent(html, "article:published_time"),
+    getMetaContent(html, "og:published_time"),
+    extractMetaItemPropDate(html, "uploadDate"),
+    extractMetaItemPropDate(html, "datePublished"),
+    extractJsonFieldDate(html, "uploadDate"),
+    extractJsonFieldDate(html, "datePublished"),
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate instanceof Date) {
+      return candidate;
+    }
+
+    const parsed = parseDateCandidate(candidate);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
 function extractBandcampReleaseDate(html: string) {
   const jsonMatch = html.match(/"album_release_date"\s*:\s*"([^"]+)"/i);
   const textMatch = html.match(/\breleased\s+([A-Z][a-z]+ \d{1,2}, \d{4})/i);
@@ -909,6 +949,7 @@ function mergeSourceMetadata(base: SourceMetadata, deep: SourceMetadata): Source
     labelName: deep.labelName || base.labelName || null,
     releaseDate: deep.releaseDate || base.releaseDate || null,
     youtubeViewCount: deep.youtubeViewCount || base.youtubeViewCount || null,
+    youtubePublishedAt: deep.youtubePublishedAt || base.youtubePublishedAt || null,
     sourceImageUrl: deep.sourceImageUrl || base.sourceImageUrl || null,
     youtubeUrl: deep.youtubeUrl || base.youtubeUrl || null,
     youtubeMusicUrl: deep.youtubeMusicUrl || base.youtubeMusicUrl || null,

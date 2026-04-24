@@ -115,14 +115,14 @@ async function AdminContent({ searchParams }: AdminPageProps) {
         <StatCard label="Follow users" value={String(dashboard.productAnalytics.funnel.followUsers)} />
         <StatCard label="Radar users" value={String(dashboard.productAnalytics.funnel.radarUsers)} />
         <StatCard label="Notif opt-in" value={String(dashboard.productAnalytics.funnel.notificationUsers)} />
-        <StatCard label="Notif eligible" value={String(dashboard.productAnalytics.funnel.notificationEligibleUsers)} />
+        <StatCard label="Opt-in / radar" value={`${dashboard.productAnalytics.funnel.notificationAdoptionRate}%`} />
       </section>
 
       <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Saves / 100 opens" value={String(dashboard.productAnalytics.conversion.savesPer100Opens)} />
         <StatCard label="Follows / 100 opens" value={String(dashboard.productAnalytics.conversion.followsPer100Opens)} />
-        <StatCard label="Notification sent" value={String(dashboard.productAnalytics.notifications.sent)} />
-        <StatCard label="Notification failed" value={String(dashboard.productAnalytics.notifications.failed)} />
+        <StatCard label="Notif eligible" value={String(dashboard.productAnalytics.funnel.notificationEligibleUsers)} />
+        <StatCard label="Eligible / radar" value={`${dashboard.productAnalytics.funnel.notificationEligibleRate}%`} />
       </section>
 
       <section className="mt-8 grid gap-4 lg:grid-cols-2">
@@ -151,7 +151,7 @@ async function AdminContent({ searchParams }: AdminPageProps) {
         </PanelCard>
       </section>
 
-      <section className="mt-8 grid gap-4 lg:grid-cols-3">
+      <section className="mt-8 grid gap-4 xl:grid-cols-4">
         <PanelCard title="Save conversion by release type">
           <div className="grid gap-3">
             {dashboard.productAnalytics.saveConversionByType.map((entry) => (
@@ -194,6 +194,36 @@ async function AdminContent({ searchParams }: AdminPageProps) {
               title="Detail to follow"
               subtitle="Across all public release pages"
               value={`${dashboard.productAnalytics.conversion.detailToFollowPer100Opens} / 100 opens`}
+            />
+          </div>
+        </PanelCard>
+
+        <PanelCard title="Notification pipeline">
+          <div className="grid gap-3">
+            <MetricRow
+              title="Queued"
+              subtitle="Jobs waiting to send"
+              value={String(dashboard.productAnalytics.notifications.pending)}
+            />
+            <MetricRow
+              title="Processing"
+              subtitle="Jobs currently running"
+              value={String(dashboard.productAnalytics.notifications.processing)}
+            />
+            <MetricRow
+              title="Sent"
+              subtitle="Delivered notification jobs"
+              value={String(dashboard.productAnalytics.notifications.sent)}
+            />
+            <MetricRow
+              title="Failed"
+              subtitle="Jobs that hard-failed"
+              value={String(dashboard.productAnalytics.notifications.failed)}
+            />
+            <MetricRow
+              title="Skipped"
+              subtitle="Jobs suppressed or ineligible"
+              value={String(dashboard.productAnalytics.notifications.skipped)}
             />
           </div>
         </PanelCard>
@@ -482,10 +512,41 @@ async function AdminContent({ searchParams }: AdminPageProps) {
             </div>
           </PanelCard>
 
-          <PanelCard title="Saved genre pressure">
+          <PanelCard title="Genre conversion">
             <div className="grid gap-3">
-              {dashboard.productAnalytics.topSavedGenres.map((entry) => (
-                <MetricRow key={entry.label} title={entry.label} subtitle="Saved taste signal" value={`${entry.count} saves`} />
+              {dashboard.productAnalytics.genrePerformance.map((entry) => (
+                <MetricRow
+                  key={entry.label}
+                  title={entry.label}
+                  subtitle={`${entry.opens} opens`}
+                  value={`${entry.savesPer100Opens} saves / 100 opens`}
+                />
+              ))}
+            </div>
+          </PanelCard>
+
+          <PanelCard title="Source performance">
+            <div className="grid gap-3">
+              {dashboard.productAnalytics.sourcePerformance.map((entry) => (
+                <MetricRow
+                  key={entry.label}
+                  title={entry.label}
+                  subtitle={`${entry.opens} opens / ${entry.listenClicks} listen clicks`}
+                  value={`${entry.savesPer100Opens} saves / 100 opens`}
+                />
+              ))}
+            </div>
+          </PanelCard>
+
+          <PanelCard title="Editorial impact">
+            <div className="grid gap-3">
+              {dashboard.productAnalytics.editorialPerformance.map((entry) => (
+                <MetricRow
+                  key={entry.label}
+                  title={entry.label}
+                  subtitle={`${entry.releaseCount} releases / ${entry.opens} opens`}
+                  value={`${entry.savesPer100Opens} saves / 100 opens`}
+                />
               ))}
             </div>
           </PanelCard>

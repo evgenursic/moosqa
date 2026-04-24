@@ -105,8 +105,12 @@ function needsEnrichment(release: EnrichableRelease, wantsAi: boolean) {
 
   if (
     isStale &&
-    !release.youtubeViewCount &&
-    (detectPlatform(release.sourceUrl) === "youtube" || Boolean(release.youtubeUrl))
+    (
+      detectPlatform(release.sourceUrl) === "youtube" ||
+      detectPlatform(release.sourceUrl) === "youtube-music" ||
+      Boolean(release.youtubeUrl) ||
+      Boolean(release.youtubeMusicUrl)
+    )
   ) {
     return true;
   }
@@ -206,6 +210,13 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
           title: release.title,
         })
       : null;
+  const supplementalYouTubeMetadata = await resolveSupplementalYouTubeMetadata(
+    release,
+    sourceMetadata,
+    fallbackBandcampMetadata,
+    searchedBandcampMetadata,
+    musicMetadata,
+  );
 
   const sourcePlatform = detectPlatform(release.sourceUrl);
 
@@ -348,13 +359,22 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
       release.releaseDate ||
       null,
     youtubeViewCount:
+      supplementalYouTubeMetadata?.youtubeViewCount ||
       sourceMetadata.youtubeViewCount ||
       fallbackBandcampMetadata?.youtubeViewCount ||
       searchedBandcampMetadata?.youtubeViewCount ||
       release.youtubeViewCount ||
       null,
+    youtubePublishedAt:
+      supplementalYouTubeMetadata?.youtubePublishedAt ||
+      sourceMetadata.youtubePublishedAt ||
+      fallbackBandcampMetadata?.youtubePublishedAt ||
+      searchedBandcampMetadata?.youtubePublishedAt ||
+      release.youtubePublishedAt ||
+      null,
     youtubeUrl:
       directYouTube ||
+      supplementalYouTubeMetadata?.youtubeUrl ||
       sourceMetadata.youtubeUrl ||
       fallbackBandcampMetadata?.youtubeUrl ||
       searchedBandcampMetadata?.youtubeUrl ||
@@ -363,6 +383,7 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
       null,
     youtubeMusicUrl:
       directYouTubeMusic ||
+      supplementalYouTubeMetadata?.youtubeMusicUrl ||
       sourceMetadata.youtubeMusicUrl ||
       fallbackBandcampMetadata?.youtubeMusicUrl ||
       searchedBandcampMetadata?.youtubeMusicUrl ||
@@ -400,6 +421,7 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
       release.imageUrl ||
       musicMetadata.coverArtUrl ||
       musicMetadata.thumbnailArtUrl ||
+      supplementalYouTubeMetadata?.sourceImageUrl ||
       sourceMetadata.sourceImageUrl ||
       fallbackBandcampMetadata?.sourceImageUrl ||
       searchedBandcampMetadata?.sourceImageUrl ||
@@ -409,11 +431,51 @@ export async function buildReleaseEnrichment(release: EnrichableRelease) {
       release.thumbnailUrl ||
       musicMetadata.thumbnailArtUrl ||
       musicMetadata.coverArtUrl ||
+      supplementalYouTubeMetadata?.sourceImageUrl ||
       sourceMetadata.sourceImageUrl ||
       fallbackBandcampMetadata?.sourceImageUrl ||
       searchedBandcampMetadata?.sourceImageUrl ||
       null,
   };
+}
+
+async function resolveSupplementalYouTubeMetadata(
+  release: EnrichableRelease,
+  sourceMetadata: Awaited<ReturnType<typeof resolveSourceMetadata>>,
+  fallbackBandcampMetadata: Awaited<ReturnType<typeof resolveSourceMetadata>> | null,
+  searchedBandcampMetadata: Awaited<ReturnType<typeof resolveSourceMetadata>> | null,
+  musicMetadata: MusicMetadata,
+) {
+  const sourcePlatform = detectPlatform(release.sourceUrl);
+  if (sourcePlatform === "youtube" || sourcePlatform === "youtube-music") {
+    return null;
+  }
+
+  const youtubeUrl =
+    sourceMetadata.youtubeUrl ||
+    fallbackBandcampMetadata?.youtubeUrl ||
+    searchedBandcampMetadata?.youtubeUrl ||
+    musicMetadata.youtubeUrl ||
+    release.youtubeUrl ||
+    null;
+  const youtubeMusicUrl =
+    sourceMetadata.youtubeMusicUrl ||
+    fallbackBandcampMetadata?.youtubeMusicUrl ||
+    searchedBandcampMetadata?.youtubeMusicUrl ||
+    musicMetadata.youtubeMusicUrl ||
+    release.youtubeMusicUrl ||
+    null;
+  const candidateUrl = youtubeUrl || youtubeMusicUrl;
+
+  if (!candidateUrl || candidateUrl === release.sourceUrl) {
+    return null;
+  }
+
+  return resolveSourceMetadata(candidateUrl, {
+    artistName: release.artistName,
+    projectTitle: release.projectTitle,
+    title: release.title,
+  }).catch(() => null);
 }
 
 function normalizeGenre(value: string | null | undefined) {
@@ -472,6 +534,10 @@ function scoreEnrichmentPriority(release: EnrichableRelease, wantsAi: boolean) {
 
   if (!release.youtubeUrl || !release.youtubeMusicUrl || !release.bandcampUrl) {
     score += 7;
+  }
+
+  if (!release.youtubeViewCount || !release.youtubePublishedAt) {
+    score += 5;
   }
 
   if (

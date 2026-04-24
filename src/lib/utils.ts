@@ -10,6 +10,14 @@ const UTC_DATE_ONLY_FORMATTER = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 
+const UTC_COMPACT_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: "UTC",
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
 const UTC_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   timeZone: "UTC",
   hour: "2-digit",
@@ -177,6 +185,23 @@ export function formatYouTubeViewsLabel(value: number | null | undefined) {
   }
 
   return `YouTube ${COMPACT_NUMBER_FORMATTER.format(Math.round(value))} views`;
+}
+
+export function formatCompactWholeCount(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  return COMPACT_NUMBER_FORMATTER.format(Math.round(value));
+}
+
+export function formatCompactUtcDate(date: Date | string | null | undefined) {
+  const safeDate = coerceDateValue(date);
+  if (!safeDate) {
+    return null;
+  }
+
+  return UTC_COMPACT_DATE_FORMATTER.format(safeDate);
 }
 
 export function formatWholeCount(value: number | null | undefined) {

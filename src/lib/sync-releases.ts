@@ -1032,6 +1032,7 @@ async function upsertNormalizedReleases(
       youtubeUrl: true,
       youtubeMusicUrl: true,
       youtubeViewCount: true,
+      youtubePublishedAt: true,
       bandcampUrl: true,
       officialWebsiteUrl: true,
       officialStoreUrl: true,
@@ -1147,6 +1148,7 @@ async function buildReleaseDataForUpsert(
     youtubeUrl: string | null;
     youtubeMusicUrl: string | null;
     youtubeViewCount: number | null;
+    youtubePublishedAt: Date | null;
     bandcampUrl: string | null;
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
@@ -1187,7 +1189,7 @@ async function buildReleaseDataForUpsert(
       !existing?.genreName ||
       !isSpecificGenreProfile(existing.genreName) ||
       (
-        !existing?.youtubeViewCount &&
+        (!existing?.youtubeViewCount || !existing?.youtubePublishedAt) &&
         (release.sourceUrl.includes("youtube.com") || Boolean(existing?.youtubeUrl))
       ) ||
       !hasStableListeningLinks ||
@@ -1271,6 +1273,10 @@ async function buildReleaseDataForUpsert(
       youtubeViewCount:
         effectiveSourceMetadata?.youtubeViewCount ||
         existing?.youtubeViewCount ||
+        null,
+      youtubePublishedAt:
+        existing?.youtubePublishedAt ||
+        effectiveSourceMetadata?.youtubePublishedAt ||
         null,
       imageUrl:
         release.imageUrl ||
@@ -1389,6 +1395,8 @@ async function buildReleaseDataForUpsert(
     youtubeUrl: sourceMetadata?.youtubeUrl || existing?.youtubeUrl || null,
     youtubeMusicUrl: sourceMetadata?.youtubeMusicUrl || existing?.youtubeMusicUrl || null,
     youtubeViewCount: sourceMetadata?.youtubeViewCount || existing?.youtubeViewCount || null,
+    youtubePublishedAt:
+      existing?.youtubePublishedAt || sourceMetadata?.youtubePublishedAt || null,
     bandcampUrl: sourceMetadata?.bandcampUrl || existing?.bandcampUrl || null,
     officialWebsiteUrl: sourceMetadata?.officialWebsiteUrl || existing?.officialWebsiteUrl || null,
     officialStoreUrl: sourceMetadata?.officialStoreUrl || existing?.officialStoreUrl || null,
@@ -1607,6 +1615,7 @@ function mergeSourceMetadataHints(
         labelName?: string | null;
         releaseDate?: Date | null;
         youtubeViewCount?: number | null;
+        youtubePublishedAt?: Date | null;
         sourceImageUrl?: string | null;
         youtubeUrl?: string | null;
         youtubeMusicUrl?: string | null;
@@ -1624,6 +1633,7 @@ function mergeSourceMetadataHints(
         labelName?: string | null;
         releaseDate?: Date | null;
         youtubeViewCount?: number | null;
+        youtubePublishedAt?: Date | null;
         sourceImageUrl?: string | null;
         youtubeUrl?: string | null;
         youtubeMusicUrl?: string | null;
@@ -1646,6 +1656,7 @@ function mergeSourceMetadataHints(
     labelName: primary?.labelName || fallback?.labelName || null,
     releaseDate: primary?.releaseDate || fallback?.releaseDate || null,
     youtubeViewCount: primary?.youtubeViewCount || fallback?.youtubeViewCount || null,
+    youtubePublishedAt: primary?.youtubePublishedAt || fallback?.youtubePublishedAt || null,
     sourceImageUrl: primary?.sourceImageUrl || fallback?.sourceImageUrl || null,
     youtubeUrl: primary?.youtubeUrl || fallback?.youtubeUrl || null,
     youtubeMusicUrl: primary?.youtubeMusicUrl || fallback?.youtubeMusicUrl || null,
@@ -1717,6 +1728,7 @@ function hasCoreReleaseDataChanges(
     youtubeUrl: string | null;
     youtubeMusicUrl: string | null;
     youtubeViewCount: number | null;
+    youtubePublishedAt: Date | null;
     bandcampUrl: string | null;
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
@@ -1751,6 +1763,7 @@ function hasCoreReleaseDataChanges(
     youtubeUrl: string | null;
     youtubeMusicUrl: string | null;
     youtubeViewCount: number | null;
+    youtubePublishedAt: Date | null;
     bandcampUrl: string | null;
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
@@ -1786,6 +1799,7 @@ function hasCoreReleaseDataChanges(
     existing.youtubeUrl !== next.youtubeUrl ||
     existing.youtubeMusicUrl !== next.youtubeMusicUrl ||
     existing.youtubeViewCount !== next.youtubeViewCount ||
+    !datesEqual(existing.youtubePublishedAt, next.youtubePublishedAt) ||
     existing.bandcampUrl !== next.bandcampUrl ||
     existing.officialWebsiteUrl !== next.officialWebsiteUrl ||
     existing.officialStoreUrl !== next.officialStoreUrl ||
