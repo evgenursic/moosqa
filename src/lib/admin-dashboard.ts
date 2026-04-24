@@ -70,6 +70,13 @@ type SearchReleaseRow = {
   imageUrlOverride: string | null;
   sourceUrl: string;
   sourceUrlOverride: string | null;
+  youtubeUrl: string | null;
+  youtubeMusicUrl: string | null;
+  youtubeViewCount: number | null;
+  youtubePublishedAt: Date | null;
+  bandcampUrl: string | null;
+  officialWebsiteUrl: string | null;
+  officialStoreUrl: string | null;
   releaseType: string;
   publishedAt: Date;
   qualityScore: number;
@@ -628,6 +635,13 @@ async function searchAdminReleases(query: string) {
       imageUrlOverride: true,
       sourceUrl: true,
       sourceUrlOverride: true,
+      youtubeUrl: true,
+      youtubeMusicUrl: true,
+      youtubeViewCount: true,
+      youtubePublishedAt: true,
+      bandcampUrl: true,
+      officialWebsiteUrl: true,
+      officialStoreUrl: true,
       releaseType: true,
       publishedAt: true,
       qualityScore: true,

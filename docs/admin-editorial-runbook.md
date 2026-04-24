@@ -16,6 +16,7 @@
   - MooSQA upgrades that exact signed-in user to `ADMIN` and records an audit row
 - Ongoing role changes:
   - only current `ADMIN` users can assign `EDITOR`, `ADMIN`, or revert to `USER`
+  - granting `ADMIN` or reverting a user to `USER` requires typing the target email in the confirmation field and providing a short reason
   - every role change writes `UserRoleAssignmentAudit`
   - the last remaining admin cannot demote themselves out of `ADMIN`
 - If role changes fail, check:
@@ -27,9 +28,11 @@
 
 - search releases by slug, artist, title, or label
 - override public genre, summary, cover URL, and primary source URL
+- edit persisted YouTube metadata and official/Bandcamp links when source enrichment needs a manual correction
 - hide irrelevant cards without deleting the release row
 - feature priority releases with `isFeatured` plus `editorialRank`
-- create lightweight editorial collections and attach releases to them
+- create or edit lightweight editorial collections and attach releases to them
+- run a bounded weak-card repair pass from admin after reviewing the repair queue
 - publish editor-facing work through `/picks` and `/collections/[slug]`
 - inspect recent editorial audit history and weak-card repair candidates
 
@@ -51,6 +54,7 @@
 - keep summaries short and specific; do not reintroduce generic fallback copy
 - use `editorialNotes` for internal reasoning that should survive future repairs
 - collections are intentionally lightweight; they are not a full CMS
+- run admin-triggered repair in small batches; use the scheduled repair workflow for routine background maintenance
 
 ## Debugging
 

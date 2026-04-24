@@ -8,6 +8,7 @@ import {
   assignUserRoleAction,
   bootstrapAdminAccessAction,
   createEditorialCollectionAction,
+  runWeakCardRepairAction,
   updateReleaseEditorialAction,
 } from "@/app/admin/actions";
 import { SiteFooter } from "@/components/site-footer";
@@ -266,6 +267,12 @@ async function AdminContent({ searchParams }: AdminPageProps) {
                   <LabeledInput name="reason" label="Reason" placeholder="Why this role is changing." />
                 </div>
                 <div className="md:col-span-2">
+                  <LabeledInput name="confirmation" label="Confirm sensitive changes" placeholder="Type the target email for Admin or User changes." />
+                  <p className="mt-2 text-xs leading-5 text-black/50">
+                    Required when granting Admin or reverting someone to User. Include a reason with at least 6 characters.
+                  </p>
+                </div>
+                <div className="md:col-span-2">
                   <button
                     type="submit"
                     className="inline-flex min-h-11 items-center justify-center border border-[var(--color-ink)] bg-[var(--color-ink)] px-4 py-3 text-xs uppercase tracking-[0.16em] text-white transition hover:bg-[var(--color-accent-strong)]"
@@ -351,6 +358,39 @@ async function AdminContent({ searchParams }: AdminPageProps) {
                 </div>
                 <h2 className="mt-3 text-3xl leading-[0.96] text-[var(--color-ink)] serif-display">{collection.title}</h2>
                 {collection.description ? <p className="mt-2 text-sm leading-7 text-black/62">{collection.description}</p> : null}
+                <form action={createEditorialCollectionAction} className="mt-4 grid gap-3 border-t border-[var(--color-soft-line)] pt-4">
+                  <input type="hidden" name="slug" value={collection.slug} />
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem]">
+                    <LabeledInput name="title" label="Edit title" defaultValue={collection.title} placeholder="Collection title" />
+                    <label className="grid gap-2 text-xs uppercase tracking-[0.16em] text-black/58">
+                      Type
+                      <select
+                        name="type"
+                        defaultValue={collection.type}
+                        className="min-h-11 border border-[var(--color-line)] bg-[var(--color-paper)] px-3 py-2 text-sm normal-case tracking-normal text-[var(--color-ink)]"
+                      >
+                        <option value="EDITORS_PICK">Editors pick</option>
+                        <option value="CURATED">Curated</option>
+                        <option value="ROUNDUP">Roundup</option>
+                        <option value="SEASONAL">Seasonal</option>
+                        <option value="BEST_OF">Best of</option>
+                      </select>
+                    </label>
+                  </div>
+                  <LabeledInput name="description" label="Edit description" defaultValue={collection.description || ""} placeholder="Short editorial context." />
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-3 text-sm text-black/62">
+                      <input type="checkbox" name="isPublished" defaultChecked={collection.isPublished} className="h-4 w-4 accent-[var(--color-accent-strong)]" />
+                      Published
+                    </label>
+                    <button
+                      type="submit"
+                      className="inline-flex min-h-11 items-center justify-center border border-[var(--color-line)] px-4 py-3 text-xs uppercase tracking-[0.16em] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+                    >
+                      Update collection
+                    </button>
+                  </div>
+                </form>
                 <div className="mt-4 grid gap-2">
                   {collection.entries.map((entry) => (
                     <div key={entry.id} className="flex items-center justify-between gap-4 border-t border-[var(--color-soft-line)] pt-2 first:border-t-0 first:pt-0">
@@ -427,6 +467,19 @@ async function AdminContent({ searchParams }: AdminPageProps) {
                     <LabeledInput name="imageUrlOverride" label="Cover override URL" defaultValue={release.imageUrlOverride || ""} placeholder={release.imageUrl || "https://..."} />
                     <LabeledInput name="sourceUrlOverride" label="Primary link override" defaultValue={release.sourceUrlOverride || ""} placeholder={release.sourceUrl} />
                   </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <LabeledInput name="youtubeUrl" label="YouTube URL" defaultValue={release.youtubeUrl || ""} placeholder="https://www.youtube.com/watch?v=..." />
+                    <LabeledInput name="youtubeMusicUrl" label="YouTube Music URL" defaultValue={release.youtubeMusicUrl || ""} placeholder="https://music.youtube.com/watch?v=..." />
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <LabeledInput name="youtubeViewCount" label="YouTube views" type="number" defaultValue={release.youtubeViewCount === null ? "" : String(release.youtubeViewCount)} placeholder="42800" />
+                    <LabeledInput name="youtubePublishedAt" label="YouTube published date" type="date" defaultValue={formatDateInput(release.youtubePublishedAt)} placeholder="2026-04-24" />
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <LabeledInput name="bandcampUrl" label="Bandcamp URL" defaultValue={release.bandcampUrl || ""} placeholder="https://artist.bandcamp.com/..." />
+                    <LabeledInput name="officialWebsiteUrl" label="Website URL" defaultValue={release.officialWebsiteUrl || ""} placeholder="https://artist.com" />
+                    <LabeledInput name="officialStoreUrl" label="Store URL" defaultValue={release.officialStoreUrl || ""} placeholder="https://store.artist.com" />
+                  </div>
                   <LabeledInput name="summaryOverride" label="Summary override" defaultValue={release.summaryOverride || ""} placeholder={release.summary || "Short editorial summary"} />
                   <LabeledInput name="editorialNotes" label="Editorial notes" defaultValue={release.editorialNotes || ""} placeholder="Internal context for future edits." />
                   <div className="grid gap-3 md:grid-cols-2">
@@ -487,7 +540,21 @@ async function AdminContent({ searchParams }: AdminPageProps) {
 
         <div className="grid gap-4">
           <PanelCard title="Repair queue">
-            <div className="grid gap-3">
+            <div id="repair" className="grid gap-4">
+              <form action={runWeakCardRepairAction} className="grid gap-3 border border-[var(--color-soft-line)] bg-[var(--color-paper)] p-4">
+                <div className="grid gap-3 md:grid-cols-[8rem_minmax(0,1fr)]">
+                  <LabeledInput name="limit" label="Limit" type="number" defaultValue="4" placeholder="4" />
+                  <LabeledInput name="reason" label="Reason" placeholder="Repair stale weak cards after editorial review." />
+                </div>
+                <div>
+                  <button
+                    type="submit"
+                    className="inline-flex min-h-11 items-center justify-center border border-[var(--color-ink)] bg-[var(--color-ink)] px-4 py-3 text-xs uppercase tracking-[0.16em] text-white transition hover:bg-[var(--color-accent-strong)]"
+                  >
+                    Run bounded repair
+                  </button>
+                </div>
+              </form>
               {dashboard.quality.summaryAudit.repairCandidates.slice(0, 8).map((release) => (
                 <MetricRow
                   key={release.id}
@@ -641,16 +708,19 @@ function LabeledInput({
   label,
   placeholder,
   defaultValue,
+  type = "text",
 }: {
   name: string;
   label: string;
   placeholder?: string;
   defaultValue?: string;
+  type?: string;
 }) {
   return (
     <label className="grid gap-2 text-xs uppercase tracking-[0.16em] text-black/58">
       {label}
       <input
+        type={type}
         name={name}
         defaultValue={defaultValue}
         placeholder={placeholder}
@@ -666,4 +736,12 @@ function readSearchParam(value: string | string[] | undefined) {
   }
 
   return value || "";
+}
+
+function formatDateInput(value: Date | null | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  return value.toISOString().slice(0, 10);
 }

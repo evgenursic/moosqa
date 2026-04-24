@@ -5,9 +5,13 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { EditorialCollectionType, UserRole } from "@/generated/prisma/enums";
+import { validateRoleAssignmentConfirmation } from "@/lib/admin-role-policy";
 import { getAdminAccessState } from "@/lib/admin-session";
 import { ensureDatabase } from "@/lib/database";
 import { prisma } from "@/lib/prisma";
+import { assessReleaseQuality } from "@/lib/release-quality";
+import { normalizePublicHttpUrl } from "@/lib/safe-url";
+import { runWeakCardReprocess } from "@/lib/sync-releases";
 
 const releaseEditorialSchema = z.object({
   releaseId: z.string().min(1),
@@ -16,6 +20,13 @@ const releaseEditorialSchema = z.object({
   summaryOverride: z.string().max(420).optional(),
   imageUrlOverride: z.string().max(500).optional(),
   sourceUrlOverride: z.string().max(500).optional(),
+  youtubeUrl: z.string().max(500).optional(),
+  youtubeMusicUrl: z.string().max(500).optional(),
+  youtubeViewCount: z.coerce.number().int().min(0).max(2_147_483_647).optional(),
+  youtubePublishedAt: z.date().optional(),
+  bandcampUrl: z.string().max(500).optional(),
+  officialWebsiteUrl: z.string().max(500).optional(),
+  officialStoreUrl: z.string().max(500).optional(),
   editorialNotes: z.string().max(800).optional(),
   hiddenReason: z.string().max(200).optional(),
   isHidden: z.boolean(),
@@ -46,6 +57,12 @@ const bootstrapSchema = z.object({
 const roleAssignmentSchema = z.object({
   email: z.string().email().max(160),
   role: z.nativeEnum(UserRole),
+  confirmation: z.string().max(160).optional(),
+  reason: z.string().max(200).optional(),
+});
+
+const weakCardRepairSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(8).default(4),
   reason: z.string().max(200).optional(),
 });
 
@@ -58,6 +75,13 @@ export async function updateReleaseEditorialAction(formData: FormData) {
     summaryOverride: readOptionalString(formData, "summaryOverride"),
     imageUrlOverride: readOptionalString(formData, "imageUrlOverride"),
     sourceUrlOverride: readOptionalString(formData, "sourceUrlOverride"),
+    youtubeUrl: readOptionalString(formData, "youtubeUrl"),
+    youtubeMusicUrl: readOptionalString(formData, "youtubeMusicUrl"),
+    youtubeViewCount: readOptionalString(formData, "youtubeViewCount") || undefined,
+    youtubePublishedAt: readOptionalDate(formData, "youtubePublishedAt") || undefined,
+    bandcampUrl: readOptionalString(formData, "bandcampUrl"),
+    officialWebsiteUrl: readOptionalString(formData, "officialWebsiteUrl"),
+    officialStoreUrl: readOptionalString(formData, "officialStoreUrl"),
     editorialNotes: readOptionalString(formData, "editorialNotes"),
     hiddenReason: readOptionalString(formData, "hiddenReason"),
     isHidden: readCheckbox(formData, "isHidden"),
@@ -73,25 +97,83 @@ export async function updateReleaseEditorialAction(formData: FormData) {
       summaryOverride: true,
       imageUrlOverride: true,
       sourceUrlOverride: true,
+      youtubeUrl: true,
+      youtubeMusicUrl: true,
+      youtubeViewCount: true,
+      youtubePublishedAt: true,
+      bandcampUrl: true,
+      officialWebsiteUrl: true,
+      officialStoreUrl: true,
       editorialNotes: true,
       isHidden: true,
       hiddenReason: true,
       isFeatured: true,
       editorialRank: true,
+      releaseType: true,
+      genreName: true,
+      imageUrl: true,
+      thumbnailUrl: true,
+      releaseDate: true,
+      publishedAt: true,
+      metadataEnrichedAt: true,
+      qualityCheckedAt: true,
+      genreConfidence: true,
     },
+  });
+
+  if (!before) {
+    redirect(`/admin?q=${encodeURIComponent(parsed.slug)}&editorial=missing#search`);
+  }
+
+  const nextYoutubeUrl = readNormalizedOptionalPublicUrl(parsed.youtubeUrl, parsed.slug);
+  const nextYoutubeMusicUrl = readNormalizedOptionalPublicUrl(parsed.youtubeMusicUrl, parsed.slug);
+  const nextBandcampUrl = readNormalizedOptionalPublicUrl(parsed.bandcampUrl, parsed.slug);
+  const nextOfficialWebsiteUrl = readNormalizedOptionalPublicUrl(parsed.officialWebsiteUrl, parsed.slug);
+  const nextOfficialStoreUrl = readNormalizedOptionalPublicUrl(parsed.officialStoreUrl, parsed.slug);
+  const nextImageOverride = readNormalizedOptionalPublicUrl(parsed.imageUrlOverride, parsed.slug);
+  const nextSourceOverride = readNormalizedOptionalPublicUrl(parsed.sourceUrlOverride, parsed.slug);
+
+  const checkedAt = new Date();
+  const qualitySnapshot = assessReleaseQuality({
+    releaseType: before.releaseType,
+    genreName: parsed.genreOverride?.trim() || before.genreName,
+    imageUrl: nextImageOverride || before.imageUrl,
+    thumbnailUrl: before.thumbnailUrl,
+    youtubeUrl: nextYoutubeUrl,
+    youtubeMusicUrl: nextYoutubeMusicUrl,
+    bandcampUrl: nextBandcampUrl,
+    officialWebsiteUrl: nextOfficialWebsiteUrl,
+    officialStoreUrl: nextOfficialStoreUrl,
+    releaseDate: before.releaseDate,
+    publishedAt: before.publishedAt,
+    metadataEnrichedAt: before.metadataEnrichedAt,
+    qualityCheckedAt: checkedAt,
+    genreConfidence: before.genreConfidence,
   });
 
   const nextData = {
     genreOverride: parsed.genreOverride?.trim() || null,
     summaryOverride: parsed.summaryOverride?.trim() || null,
-    imageUrlOverride: parsed.imageUrlOverride?.trim() || null,
-    sourceUrlOverride: parsed.sourceUrlOverride?.trim() || null,
+    imageUrlOverride: nextImageOverride || null,
+    sourceUrlOverride: nextSourceOverride || null,
+    youtubeUrl: nextYoutubeUrl || null,
+    youtubeMusicUrl: nextYoutubeMusicUrl || null,
+    youtubeViewCount: parsed.youtubeViewCount ?? null,
+    youtubePublishedAt: parsed.youtubePublishedAt ?? null,
+    bandcampUrl: nextBandcampUrl || null,
+    officialWebsiteUrl: nextOfficialWebsiteUrl || null,
+    officialStoreUrl: nextOfficialStoreUrl || null,
     editorialNotes: parsed.editorialNotes?.trim() || null,
     isHidden: parsed.isHidden,
     hiddenReason: parsed.isHidden ? parsed.hiddenReason?.trim() || "Hidden by editor." : null,
     isFeatured: parsed.isFeatured,
     editorialRank: parsed.editorialRank,
     featuredAt: parsed.isFeatured ? new Date() : null,
+    artworkStatus: qualitySnapshot.artworkStatus,
+    genreStatus: qualitySnapshot.genreStatus,
+    linkStatus: qualitySnapshot.linkStatus,
+    qualityScore: qualitySnapshot.qualityScore,
+    qualityCheckedAt: checkedAt,
     editorialUpdatedAt: new Date(),
     editorialUpdatedBy: admin.id,
   };
@@ -299,9 +381,21 @@ export async function assignUserRoleAction(formData: FormData) {
   const parsed = roleAssignmentSchema.parse({
     email: readString(formData, "email").toLowerCase(),
     role: readString(formData, "role"),
+    confirmation: readOptionalString(formData, "confirmation"),
     reason: readOptionalString(formData, "reason"),
   });
   await ensureDatabase();
+
+  if (
+    !validateRoleAssignmentConfirmation({
+      email: parsed.email,
+      nextRole: parsed.role,
+      confirmation: parsed.confirmation,
+      reason: parsed.reason,
+    })
+  ) {
+    redirect(`/admin?roles=confirm-required&email=${encodeURIComponent(parsed.email)}#roles`);
+  }
 
   const target = await prisma.userProfile.findUnique({
     where: {
@@ -357,6 +451,37 @@ export async function assignUserRoleAction(formData: FormData) {
 
   revalidatePath("/admin");
   redirect(`/admin?roles=saved&email=${encodeURIComponent(parsed.email)}#roles`);
+}
+
+export async function runWeakCardRepairAction(formData: FormData) {
+  const admin = await requireAdminActionUser();
+  const parsed = weakCardRepairSchema.parse({
+    limit: readOptionalString(formData, "limit") || "4",
+    reason: readOptionalString(formData, "reason"),
+  });
+  await ensureDatabase();
+
+  const result = await runWeakCardReprocess(parsed.limit);
+
+  await prisma.releaseEditorialAudit.create({
+    data: {
+      releaseId: await readFallbackAuditReleaseId(),
+      editorUserId: admin.id,
+      action: "quality.repair",
+      detailsJson: JSON.stringify({
+        limit: parsed.limit,
+        reason: parsed.reason?.trim() || null,
+        result,
+      }),
+    },
+  }).catch(() => undefined);
+
+  revalidatePath("/admin");
+  revalidatePath("/debug");
+  revalidateTag("releases", "max");
+  revalidateTag("quality-dashboard", "max");
+  revalidateTag("ops-dashboard", "max");
+  redirect(`/admin?repair=queued-${result.queued}&checked=${result.checked}&improved=${result.improved}#repair`);
 }
 
 async function requireAdminActionUser() {
@@ -418,6 +543,30 @@ function readString(formData: FormData, key: string) {
 function readOptionalString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
+}
+
+function readOptionalDate(formData: FormData, key: string) {
+  const value = readOptionalString(formData, key);
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function readNormalizedOptionalPublicUrl(value: string | null | undefined, slug: string) {
+  const normalized = value?.trim() || "";
+  if (!normalized) {
+    return null;
+  }
+
+  const publicUrl = normalizePublicHttpUrl(normalized);
+  if (!publicUrl) {
+    redirect(`/admin?q=${encodeURIComponent(slug)}&editorial=invalid-url#search`);
+  }
+
+  return publicUrl;
 }
 
 async function readFallbackAuditReleaseId() {
