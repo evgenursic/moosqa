@@ -5,6 +5,7 @@ import { extractYouTubeViewCountFromHtml } from "../../src/lib/source-metadata";
 import {
   formatDetailedUtcTimestamp,
   formatDiscussionShare,
+  formatContextualReleaseDateLabel,
   formatPrimaryReleaseDateLabel,
   formatRedditDateLabel,
   formatYouTubeViewsLabel,
@@ -40,6 +41,14 @@ describe("presentation metadata helpers", () => {
     assert.equal(
       formatPrimaryReleaseDateLabel(ReleaseType.SINGLE, "2026-04-24T00:00:00.000Z"),
       "Release Friday, April 24, 2026",
+    );
+    assert.equal(
+      formatContextualReleaseDateLabel(
+        ReleaseType.SINGLE,
+        "2026-04-24T14:00:00.000Z",
+        "YouTube",
+      ),
+      "YouTube Friday, April 24, 2026 at 14:00 UTC",
     );
   });
 

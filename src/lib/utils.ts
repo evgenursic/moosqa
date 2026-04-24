@@ -148,15 +148,15 @@ export function formatContextualReleaseDateLabel(
 
   const outlet = (outletName || "").trim().toLowerCase();
   if (outlet === "youtube") {
-    return `YouTube ${formatPubDate(safeDate)}`;
+    return `YouTube ${formatReleaseMoment(safeDate)}`;
   }
 
   if (outlet === "youtube music") {
-    return `YouTube Music ${formatPubDate(safeDate)}`;
+    return `YouTube Music ${formatReleaseMoment(safeDate)}`;
   }
 
   if (outlet === "bandcamp") {
-    return `Bandcamp ${formatPubDate(safeDate)}`;
+    return `Bandcamp ${formatReleaseMoment(safeDate)}`;
   }
 
   return formatPrimaryReleaseDateLabel(releaseType, safeDate);
