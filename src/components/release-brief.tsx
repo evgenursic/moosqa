@@ -5,6 +5,8 @@ import { ReleaseLink } from "@/components/release-link";
 import {
   cn,
   formatContextualReleaseDateLabel,
+  formatCompactUtcDate,
+  formatCompactWholeCount,
   formatRedditDateLabel,
   formatScore,
   getDisplayGenre,
@@ -25,6 +27,7 @@ type ReleaseBriefProps = {
     youtubeUrl?: string | null;
     youtubeMusicUrl?: string | null;
     youtubeViewCount?: number | null;
+    youtubePublishedAt?: Date | string | null;
     bandcampUrl?: string | null;
     officialWebsiteUrl?: string | null;
     officialStoreUrl?: string | null;
@@ -47,6 +50,7 @@ export function ReleaseBrief({
 }: ReleaseBriefProps) {
   const directLinks = getListeningLinks(release).filter((link) => link.isDirect);
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
+  const youtubeMetadata = buildYouTubeMetadataLine(release);
 
   return (
     <ReleaseLink
@@ -86,12 +90,39 @@ export function ReleaseBrief({
           {release.artistName && release.projectTitle ? release.projectTitle : release.title}
         </p>
 
+        {youtubeMetadata ? (
+          <p
+            aria-label={youtubeMetadata.ariaLabel}
+            className="mt-2 text-[11px] uppercase tracking-[0.18em] text-black/52"
+          >
+            {youtubeMetadata.label}
+          </p>
+        ) : null}
+
         <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-black/52">
           {renderEmphasis(emphasis, release, directLinks.length)}
         </p>
       </div>
     </ReleaseLink>
   );
+}
+
+function buildYouTubeMetadataLine(release: ReleaseBriefProps["release"]) {
+  const youtubeViews = formatCompactWholeCount(release.youtubeViewCount);
+  const youtubePublished = formatCompactUtcDate(release.youtubePublishedAt);
+  const parts = [
+    youtubeViews ? `${youtubeViews} views` : null,
+    youtubePublished ? `Published ${youtubePublished}` : null,
+  ].filter((part): part is string => Boolean(part));
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  return {
+    label: `YouTube ${parts.join(" / ")}`,
+    ariaLabel: `YouTube metadata: ${parts.join("; ")}`,
+  };
 }
 
 function renderEmphasis(
