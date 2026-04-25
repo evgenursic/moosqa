@@ -14,9 +14,20 @@ describe("release metric badge helpers", () => {
       }),
       {
         kind: "youtube",
-        label: "12.4K YouTube views",
+        label: "12.4K views",
         ariaLabel: "12.4K YouTube views",
       },
+    );
+  });
+
+  it("coerces string metric values before deciding the primary signal", () => {
+    assert.equal(
+      buildBestReleaseMetricSignal({
+        youtubeViewCount: "2,103",
+        redditUpvotes: "84",
+        redditComments: "16",
+      })?.label,
+      "2.1K views",
     );
   });
 

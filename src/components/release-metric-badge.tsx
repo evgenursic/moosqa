@@ -23,11 +23,11 @@ export function ReleaseMetricBadge({
     <span
       aria-label={signal.ariaLabel}
       className={cn(
-        "inline-flex max-w-full items-center border uppercase tracking-[0.16em]",
+        "inline-flex max-w-full items-center border font-medium uppercase tracking-[0.16em] shadow-[0_10px_28px_rgba(29,34,48,0.12)]",
         compact ? "px-2 py-1 text-[9px]" : "px-3 py-2 text-[10px]",
         tone === "dark"
           ? "border-white/15 bg-white/[0.04] text-white/68"
-          : "border-[var(--color-line)] bg-[var(--color-panel)] text-black/58",
+          : "border-[var(--color-line)] bg-[var(--color-paper)]/95 text-[var(--color-ink)]",
         className,
       )}
     >

@@ -11,7 +11,6 @@ import {
   formatScore,
   getDisplayGenre,
 } from "@/lib/utils";
-import { buildBestReleaseMetricSignal } from "@/lib/release-metrics";
 
 type ReleaseBriefProps = {
   release: {
@@ -54,13 +53,6 @@ export function ReleaseBrief({
   const directLinks = getListeningLinks(release).filter((link) => link.isDirect);
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
   const youtubePublished = formatCompactUtcDate(release.youtubePublishedAt);
-  const hasFrontMetric = Boolean(
-    buildBestReleaseMetricSignal({
-      youtubeViewCount: release.youtubeViewCount,
-      redditUpvotes: release.score,
-      redditComments: release.commentCount,
-    }),
-  );
 
   return (
     <ReleaseLink
@@ -71,23 +63,32 @@ export function ReleaseBrief({
         className,
       )}
     >
-      <ReleaseArtwork
-        releaseId={release.id}
-        title={release.title}
-        artistName={release.artistName}
-        projectTitle={release.projectTitle}
-        imageUrl={release.imageUrl}
-        thumbnailUrl={release.thumbnailUrl || null}
-        sourceUrl={release.sourceUrl}
-        youtubeUrl={release.youtubeUrl || null}
-        youtubeMusicUrl={release.youtubeMusicUrl || null}
-        bandcampUrl={release.bandcampUrl || null}
-        officialWebsiteUrl={release.officialWebsiteUrl || null}
-        officialStoreUrl={release.officialStoreUrl || null}
-        genreName={displayGenre}
-        className="h-[5.25rem] sm:h-[6.5rem]"
-        imageClassName="h-full"
-      />
+      <div className="relative">
+        <ReleaseArtwork
+          releaseId={release.id}
+          title={release.title}
+          artistName={release.artistName}
+          projectTitle={release.projectTitle}
+          imageUrl={release.imageUrl}
+          thumbnailUrl={release.thumbnailUrl || null}
+          sourceUrl={release.sourceUrl}
+          youtubeUrl={release.youtubeUrl || null}
+          youtubeMusicUrl={release.youtubeMusicUrl || null}
+          bandcampUrl={release.bandcampUrl || null}
+          officialWebsiteUrl={release.officialWebsiteUrl || null}
+          officialStoreUrl={release.officialStoreUrl || null}
+          genreName={displayGenre}
+          className="h-[5.25rem] sm:h-[6.5rem]"
+          imageClassName="h-full"
+        />
+        <ReleaseMetricBadge
+          youtubeViewCount={release.youtubeViewCount}
+          redditUpvotes={release.score}
+          redditComments={release.commentCount}
+          className="absolute right-1.5 top-1.5 z-10 max-w-[calc(100%-0.75rem)]"
+          compact
+        />
+      </div>
 
       <div className="min-w-0">
         <p className="text-[11px] uppercase tracking-[0.18em] text-black/46">
@@ -100,23 +101,13 @@ export function ReleaseBrief({
           {release.artistName && release.projectTitle ? release.projectTitle : release.title}
         </p>
 
-        {hasFrontMetric || youtubePublished ? (
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <ReleaseMetricBadge
-              youtubeViewCount={release.youtubeViewCount}
-              redditUpvotes={release.score}
-              redditComments={release.commentCount}
-              compact
-            />
-            {youtubePublished ? (
-              <span
-                aria-label={`Published on YouTube ${youtubePublished}`}
-                className="text-[9px] uppercase tracking-[0.16em] text-black/48"
-              >
-                Published {youtubePublished}
-              </span>
-            ) : null}
-          </div>
+        {youtubePublished ? (
+          <p
+            aria-label={`Published on YouTube ${youtubePublished}`}
+            className="mt-2 text-[9px] uppercase tracking-[0.16em] text-black/48"
+          >
+            Published {youtubePublished}
+          </p>
         ) : null}
 
         <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-black/52">

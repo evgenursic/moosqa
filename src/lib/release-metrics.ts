@@ -7,42 +7,47 @@ export type ReleaseMetricSignal = {
 };
 
 export type ReleaseMetricInput = {
-  youtubeViewCount?: number | null;
-  redditUpvotes?: number | null;
-  redditComments?: number | null;
-  bandcampSupporterCount?: number | null;
-  bandcampFollowerCount?: number | null;
+  youtubeViewCount?: number | string | null;
+  redditUpvotes?: number | string | null;
+  redditComments?: number | string | null;
+  bandcampSupporterCount?: number | string | null;
+  bandcampFollowerCount?: number | string | null;
 };
 
-export function buildBestReleaseMetricSignal(input: ReleaseMetricInput): ReleaseMetricSignal | null {
-  const youtubeViews = formatCompactWholeCount(input.youtubeViewCount);
+export function getPrimaryReleaseMetric(input: ReleaseMetricInput): ReleaseMetricSignal | null {
+  const youtubeViewCount = coerceMetricNumber(input.youtubeViewCount);
+  const redditUpvotes = coerceMetricNumber(input.redditUpvotes);
+  const redditComments = coerceMetricNumber(input.redditComments);
+  const bandcampSupporterCount = coerceMetricNumber(input.bandcampSupporterCount);
+  const bandcampFollowerCount = coerceMetricNumber(input.bandcampFollowerCount);
+  const youtubeViews = formatCompactWholeCount(youtubeViewCount);
   if (youtubeViews) {
     return {
       kind: "youtube",
-      label: `${youtubeViews} YouTube views`,
+      label: `${youtubeViews} views`,
       ariaLabel: `${youtubeViews} YouTube views`,
     };
   }
 
-  const redditUpvotes = formatCompactWholeCount(input.redditUpvotes);
-  if (redditUpvotes) {
+  const upvotes = formatCompactWholeCount(redditUpvotes);
+  if (upvotes) {
     return {
       kind: "reddit-upvotes",
-      label: `${redditUpvotes} upvotes`,
-      ariaLabel: `${redditUpvotes} Reddit upvotes`,
+      label: `${upvotes} upvotes`,
+      ariaLabel: `${upvotes} Reddit upvotes`,
     };
   }
 
-  const redditComments = formatCompactWholeCount(input.redditComments);
-  if (redditComments) {
+  const comments = formatCompactWholeCount(redditComments);
+  if (comments) {
     return {
       kind: "reddit-comments",
-      label: `${redditComments} comments`,
-      ariaLabel: `${redditComments} Reddit comments`,
+      label: `${comments} comments`,
+      ariaLabel: `${comments} Reddit comments`,
     };
   }
 
-  const bandcampSupporters = formatCompactWholeCount(input.bandcampSupporterCount);
+  const bandcampSupporters = formatCompactWholeCount(bandcampSupporterCount);
   if (bandcampSupporters) {
     return {
       kind: "bandcamp-supporters",
@@ -51,7 +56,7 @@ export function buildBestReleaseMetricSignal(input: ReleaseMetricInput): Release
     };
   }
 
-  const bandcampFollowers = formatCompactWholeCount(input.bandcampFollowerCount);
+  const bandcampFollowers = formatCompactWholeCount(bandcampFollowerCount);
   if (bandcampFollowers) {
     return {
       kind: "bandcamp-followers",
@@ -60,13 +65,33 @@ export function buildBestReleaseMetricSignal(input: ReleaseMetricInput): Release
     };
   }
 
-  const discussionShare = formatDiscussionShare(input.redditUpvotes, input.redditComments);
+  const discussionShare = formatDiscussionShare(redditUpvotes, redditComments);
   if (discussionShare !== null) {
     return {
       kind: "discussion-share",
       label: `${discussionShare}% Discussion share`,
       ariaLabel: `${discussionShare}% Discussion share`,
     };
+  }
+
+  return null;
+}
+
+export const buildBestReleaseMetricSignal = getPrimaryReleaseMetric;
+
+function coerceMetricNumber(value: number | string | null | undefined) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.replace(/,/g, "").trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
   return null;

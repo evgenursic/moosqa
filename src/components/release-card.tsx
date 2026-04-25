@@ -3,6 +3,7 @@ import { ListeningLinks } from "@/components/listening-links";
 import { ReleaseCardActions } from "@/components/release-card-actions";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
+import { ReleaseMetricBadge } from "@/components/release-metric-badge";
 import { ReleaseStatsSummary } from "@/components/release-stats-summary";
 import { TopEngagedVisual } from "@/components/top-engaged-visual";
 import { TopRatedVisual } from "@/components/top-rated-visual";
@@ -76,23 +77,32 @@ export function ReleaseCard({
         fromHref={fromHref}
         className="block min-w-0 cursor-pointer"
       >
-        <ReleaseArtwork
-          releaseId={release.id}
-          title={release.title}
-          artistName={release.artistName}
-          projectTitle={release.projectTitle}
-          imageUrl={release.imageUrl || null}
-          thumbnailUrl={release.thumbnailUrl || null}
-          sourceUrl={release.sourceUrl}
-          youtubeUrl={release.youtubeUrl || null}
-          youtubeMusicUrl={release.youtubeMusicUrl || null}
-          bandcampUrl={release.bandcampUrl || null}
-          officialWebsiteUrl={release.officialWebsiteUrl || null}
-          officialStoreUrl={release.officialStoreUrl || null}
-          genreName={displayGenre}
-          imageClassName="aspect-[4/3]"
-          priority={priority}
-        />
+        <div className="relative">
+          <ReleaseArtwork
+            releaseId={release.id}
+            title={release.title}
+            artistName={release.artistName}
+            projectTitle={release.projectTitle}
+            imageUrl={release.imageUrl || null}
+            thumbnailUrl={release.thumbnailUrl || null}
+            sourceUrl={release.sourceUrl}
+            youtubeUrl={release.youtubeUrl || null}
+            youtubeMusicUrl={release.youtubeMusicUrl || null}
+            bandcampUrl={release.bandcampUrl || null}
+            officialWebsiteUrl={release.officialWebsiteUrl || null}
+            officialStoreUrl={release.officialStoreUrl || null}
+            genreName={displayGenre}
+            imageClassName="aspect-[4/3]"
+            priority={priority}
+          />
+          <ReleaseMetricBadge
+            youtubeViewCount={release.youtubeViewCount}
+            redditUpvotes={release.score}
+            redditComments={release.commentCount}
+            className="absolute right-3 top-3 z-10 max-w-[calc(100%-1.5rem)]"
+            compact={compact}
+          />
+        </div>
       </ReleaseLink>
 
       <div className="pt-4">
