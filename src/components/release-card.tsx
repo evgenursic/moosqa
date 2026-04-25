@@ -188,9 +188,9 @@ export function ReleaseCard({
             releaseId={release.id}
             slug={release.slug}
             fromHref={fromHref}
-            className="inline-flex items-center border border-[var(--color-line)] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:border-[var(--color-ink)]"
+            className="inline-flex min-h-11 items-center border border-[var(--color-line)] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-[var(--color-ink)] transition hover:border-[var(--color-ink)]"
           >
-            Open and rate
+            Open details
           </ReleaseLink>
         </div>
       </div>

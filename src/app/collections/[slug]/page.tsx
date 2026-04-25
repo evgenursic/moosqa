@@ -110,6 +110,9 @@ async function CollectionContent({ params }: CollectionPageProps) {
             Published {formatDetailedUtcDate(collection.publishedAt)}
           </p>
         ) : null}
+        <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-black/50">
+          {collection.entries.length} public release{collection.entries.length === 1 ? "" : "s"} in this collection
+        </p>
       </div>
 
       <div className="grid gap-5">

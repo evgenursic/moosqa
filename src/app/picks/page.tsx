@@ -93,7 +93,7 @@ async function PicksContent() {
         ) : (
           <EditorialEmptyState
             title="No featured releases are public yet."
-            message="Editors can feature a release from /admin after checking that the card has usable artwork, source links, and public visibility."
+            message="Editors can feature a release from the private admin workflow after checking that the card has usable artwork, source links, and public visibility."
             actionHref="/browse/latest"
             actionLabel="Use latest feed"
           />
@@ -144,7 +144,7 @@ async function PicksContent() {
         ) : (
           <EditorialEmptyState
             title="No public collections are ready."
-            message="Published collections only appear here after they have at least one visible public release. Editors can add releases or unpublish empty drafts from /admin."
+            message="Published collections only appear here after they have at least one visible public release. Editors can add releases or unpublish empty drafts from the private admin workflow."
             actionHref="/browse/albums"
             actionLabel="Browse albums"
           />

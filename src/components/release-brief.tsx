@@ -57,7 +57,7 @@ export function ReleaseBrief({
       slug={release.slug}
       fromHref={fromHref}
       className={cn(
-        "grid grid-cols-[6.5rem_1fr] gap-4 border-t border-[var(--color-line)] pt-4 first:border-t-0 first:pt-0",
+        "grid min-w-0 grid-cols-[5.25rem_minmax(0,1fr)] gap-3 border-t border-[var(--color-line)] pt-4 first:border-t-0 first:pt-0 sm:grid-cols-[6.5rem_minmax(0,1fr)] sm:gap-4",
         className,
       )}
     >
@@ -75,7 +75,7 @@ export function ReleaseBrief({
         officialWebsiteUrl={release.officialWebsiteUrl || null}
         officialStoreUrl={release.officialStoreUrl || null}
         genreName={displayGenre}
-        className="h-[6.5rem]"
+        className="h-[5.25rem] sm:h-[6.5rem]"
         imageClassName="h-full"
       />
 
@@ -83,7 +83,7 @@ export function ReleaseBrief({
         <p className="text-[11px] uppercase tracking-[0.18em] text-black/46">
           {displayGenre}
         </p>
-        <h3 className="mt-2 text-[1.7rem] leading-[0.92] text-[var(--color-ink)] serif-display">
+        <h3 className="mt-2 break-words text-[1.35rem] leading-[0.95] text-[var(--color-ink)] serif-display sm:text-[1.7rem] sm:leading-[0.92]">
           {release.artistName || release.projectTitle || release.title}
         </h3>
         <p className="mt-1 truncate text-sm leading-6 text-black/60">
