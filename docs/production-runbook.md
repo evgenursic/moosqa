@@ -57,10 +57,19 @@ Do not claim migration success unless `db:inspect` shows the required tables on 
 
 - Public cards read stored `Release.youtubeViewCount` and `Release.youtubePublishedAt`; they must not fetch YouTube data during page or card rendering.
 - `Release.youtubeMetadataUpdatedAt` records the last pipeline/manual attempt to refresh YouTube metadata.
-- Front-card metric badges use persisted public signals only: YouTube views first, then Reddit upvotes/comments. Bandcamp supporter/follower counts are intentionally not ingested yet because there is no reliable persisted source/API in the current pipeline; do not add runtime Bandcamp scraping to page renders.
+- Front-card metric badges use persisted public signals only: YouTube views first, then Reddit upvotes/comments, then trusted/editor-entered Bandcamp supporter/follower counts.
+- Bandcamp supporter/follower fields are manual/editorial overrides unless a reliable provider is added later. Do not add runtime Bandcamp scraping to page renders.
 - Sync, enrichment, artwork repair, and admin overrides may update the stored YouTube fields. Complete metadata is considered fresh for about one week; incomplete metadata retries after a short cooldown to avoid quota or source-fetch storms.
 - If source metadata fetching fails or YouTube data is missing, preserve the last known stored values and keep cards renderable with omitted metrics.
 - If YouTube extraction behavior changes, fix the metadata parser or repair/enrichment job first, then run the normal smoke flow.
+
+## External Reviews And Sources
+
+- Release detail pages can show curated `ReleaseExternalSource` links under "Reviews & sources".
+- Sources are editorial/admin controlled: review, feature, interview, news, official, or curated source.
+- Public pages show only visible rows with valid public HTTP(S) URLs.
+- The first implementation is not a crawler. Do not add Google scraping, broad review-site scraping, hidden browser scraping, or copyrighted full-text ingestion.
+- Use short editor-written summaries or trusted metadata only, and keep internal/hidden sources private.
 
 ## Failed Notification Processing
 

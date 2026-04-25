@@ -24,6 +24,8 @@ type ReleaseExplorerProps = {
     youtubeViewCount?: number | null;
     youtubePublishedAt?: Date | string | null;
     bandcampUrl?: string | null;
+    bandcampSupporterCount?: number | null;
+    bandcampFollowerCount?: number | null;
     officialWebsiteUrl?: string | null;
     officialStoreUrl?: string | null;
     labelName?: string | null;

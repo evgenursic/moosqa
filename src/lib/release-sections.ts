@@ -37,6 +37,8 @@ export type ReleaseListingItem = {
   youtubeViewCount: number | null;
   youtubePublishedAt: Date | null;
   bandcampUrl: string | null;
+  bandcampSupporterCount: number | null;
+  bandcampFollowerCount: number | null;
   officialWebsiteUrl: string | null;
   officialStoreUrl: string | null;
   qualityScore: number;
@@ -198,6 +200,8 @@ const releaseListingSelect = {
   youtubeViewCount: true,
   youtubePublishedAt: true,
   bandcampUrl: true,
+  bandcampSupporterCount: true,
+  bandcampFollowerCount: true,
   officialWebsiteUrl: true,
   officialStoreUrl: true,
   isHidden: true,
@@ -707,6 +711,8 @@ function prepareDisplayReleases(releases: ReleaseListingRow[]) {
           youtubeViewCount: edited.youtubeViewCount,
           youtubePublishedAt: edited.youtubePublishedAt,
           bandcampUrl: edited.bandcampUrl,
+          bandcampSupporterCount: edited.bandcampSupporterCount,
+          bandcampFollowerCount: edited.bandcampFollowerCount,
           officialWebsiteUrl: edited.officialWebsiteUrl,
           officialStoreUrl: edited.officialStoreUrl,
           qualityScore: edited.qualityScore,

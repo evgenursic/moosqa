@@ -57,13 +57,13 @@ describe("release metric badge helpers", () => {
         bandcampSupporterCount: 320,
         bandcampFollowerCount: 990,
       })?.label,
-      "320 Bandcamp supporters",
+      "320 supporters",
     );
     assert.equal(
       buildBestReleaseMetricSignal({
         bandcampFollowerCount: 990,
       })?.label,
-      "990 Bandcamp followers",
+      "990 followers",
     );
   });
 });

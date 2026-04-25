@@ -3,6 +3,7 @@ import { ListeningLinks } from "@/components/listening-links";
 import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
+import { ReleaseMetricBadge } from "@/components/release-metric-badge";
 import { ReleaseStatsSummary } from "@/components/release-stats-summary";
 import {
   formatContextualReleaseDateLabel,
@@ -41,6 +42,8 @@ type HeroFeatureProps = {
     youtubeViewCount?: number | null;
     youtubePublishedAt?: Date | null;
     bandcampUrl: string | null;
+    bandcampSupporterCount?: number | null;
+    bandcampFollowerCount?: number | null;
     officialWebsiteUrl: string | null;
     officialStoreUrl: string | null;
   };
@@ -58,24 +61,34 @@ export function HeroFeature({ release, fromHref = null }: HeroFeatureProps) {
 
   return (
     <article className="border-b border-[var(--color-line)] pb-10">
-      <ReleaseArtwork
-        releaseId={release.id}
-        title={release.title}
-        artistName={release.artistName}
-        projectTitle={release.projectTitle}
-        imageUrl={release.imageUrl}
-        thumbnailUrl={release.thumbnailUrl || null}
-        sourceUrl={release.sourceUrl}
-        youtubeUrl={release.youtubeUrl || null}
-        youtubeMusicUrl={release.youtubeMusicUrl || null}
-        bandcampUrl={release.bandcampUrl || null}
-        officialWebsiteUrl={release.officialWebsiteUrl || null}
-        officialStoreUrl={release.officialStoreUrl || null}
-        genreName={displayGenre}
-        imageClassName="aspect-[16/10]"
-        className="min-h-[20rem]"
-        priority
-      />
+      <div className="relative">
+        <ReleaseArtwork
+          releaseId={release.id}
+          title={release.title}
+          artistName={release.artistName}
+          projectTitle={release.projectTitle}
+          imageUrl={release.imageUrl}
+          thumbnailUrl={release.thumbnailUrl || null}
+          sourceUrl={release.sourceUrl}
+          youtubeUrl={release.youtubeUrl || null}
+          youtubeMusicUrl={release.youtubeMusicUrl || null}
+          bandcampUrl={release.bandcampUrl || null}
+          officialWebsiteUrl={release.officialWebsiteUrl || null}
+          officialStoreUrl={release.officialStoreUrl || null}
+          genreName={displayGenre}
+          imageClassName="aspect-[16/10]"
+          className="min-h-[20rem]"
+          priority
+        />
+        <ReleaseMetricBadge
+          youtubeViewCount={release.youtubeViewCount}
+          redditUpvotes={release.score}
+          redditComments={release.commentCount}
+          bandcampSupporterCount={release.bandcampSupporterCount}
+          bandcampFollowerCount={release.bandcampFollowerCount}
+          className="absolute right-4 top-4 z-10 max-w-[calc(100%-2rem)]"
+        />
+      </div>
 
       <div className="grid gap-8 pt-6 lg:grid-cols-[1.1fr_0.55fr]">
         <div>
@@ -147,6 +160,8 @@ export function HeroFeature({ release, fromHref = null }: HeroFeatureProps) {
             youtubePublishedAt={release.youtubePublishedAt}
             redditUpvotes={release.score}
             redditComments={release.commentCount}
+            bandcampSupporterCount={release.bandcampSupporterCount}
+            bandcampFollowerCount={release.bandcampFollowerCount}
           />
 
           <RatingMeter

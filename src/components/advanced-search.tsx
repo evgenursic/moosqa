@@ -625,6 +625,8 @@ function SearchLiveResults({
                 youtubeViewCount={result.youtubeViewCount}
                 redditUpvotes={result.score}
                 redditComments={result.commentCount}
+                bandcampSupporterCount={result.bandcampSupporterCount}
+                bandcampFollowerCount={result.bandcampFollowerCount}
                 className="mt-3"
                 compact
                 tone="dark"

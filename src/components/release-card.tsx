@@ -34,6 +34,8 @@ type ReleaseCardProps = {
     youtubeViewCount?: number | null;
     youtubePublishedAt?: Date | null;
     bandcampUrl?: string | null;
+    bandcampSupporterCount?: number | null;
+    bandcampFollowerCount?: number | null;
     officialWebsiteUrl?: string | null;
     officialStoreUrl?: string | null;
     labelName?: string | null;
@@ -99,6 +101,8 @@ export function ReleaseCard({
             youtubeViewCount={release.youtubeViewCount}
             redditUpvotes={release.score}
             redditComments={release.commentCount}
+            bandcampSupporterCount={release.bandcampSupporterCount}
+            bandcampFollowerCount={release.bandcampFollowerCount}
             className="absolute right-3 top-3 z-10 max-w-[calc(100%-1.5rem)]"
             compact={compact}
           />
@@ -147,6 +151,8 @@ export function ReleaseCard({
             youtubePublishedAt={release.youtubePublishedAt}
             redditUpvotes={release.score}
             redditComments={release.commentCount}
+            bandcampSupporterCount={release.bandcampSupporterCount}
+            bandcampFollowerCount={release.bandcampFollowerCount}
             compact
             className="w-full md:w-[13.5rem] md:shrink-0"
           />

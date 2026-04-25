@@ -4,7 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { EditorialCollectionType, UserRole } from "@/generated/prisma/enums";
+import { EditorialCollectionType, ReleaseExternalSourceType, UserRole } from "@/generated/prisma/enums";
 import { validateRoleAssignmentConfirmation } from "@/lib/admin-role-policy";
 import { getAdminAccessState } from "@/lib/admin-session";
 import { ensureDatabase } from "@/lib/database";
@@ -25,6 +25,8 @@ const releaseEditorialSchema = z.object({
   youtubeViewCount: z.coerce.number().int().min(0).max(2_147_483_647).optional(),
   youtubePublishedAt: z.date().optional(),
   bandcampUrl: z.string().max(500).optional(),
+  bandcampSupporterCount: z.coerce.number().int().min(0).max(2_147_483_647).optional(),
+  bandcampFollowerCount: z.coerce.number().int().min(0).max(2_147_483_647).optional(),
   officialWebsiteUrl: z.string().max(500).optional(),
   officialStoreUrl: z.string().max(500).optional(),
   editorialNotes: z.string().max(800).optional(),
@@ -59,6 +61,19 @@ const collectionEntryDeleteSchema = z.object({
   entryId: z.string().min(1),
 });
 
+const externalSourceSchema = z.object({
+  sourceId: z.string().optional(),
+  releaseId: z.string().min(1),
+  slug: z.string().min(1),
+  sourceName: z.string().min(2).max(120),
+  sourceUrl: z.string().max(500),
+  title: z.string().min(2).max(180),
+  summary: z.string().max(420).optional(),
+  sourceType: z.nativeEnum(ReleaseExternalSourceType),
+  publishedAt: z.date().optional(),
+  isVisible: z.boolean(),
+});
+
 const bootstrapSchema = z.object({
   bootstrapSecret: z.string().min(1).max(200),
   reason: z.string().max(200).optional(),
@@ -90,6 +105,8 @@ export async function updateReleaseEditorialAction(formData: FormData) {
     youtubeViewCount: readOptionalString(formData, "youtubeViewCount") || undefined,
     youtubePublishedAt: readOptionalDate(formData, "youtubePublishedAt") || undefined,
     bandcampUrl: readOptionalString(formData, "bandcampUrl"),
+    bandcampSupporterCount: readOptionalString(formData, "bandcampSupporterCount") || undefined,
+    bandcampFollowerCount: readOptionalString(formData, "bandcampFollowerCount") || undefined,
     officialWebsiteUrl: readOptionalString(formData, "officialWebsiteUrl"),
     officialStoreUrl: readOptionalString(formData, "officialStoreUrl"),
     editorialNotes: readOptionalString(formData, "editorialNotes"),
@@ -113,6 +130,9 @@ export async function updateReleaseEditorialAction(formData: FormData) {
       youtubePublishedAt: true,
       youtubeMetadataUpdatedAt: true,
       bandcampUrl: true,
+      bandcampSupporterCount: true,
+      bandcampFollowerCount: true,
+      bandcampMetadataUpdatedAt: true,
       officialWebsiteUrl: true,
       officialStoreUrl: true,
       editorialNotes: true,
@@ -150,6 +170,10 @@ export async function updateReleaseEditorialAction(formData: FormData) {
     nextYoutubeMusicUrl !== before.youtubeMusicUrl ||
     (parsed.youtubeViewCount ?? null) !== before.youtubeViewCount ||
     !datesEqual(parsed.youtubePublishedAt ?? null, before.youtubePublishedAt);
+  const bandcampMetadataChanged =
+    nextBandcampUrl !== before.bandcampUrl ||
+    (parsed.bandcampSupporterCount ?? null) !== before.bandcampSupporterCount ||
+    (parsed.bandcampFollowerCount ?? null) !== before.bandcampFollowerCount;
   const qualitySnapshot = assessReleaseQuality({
     releaseType: before.releaseType,
     genreName: parsed.genreOverride?.trim() || before.genreName,
@@ -180,6 +204,11 @@ export async function updateReleaseEditorialAction(formData: FormData) {
       ? checkedAt
       : before.youtubeMetadataUpdatedAt,
     bandcampUrl: nextBandcampUrl || null,
+    bandcampSupporterCount: parsed.bandcampSupporterCount ?? null,
+    bandcampFollowerCount: parsed.bandcampFollowerCount ?? null,
+    bandcampMetadataUpdatedAt: bandcampMetadataChanged
+      ? checkedAt
+      : before.bandcampMetadataUpdatedAt,
     officialWebsiteUrl: nextOfficialWebsiteUrl || null,
     officialStoreUrl: nextOfficialStoreUrl || null,
     editorialNotes: parsed.editorialNotes?.trim() || null,
@@ -215,6 +244,82 @@ export async function updateReleaseEditorialAction(formData: FormData) {
 
   revalidateReleaseSurfaces(parsed.slug);
   redirect(`/admin?q=${encodeURIComponent(parsed.slug)}#search`);
+}
+
+export async function upsertReleaseExternalSourceAction(formData: FormData) {
+  const admin = await requireAdminActionUser();
+  const parsed = externalSourceSchema.parse({
+    sourceId: readOptionalString(formData, "sourceId") || undefined,
+    releaseId: readString(formData, "releaseId"),
+    slug: readString(formData, "slug"),
+    sourceName: readString(formData, "sourceName"),
+    sourceUrl: readString(formData, "sourceUrl"),
+    title: readString(formData, "title"),
+    summary: readOptionalString(formData, "summary"),
+    sourceType: readString(formData, "sourceType"),
+    publishedAt: readOptionalDate(formData, "publishedAt") || undefined,
+    isVisible: readCheckbox(formData, "isVisible"),
+  });
+  await ensureDatabase();
+
+  const release = await prisma.release.findUnique({
+    where: { id: parsed.releaseId },
+    select: { id: true, slug: true },
+  });
+  if (!release) {
+    redirect(`/admin?q=${encodeURIComponent(parsed.slug)}&source=missing-release#search`);
+  }
+
+  const sourceUrl = readNormalizedOptionalPublicUrl(parsed.sourceUrl, parsed.slug);
+  if (!sourceUrl) {
+    redirect(`/admin?q=${encodeURIComponent(parsed.slug)}&source=invalid-url#search`);
+  }
+
+  const before = parsed.sourceId
+    ? await prisma.releaseExternalSource.findFirst({
+        where: {
+          id: parsed.sourceId,
+          releaseId: parsed.releaseId,
+        },
+      })
+    : null;
+
+  const nextData = {
+    releaseId: parsed.releaseId,
+    sourceName: parsed.sourceName.trim(),
+    sourceUrl,
+    title: parsed.title.trim(),
+    summary: parsed.summary?.trim() || null,
+    sourceType: parsed.sourceType,
+    publishedAt: parsed.publishedAt ?? null,
+    isVisible: parsed.isVisible,
+    addedByUserId: admin.id,
+  };
+
+  const source = before
+    ? await prisma.releaseExternalSource.update({
+        where: { id: before.id },
+        data: nextData,
+      })
+    : await prisma.releaseExternalSource.create({
+        data: nextData,
+      });
+
+  await prisma.releaseEditorialAudit.create({
+    data: {
+      releaseId: parsed.releaseId,
+      editorUserId: admin.id,
+      action: before ? "external-source.update" : "external-source.create",
+      detailsJson: JSON.stringify({
+        sourceId: source.id,
+        before,
+        after: nextData,
+      }),
+    },
+  });
+
+  revalidateReleaseSurfaces(release.slug);
+  redirect(`/admin?q=${encodeURIComponent(release.slug)}#sources-${release.id}`);
 }
 
 export async function createEditorialCollectionAction(formData: FormData) {

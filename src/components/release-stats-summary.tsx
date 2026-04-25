@@ -5,6 +5,8 @@ type ReleaseStatsSummaryProps = {
   youtubePublishedAt?: Date | string | null;
   redditUpvotes?: number | null;
   redditComments?: number | null;
+  bandcampSupporterCount?: number | null;
+  bandcampFollowerCount?: number | null;
   compact?: boolean;
   className?: string;
 };
@@ -20,6 +22,8 @@ export function ReleaseStatsSummary({
   youtubePublishedAt,
   redditUpvotes,
   redditComments,
+  bandcampSupporterCount,
+  bandcampFollowerCount,
   compact = false,
   className,
 }: ReleaseStatsSummaryProps) {
@@ -28,6 +32,8 @@ export function ReleaseStatsSummary({
     youtubePublishedAt,
     redditUpvotes,
     redditComments,
+    bandcampSupporterCount,
+    bandcampFollowerCount,
   });
 
   if (items.length === 0) {
@@ -68,12 +74,16 @@ function buildSummaryItems(input: {
   youtubePublishedAt?: Date | string | null;
   redditUpvotes?: number | null;
   redditComments?: number | null;
+  bandcampSupporterCount?: number | null;
+  bandcampFollowerCount?: number | null;
 }) {
   const items: SummaryItem[] = [];
   const youtubeViews = formatCompactWholeCount(input.youtubeViewCount);
   const youtubePublished = formatCompactUtcDate(input.youtubePublishedAt);
   const redditUpvotes = formatCompactWholeCount(input.redditUpvotes);
   const redditComments = formatCompactWholeCount(input.redditComments);
+  const bandcampSupporters = formatCompactWholeCount(input.bandcampSupporterCount);
+  const bandcampFollowers = formatCompactWholeCount(input.bandcampFollowerCount);
   const discussionShare = formatDiscussionShare(input.redditUpvotes, input.redditComments);
 
   if (youtubeViews) {
@@ -98,6 +108,22 @@ function buildSummaryItems(input: {
 
   if (redditComments) {
     items.push({ label: "Comments", value: redditComments });
+  }
+
+  if (bandcampSupporters) {
+    items.push({
+      label: "Bandcamp",
+      value: `${bandcampSupporters} supporters`,
+      ariaLabel: `${bandcampSupporters} Bandcamp supporters`,
+    });
+  }
+
+  if (bandcampFollowers && items.length < 4) {
+    items.push({
+      label: "Bandcamp",
+      value: `${bandcampFollowers} followers`,
+      ariaLabel: `${bandcampFollowers} Bandcamp followers`,
+    });
   }
 
   if (discussionShare !== null && items.length < 4) {

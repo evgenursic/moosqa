@@ -31,6 +31,8 @@ type ReleaseBriefProps = {
     score?: number | null;
     commentCount?: number | null;
     bandcampUrl?: string | null;
+    bandcampSupporterCount?: number | null;
+    bandcampFollowerCount?: number | null;
     officialWebsiteUrl?: string | null;
     officialStoreUrl?: string | null;
     genreName?: string | null;
@@ -85,6 +87,8 @@ export function ReleaseBrief({
           youtubeViewCount={release.youtubeViewCount}
           redditUpvotes={release.score}
           redditComments={release.commentCount}
+          bandcampSupporterCount={release.bandcampSupporterCount}
+          bandcampFollowerCount={release.bandcampFollowerCount}
           className="absolute right-1.5 top-1.5 z-10 max-w-[calc(100%-0.75rem)]"
           compact
         />

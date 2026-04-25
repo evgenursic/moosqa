@@ -136,6 +136,8 @@ function RadarReleaseList({
                 youtubeViewCount={release.youtubeViewCount}
                 redditUpvotes={release.score}
                 redditComments={release.commentCount}
+                bandcampSupporterCount={release.bandcampSupporterCount}
+                bandcampFollowerCount={release.bandcampFollowerCount}
                 className="mt-3"
                 compact
               />
@@ -176,6 +178,8 @@ function RadarRecommendationList({ releases }: { releases: RadarRecommendation[]
                 youtubeViewCount={release.youtubeViewCount}
                 redditUpvotes={release.redditUpvotes}
                 redditComments={release.redditComments}
+                bandcampSupporterCount={release.bandcampSupporterCount}
+                bandcampFollowerCount={release.bandcampFollowerCount}
                 className="mt-3"
                 compact
               />

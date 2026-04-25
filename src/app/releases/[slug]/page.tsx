@@ -12,12 +12,14 @@ import { ReleasePublicCounters } from "@/components/release-public-counters";
 import { ReleaseStatsSummary } from "@/components/release-stats-summary";
 import { ReleaseUserActions } from "@/components/release-user-actions";
 import { TopEngagedVisual } from "@/components/top-engaged-visual";
+import { formatExternalSourceTypeLabel, getVisibleExternalSources } from "@/lib/external-sources";
 import { sanitizeInternalHref } from "@/lib/navigation";
 import { normalizePublicHttpUrl } from "@/lib/safe-url";
 import { getSiteUrl } from "@/lib/site";
 import { getReleaseBySlug } from "@/lib/sync-releases";
 import {
   formatContextualReleaseDateLabel,
+  formatCompactUtcDate,
   formatRedditDateLabel,
   formatReleaseTypeLabel,
   getDisplayGenre,
@@ -269,6 +271,8 @@ function renderReleasePage(
               />
             </ClientWidgetBoundary>
 
+            {renderExternalSources(release)}
+
             <div className="flex flex-wrap gap-3">
               {originalSourceUrl ? (
                 <a
@@ -321,6 +325,8 @@ function renderReleasePage(
                   youtubePublishedAt={release.youtubePublishedAt}
                   redditUpvotes={release.score}
                   redditComments={release.commentCount}
+                  bandcampSupporterCount={release.bandcampSupporterCount}
+                  bandcampFollowerCount={release.bandcampFollowerCount}
                 />
               </div>
               <div className="mt-4 flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.18em] text-black/55">
@@ -380,6 +386,8 @@ function renderReleasePublicCounters(
         youtubePublishedAt={release.youtubePublishedAt}
         redditUpvotes={release.score}
         redditComments={release.commentCount}
+        bandcampSupporterCount={release.bandcampSupporterCount}
+        bandcampFollowerCount={release.bandcampFollowerCount}
         openCount={release.openCount}
         listenClickCount={release.listenClickCount}
         shareCount={release.shareCount}
@@ -395,6 +403,49 @@ function renderReleasePublicCounters(
       </div>
     );
   }
+}
+
+function renderExternalSources(
+  release: NonNullable<Awaited<ReturnType<typeof getReleaseBySlug>>>,
+) {
+  const sources = getVisibleExternalSources(release.externalSources);
+
+  if (sources.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
+      <p className="section-kicker text-black/45">Reviews & sources</p>
+      <div className="mt-4 grid gap-3">
+        {sources.map((source) => {
+          const published = formatCompactUtcDate(source.publishedAt);
+
+          return (
+            <a
+              key={source.id}
+              href={source.sourceUrl || "#"}
+              target="_blank"
+              rel="noreferrer"
+              className="block border border-[var(--color-line)] bg-[var(--color-paper)] p-4 transition hover:border-[var(--color-accent-strong)]"
+            >
+              <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.16em] text-black/48">
+                <span>{formatExternalSourceTypeLabel(source.sourceType)}</span>
+                <span>{source.sourceName}</span>
+                {published ? <span>{published}</span> : null}
+              </div>
+              <p className="mt-2 text-xl leading-tight text-[var(--color-ink)] serif-display">
+                {source.title}
+              </p>
+              {source.summary ? (
+                <p className="mt-2 text-sm leading-6 text-black/62">{source.summary}</p>
+              ) : null}
+            </a>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
 
 function UnavailableReleasePage({ message }: { message: string }) {

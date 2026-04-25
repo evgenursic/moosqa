@@ -51,7 +51,7 @@ export function getPrimaryReleaseMetric(input: ReleaseMetricInput): ReleaseMetri
   if (bandcampSupporters) {
     return {
       kind: "bandcamp-supporters",
-      label: `${bandcampSupporters} Bandcamp supporters`,
+      label: `${bandcampSupporters} supporters`,
       ariaLabel: `${bandcampSupporters} Bandcamp supporters`,
     };
   }
@@ -60,7 +60,7 @@ export function getPrimaryReleaseMetric(input: ReleaseMetricInput): ReleaseMetri
   if (bandcampFollowers) {
     return {
       kind: "bandcamp-followers",
-      label: `${bandcampFollowers} Bandcamp followers`,
+      label: `${bandcampFollowers} followers`,
       ariaLabel: `${bandcampFollowers} Bandcamp followers`,
     };
   }

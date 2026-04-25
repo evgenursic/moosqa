@@ -127,6 +127,15 @@ enum EditorialCollectionType {
   BEST_OF
 }
 
+enum ReleaseExternalSourceType {
+  REVIEW
+  FEATURE
+  INTERVIEW
+  NEWS
+  OFFICIAL
+  USER_CURATED
+}
+
 model Release {
   id              String        @id @default(cuid())
   source          ReleaseSource @default(REDDIT)
@@ -162,6 +171,9 @@ model Release {
   youtubePublishedAt DateTime?
   youtubeMetadataUpdatedAt DateTime?
   bandcampUrl     String?
+  bandcampSupporterCount Int?
+  bandcampFollowerCount Int?
+  bandcampMetadataUpdatedAt DateTime?
   officialWebsiteUrl String?
   officialStoreUrl   String?
   artworkStatus   ArtworkStatus @default(MISSING)
@@ -205,6 +217,7 @@ model Release {
   savedBy         UserSavedRelease[]
   collectionEntries EditorialCollectionEntry[]
   editorialAudits ReleaseEditorialAudit[]
+  externalSources ReleaseExternalSource[]
 
   @@index([publishedAt(sort: Desc)])
   @@index([releaseType, publishedAt(sort: Desc)])
@@ -228,6 +241,7 @@ model UserProfile {
   releaseEditorialAudits ReleaseEditorialAudit[]
   performedRoleAssignments UserRoleAssignmentAudit[] @relation("RoleAssignmentActor")
   receivedRoleAssignments UserRoleAssignmentAudit[] @relation("RoleAssignmentTarget")
+  externalSources ReleaseExternalSource[]
 
   @@index([role, createdAt(sort: Desc)])
 }
@@ -367,6 +381,27 @@ model ReleaseEditorialAudit {
 
   @@index([releaseId, createdAt(sort: Desc)])
   @@index([editorUserId, createdAt(sort: Desc)])
+}
+
+model ReleaseExternalSource {
+  id            String                    @id @default(cuid())
+  releaseId     String
+  sourceName    String
+  sourceUrl     String
+  title         String
+  summary       String?
+  sourceType    ReleaseExternalSourceType @default(USER_CURATED)
+  publishedAt   DateTime?
+  isVisible     Boolean                   @default(true)
+  addedByUserId String?
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  release       Release                   @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  addedBy       UserProfile?              @relation(fields: [addedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([releaseId, isVisible, publishedAt(sort: Desc)])
+  @@index([sourceType, isVisible, updatedAt(sort: Desc)])
+  @@index([addedByUserId, createdAt(sort: Desc)])
 }
 
 model UserRoleAssignmentAudit {

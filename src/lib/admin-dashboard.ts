@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 
-import { FollowTargetType, NotificationJobStatus, UserRole } from "@/generated/prisma/enums";
+import { FollowTargetType, NotificationJobStatus, ReleaseExternalSourceType, UserRole } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
 import { ensureDatabase } from "@/lib/database";
 import { applyReleaseEditorialFields, buildVisibleReleaseWhere } from "@/lib/editorial";
@@ -60,6 +60,10 @@ type PublicMetricCoverageRow = {
   youtubeVisible: bigint;
   redditUpvoteVisible: bigint;
   redditCommentVisible: bigint;
+  bandcampSupporterVisible: bigint;
+  bandcampFollowerVisible: bigint;
+  bandcampMetricVisible: bigint;
+  youtubeMetadataStale: bigint;
   noPublicMetric: bigint;
 };
 
@@ -83,6 +87,9 @@ type SearchReleaseRow = {
   youtubeViewCount: number | null;
   youtubePublishedAt: Date | null;
   bandcampUrl: string | null;
+  bandcampSupporterCount: number | null;
+  bandcampFollowerCount: number | null;
+  bandcampMetadataUpdatedAt: Date | null;
   officialWebsiteUrl: string | null;
   officialStoreUrl: string | null;
   releaseType: string;
@@ -95,6 +102,17 @@ type SearchReleaseRow = {
   editorialNotes: string | null;
   featuredAt: Date | null;
   editorialUpdatedAt: Date | null;
+  externalSources: Array<{
+    id: string;
+    sourceName: string;
+    sourceUrl: string;
+    title: string;
+    summary: string | null;
+    sourceType: ReleaseExternalSourceType;
+    publishedAt: Date | null;
+    isVisible: boolean;
+    updatedAt: Date;
+  }>;
 };
 
 type RoleRosterRow = {
@@ -421,10 +439,30 @@ const getProductAnalyticsData = unstable_cache(
           count(*) filter (where coalesce(r."youtubeViewCount", 0) > 0)::bigint as "youtubeVisible",
           count(*) filter (where coalesce(r."score", 0) > 0)::bigint as "redditUpvoteVisible",
           count(*) filter (where coalesce(r."commentCount", 0) > 0)::bigint as "redditCommentVisible",
+          count(*) filter (where coalesce(r."bandcampSupporterCount", 0) > 0)::bigint as "bandcampSupporterVisible",
+          count(*) filter (where coalesce(r."bandcampFollowerCount", 0) > 0)::bigint as "bandcampFollowerVisible",
+          count(*) filter (
+            where coalesce(r."bandcampSupporterCount", 0) > 0
+              or coalesce(r."bandcampFollowerCount", 0) > 0
+          )::bigint as "bandcampMetricVisible",
+          count(*) filter (
+            where (
+              r."youtubeUrl" is not null
+              or r."youtubeMusicUrl" is not null
+              or r."sourceUrl" ilike '%youtube.com%'
+              or r."sourceUrl" ilike '%youtu.be%'
+            )
+            and (
+              r."youtubeMetadataUpdatedAt" is null
+              or r."youtubeMetadataUpdatedAt" < now() - interval '8 day'
+            )
+          )::bigint as "youtubeMetadataStale",
           count(*) filter (
             where coalesce(r."youtubeViewCount", 0) <= 0
               and coalesce(r."score", 0) <= 0
               and coalesce(r."commentCount", 0) <= 0
+              and coalesce(r."bandcampSupporterCount", 0) <= 0
+              and coalesce(r."bandcampFollowerCount", 0) <= 0
           )::bigint as "noPublicMetric"
         from "Release" r
         where r."isHidden" = false
@@ -493,6 +531,10 @@ const getProductAnalyticsData = unstable_cache(
         youtubeVisible: Number(publicMetricCoverage?.youtubeVisible || 0),
         redditUpvoteVisible: Number(publicMetricCoverage?.redditUpvoteVisible || 0),
         redditCommentVisible: Number(publicMetricCoverage?.redditCommentVisible || 0),
+        bandcampSupporterVisible: Number(publicMetricCoverage?.bandcampSupporterVisible || 0),
+        bandcampFollowerVisible: Number(publicMetricCoverage?.bandcampFollowerVisible || 0),
+        bandcampMetricVisible: Number(publicMetricCoverage?.bandcampMetricVisible || 0),
+        youtubeMetadataStale: Number(publicMetricCoverage?.youtubeMetadataStale || 0),
         noPublicMetric: noPublicMetricCount,
         bestSignalCoverageRate:
           visibleReleaseCount > 0
@@ -677,6 +719,9 @@ async function searchAdminReleases(query: string) {
       youtubeViewCount: true,
       youtubePublishedAt: true,
       bandcampUrl: true,
+      bandcampSupporterCount: true,
+      bandcampFollowerCount: true,
+      bandcampMetadataUpdatedAt: true,
       officialWebsiteUrl: true,
       officialStoreUrl: true,
       releaseType: true,
@@ -689,6 +734,21 @@ async function searchAdminReleases(query: string) {
       editorialNotes: true,
       featuredAt: true,
       editorialUpdatedAt: true,
+      externalSources: {
+        orderBy: [{ updatedAt: "desc" }],
+        take: 6,
+        select: {
+          id: true,
+          sourceName: true,
+          sourceUrl: true,
+          title: true,
+          summary: true,
+          sourceType: true,
+          publishedAt: true,
+          isVisible: true,
+          updatedAt: true,
+        },
+      },
     },
   });
 

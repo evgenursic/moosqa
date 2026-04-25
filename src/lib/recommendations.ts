@@ -15,6 +15,8 @@ export type RadarRecommendation = {
   youtubeViewCount: number | null;
   redditUpvotes: number | null;
   redditComments: number | null;
+  bandcampSupporterCount: number | null;
+  bandcampFollowerCount: number | null;
   reasons: string[];
   score: number;
 };
@@ -33,6 +35,8 @@ type RecommendationCandidate = {
   qualityScore: number;
   score: number | null;
   youtubeViewCount: number | null;
+  bandcampSupporterCount: number | null;
+  bandcampFollowerCount: number | null;
   openCount: number;
   shareCount: number;
   listenClickCount: number;
@@ -118,6 +122,8 @@ export async function getRecommendedReleasesForUser(userId: string) {
       qualityScore: true,
       score: true,
       youtubeViewCount: true,
+      bandcampSupporterCount: true,
+      bandcampFollowerCount: true,
       openCount: true,
       shareCount: true,
       listenClickCount: true,
@@ -265,6 +271,8 @@ export function scoreRecommendationCandidate(
     youtubeViewCount: candidate.youtubeViewCount,
     redditUpvotes: candidate.score,
     redditComments: candidate.commentCount,
+    bandcampSupporterCount: candidate.bandcampSupporterCount,
+    bandcampFollowerCount: candidate.bandcampFollowerCount,
     reasons: [...reasons].slice(0, 3),
     score: Math.round(score),
   };

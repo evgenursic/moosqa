@@ -81,6 +81,8 @@ export type PersonalRadarRelease = {
   youtubeViewCount: number | null;
   score: number | null;
   commentCount: number | null;
+  bandcampSupporterCount: number | null;
+  bandcampFollowerCount: number | null;
 };
 
 export function buildReleaseFollowTargets(input: {
@@ -306,6 +308,8 @@ const personalRadarReleaseSelect = {
   youtubeViewCount: true,
   score: true,
   commentCount: true,
+  bandcampSupporterCount: true,
+  bandcampFollowerCount: true,
 } satisfies Record<keyof PersonalRadarRelease, true>;
 
 const personalRadarReleaseSelectWithVisibility = {

@@ -307,6 +307,24 @@ const getCachedReleaseBySlug = unstable_cache(
   async (slug: string) => {
     const release = await prisma.release.findUnique({
       where: { slug },
+      include: {
+        externalSources: {
+          where: {
+            isVisible: true,
+          },
+          orderBy: [{ publishedAt: "desc" }, { updatedAt: "desc" }],
+          select: {
+            id: true,
+            sourceName: true,
+            sourceUrl: true,
+            title: true,
+            summary: true,
+            sourceType: true,
+            publishedAt: true,
+            isVisible: true,
+          },
+        },
+      },
     });
 
     if (!release || release.isHidden) {

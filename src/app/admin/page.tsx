@@ -10,9 +10,11 @@ import {
   createEditorialCollectionAction,
   removeCollectionEntryAction,
   runWeakCardRepairAction,
+  upsertReleaseExternalSourceAction,
   updateCollectionEntryAction,
   updateReleaseEditorialAction,
 } from "@/app/admin/actions";
+import { ReleaseExternalSourceType } from "@/generated/prisma/enums";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getAdminAccessState } from "@/lib/admin-session";
@@ -128,11 +130,13 @@ async function AdminContent({ searchParams }: AdminPageProps) {
         <StatCard label="Eligible / radar" value={`${dashboard.productAnalytics.funnel.notificationEligibleRate}%`} />
       </section>
 
-      <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Signal coverage" value={`${dashboard.productAnalytics.publicMetricCoverage.bestSignalCoverageRate}%`} />
         <StatCard label="YouTube cards" value={String(dashboard.productAnalytics.publicMetricCoverage.youtubeVisible)} />
         <StatCard label="Upvote cards" value={String(dashboard.productAnalytics.publicMetricCoverage.redditUpvoteVisible)} />
         <StatCard label="Comment cards" value={String(dashboard.productAnalytics.publicMetricCoverage.redditCommentVisible)} />
+        <StatCard label="Bandcamp cards" value={String(dashboard.productAnalytics.publicMetricCoverage.bandcampMetricVisible)} />
+        <StatCard label="YouTube stale" value={String(dashboard.productAnalytics.publicMetricCoverage.youtubeMetadataStale)} />
         <StatCard label="No public metric" value={String(dashboard.productAnalytics.publicMetricCoverage.noPublicMetric)} />
       </section>
 
@@ -519,6 +523,10 @@ async function AdminContent({ searchParams }: AdminPageProps) {
                   </div>
                   <div className="grid gap-3 md:grid-cols-3">
                     <LabeledInput name="bandcampUrl" label="Bandcamp URL" defaultValue={release.bandcampUrl || ""} placeholder="https://artist.bandcamp.com/..." />
+                    <LabeledInput name="bandcampSupporterCount" label="Bandcamp supporters" type="number" defaultValue={release.bandcampSupporterCount === null ? "" : String(release.bandcampSupporterCount)} placeholder="320" />
+                    <LabeledInput name="bandcampFollowerCount" label="Bandcamp followers" type="number" defaultValue={release.bandcampFollowerCount === null ? "" : String(release.bandcampFollowerCount)} placeholder="990" />
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
                     <LabeledInput name="officialWebsiteUrl" label="Website URL" defaultValue={release.officialWebsiteUrl || ""} placeholder="https://artist.com" />
                     <LabeledInput name="officialStoreUrl" label="Store URL" defaultValue={release.officialStoreUrl || ""} placeholder="https://store.artist.com" />
                   </div>
@@ -575,6 +583,96 @@ async function AdminContent({ searchParams }: AdminPageProps) {
                     </div>
                   </form>
                 ) : null}
+
+                <div id={`sources-${release.id}`} className="mt-5 border-t border-[var(--color-soft-line)] pt-4">
+                  <p className="section-kicker text-black/43">Reviews & sources</p>
+                  <form action={upsertReleaseExternalSourceAction} className="mt-3 grid gap-3 border border-[var(--color-soft-line)] bg-[var(--color-paper)] p-4">
+                    <input type="hidden" name="releaseId" value={release.id} />
+                    <input type="hidden" name="slug" value={release.slug} />
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                      <LabeledInput name="sourceName" label="Source name" placeholder="Pitchfork, Bandcamp, artist site" />
+                      <LabeledInput name="sourceUrl" label="Source URL" placeholder="https://..." />
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem_12rem]">
+                      <LabeledInput name="title" label="Title" placeholder="Review or source title" />
+                      <label className="grid gap-2 text-xs uppercase tracking-[0.16em] text-black/58">
+                        Type
+                        <select
+                          name="sourceType"
+                          defaultValue={ReleaseExternalSourceType.USER_CURATED}
+                          className="min-h-11 border border-[var(--color-line)] bg-[var(--color-paper)] px-3 py-2 text-sm normal-case tracking-normal text-[var(--color-ink)]"
+                        >
+                          {externalSourceTypeOptions.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <LabeledInput name="publishedAt" label="Published" type="date" />
+                    </div>
+                    <LabeledInput name="summary" label="Short editor summary" placeholder="Optional context. Do not paste full review text." />
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="flex items-center gap-3 text-sm text-black/62">
+                        <input type="checkbox" name="isVisible" defaultChecked className="h-4 w-4 accent-[var(--color-accent-strong)]" />
+                        Publicly visible
+                      </label>
+                      <button
+                        type="submit"
+                        className="inline-flex min-h-11 items-center justify-center border border-[var(--color-line)] px-4 py-3 text-xs uppercase tracking-[0.16em] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+                      >
+                        Add source
+                      </button>
+                    </div>
+                  </form>
+
+                  <div className="mt-4 grid gap-3">
+                    {release.externalSources.length > 0 ? (
+                      release.externalSources.map((source) => (
+                        <form key={source.id} action={upsertReleaseExternalSourceAction} className="grid gap-3 border border-[var(--color-soft-line)] bg-[var(--color-paper)] p-4">
+                          <input type="hidden" name="sourceId" value={source.id} />
+                          <input type="hidden" name="releaseId" value={release.id} />
+                          <input type="hidden" name="slug" value={release.slug} />
+                          <div className="grid gap-3 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                            <LabeledInput name="sourceName" label="Source name" defaultValue={source.sourceName} placeholder="Source" />
+                            <LabeledInput name="sourceUrl" label="Source URL" defaultValue={source.sourceUrl} placeholder="https://..." />
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem_12rem]">
+                            <LabeledInput name="title" label="Title" defaultValue={source.title} placeholder="Title" />
+                            <label className="grid gap-2 text-xs uppercase tracking-[0.16em] text-black/58">
+                              Type
+                              <select
+                                name="sourceType"
+                                defaultValue={source.sourceType}
+                                className="min-h-11 border border-[var(--color-line)] bg-[var(--color-paper)] px-3 py-2 text-sm normal-case tracking-normal text-[var(--color-ink)]"
+                              >
+                                {externalSourceTypeOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <LabeledInput name="publishedAt" label="Published" type="date" defaultValue={formatDateInput(source.publishedAt)} />
+                          </div>
+                          <LabeledInput name="summary" label="Short editor summary" defaultValue={source.summary || ""} placeholder="Optional context" />
+                          <div className="flex flex-wrap items-center gap-3">
+                            <label className="flex items-center gap-3 text-sm text-black/62">
+                              <input type="checkbox" name="isVisible" defaultChecked={source.isVisible} className="h-4 w-4 accent-[var(--color-accent-strong)]" />
+                              Publicly visible
+                            </label>
+                            <button
+                              type="submit"
+                              className="inline-flex min-h-11 items-center justify-center border border-[var(--color-line)] px-4 py-3 text-xs uppercase tracking-[0.16em] text-[var(--color-ink)] transition hover:border-[var(--color-accent-strong)] hover:text-[var(--color-accent-strong)]"
+                            >
+                              Update source
+                            </button>
+                          </div>
+                        </form>
+                      ))
+                    ) : (
+                      <p className="text-sm leading-7 text-black/56">
+                        No curated external sources yet. Add only explicit, reliable links; do not paste full review text.
+                      </p>
+                    )}
+                  </div>
+                </div>
               </article>
             ))}
           </div>
@@ -664,6 +762,15 @@ async function AdminContent({ searchParams }: AdminPageProps) {
     </section>
   );
 }
+
+const externalSourceTypeOptions = [
+  { value: ReleaseExternalSourceType.REVIEW, label: "Review" },
+  { value: ReleaseExternalSourceType.FEATURE, label: "Feature" },
+  { value: ReleaseExternalSourceType.INTERVIEW, label: "Interview" },
+  { value: ReleaseExternalSourceType.NEWS, label: "News" },
+  { value: ReleaseExternalSourceType.OFFICIAL, label: "Official" },
+  { value: ReleaseExternalSourceType.USER_CURATED, label: "User curated" },
+];
 
 function AdminShell() {
   return (

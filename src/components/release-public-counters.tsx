@@ -5,6 +5,8 @@ type ReleasePublicCountersProps = {
   youtubePublishedAt?: Date | string | null;
   redditUpvotes?: number | null | undefined;
   redditComments?: number | null | undefined;
+  bandcampSupporterCount?: number | null | undefined;
+  bandcampFollowerCount?: number | null | undefined;
   openCount: number | null | undefined;
   listenClickCount: number | null | undefined;
   shareCount: number | null | undefined;
@@ -17,6 +19,8 @@ export function ReleasePublicCounters({
   youtubePublishedAt,
   redditUpvotes,
   redditComments,
+  bandcampSupporterCount,
+  bandcampFollowerCount,
   openCount,
   listenClickCount,
   shareCount,
@@ -31,6 +35,8 @@ export function ReleasePublicCounters({
   const safeYouTubeViewCount = sanitizeMetric(youtubeViewCount);
   const safeRedditUpvotes = sanitizeMetric(redditUpvotes);
   const safeRedditComments = sanitizeMetric(redditComments);
+  const safeBandcampSupporterCount = sanitizeMetric(bandcampSupporterCount);
+  const safeBandcampFollowerCount = sanitizeMetric(bandcampFollowerCount);
   const discussionShare = formatDiscussionShare(safeRedditUpvotes, safeRedditComments);
   const compactYouTubePublishedAt = formatCompactUtcDate(youtubePublishedAt);
   const items = [
@@ -40,6 +46,12 @@ export function ReleasePublicCounters({
       : []),
     ...(safeRedditUpvotes > 0 ? [{ label: "Upvotes", value: formatWholeCount(safeRedditUpvotes) }] : []),
     ...(safeRedditComments > 0 ? [{ label: "Comments", value: formatWholeCount(safeRedditComments) }] : []),
+    ...(safeBandcampSupporterCount > 0
+      ? [{ label: "Bandcamp supporters", value: formatWholeCount(safeBandcampSupporterCount) }]
+      : []),
+    ...(safeBandcampFollowerCount > 0
+      ? [{ label: "Bandcamp followers", value: formatWholeCount(safeBandcampFollowerCount) }]
+      : []),
     ...(discussionShare !== null ? [{ label: "Discussion share", value: `${discussionShare}%` }] : []),
     ...(safeOpenCount > 0 ? [{ label: "MooSQA opens", value: formatWholeCount(safeOpenCount) }] : []),
     ...(safeListenClickCount > 0 ? [{ label: "Listen clicks", value: formatWholeCount(safeListenClickCount) }] : []),

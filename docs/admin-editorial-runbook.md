@@ -29,6 +29,8 @@
 - search releases by slug, artist, title, or label
 - override public genre, summary, cover URL, and primary source URL
 - edit persisted YouTube metadata and official/Bandcamp links when source enrichment needs a manual correction
+- enter Bandcamp supporter/follower counts only when they come from a trusted editorial source; MooSQA does not scrape Bandcamp counts at runtime
+- curate external review/source links for release detail pages with short editor-written summaries
 - hide irrelevant cards without deleting the release row
 - feature priority releases with `isFeatured` plus `editorialRank`
 - create or edit lightweight editorial collections and attach releases to them
@@ -56,6 +58,9 @@
 - use `editorialNotes` for internal reasoning that should survive future repairs
 - collections are intentionally lightweight; they are not a full CMS
 - collection entry updates and removals are audited as `collection.entry.update` and `collection.entry.remove`
+- curated source creates/updates are audited as `external-source.create` or `external-source.update`
+- external source summaries should be short editorial context only; do not paste copyrighted review text
+- hiding a curated source by unchecking public visibility preserves the row for audit/history but removes it from public release pages
 - run admin-triggered repair in small batches; use the scheduled repair workflow for routine background maintenance
 
 ## Debugging
