@@ -78,6 +78,9 @@ export type PersonalRadarRelease = {
   labelName: string | null;
   genreName: string | null;
   publishedAt: Date;
+  youtubeViewCount: number | null;
+  score: number | null;
+  commentCount: number | null;
 };
 
 export function buildReleaseFollowTargets(input: {
@@ -300,6 +303,9 @@ const personalRadarReleaseSelect = {
   labelName: true,
   genreName: true,
   publishedAt: true,
+  youtubeViewCount: true,
+  score: true,
+  commentCount: true,
 } satisfies Record<keyof PersonalRadarRelease, true>;
 
 const personalRadarReleaseSelectWithVisibility = {

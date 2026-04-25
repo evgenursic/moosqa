@@ -55,6 +55,14 @@ type DailyTrendRow = {
   notificationSkipped: bigint;
 };
 
+type PublicMetricCoverageRow = {
+  visibleReleases: bigint;
+  youtubeVisible: bigint;
+  redditUpvoteVisible: bigint;
+  redditCommentVisible: bigint;
+  noPublicMetric: bigint;
+};
+
 type SearchReleaseRow = {
   id: string;
   slug: string;
@@ -156,6 +164,7 @@ const getProductAnalyticsData = unstable_cache(
       editorialPerformanceRows,
       followPathwayRows,
       dailyTrendRows,
+      publicMetricCoverageRows,
     ] = await Promise.all([
       prisma.userProfile.count(),
       prisma.userSavedRelease.count(),
@@ -406,6 +415,20 @@ const getProductAnalyticsData = unstable_cache(
         left join skipped on skipped."dateKey" = days."dateKey"
         order by days."dateKey" desc
       `),
+      prisma.$queryRaw<PublicMetricCoverageRow[]>(Prisma.sql`
+        select
+          count(*)::bigint as "visibleReleases",
+          count(*) filter (where coalesce(r."youtubeViewCount", 0) > 0)::bigint as "youtubeVisible",
+          count(*) filter (where coalesce(r."score", 0) > 0)::bigint as "redditUpvoteVisible",
+          count(*) filter (where coalesce(r."commentCount", 0) > 0)::bigint as "redditCommentVisible",
+          count(*) filter (
+            where coalesce(r."youtubeViewCount", 0) <= 0
+              and coalesce(r."score", 0) <= 0
+              and coalesce(r."commentCount", 0) <= 0
+          )::bigint as "noPublicMetric"
+        from "Release" r
+        where r."isHidden" = false
+      `),
     ]);
 
     const topSavedReleaseIds = topSavedReleaseGroups.map((entry) => entry.releaseId);
@@ -429,6 +452,9 @@ const getProductAnalyticsData = unstable_cache(
       },
     });
     const totalDetailOpens = detailOpenCount._sum.openCount || 0;
+    const publicMetricCoverage = publicMetricCoverageRows[0];
+    const visibleReleaseCount = Number(publicMetricCoverage?.visibleReleases || 0);
+    const noPublicMetricCount = Number(publicMetricCoverage?.noPublicMetric || 0);
 
     return {
       funnel: {
@@ -461,6 +487,17 @@ const getProductAnalyticsData = unstable_cache(
         sent: readNotificationJobCount(notificationJobGroups, NotificationJobStatus.SENT),
         failed: readNotificationJobCount(notificationJobGroups, NotificationJobStatus.FAILED),
         skipped: readNotificationJobCount(notificationJobGroups, NotificationJobStatus.SKIPPED),
+      },
+      publicMetricCoverage: {
+        visibleReleases: visibleReleaseCount,
+        youtubeVisible: Number(publicMetricCoverage?.youtubeVisible || 0),
+        redditUpvoteVisible: Number(publicMetricCoverage?.redditUpvoteVisible || 0),
+        redditCommentVisible: Number(publicMetricCoverage?.redditCommentVisible || 0),
+        noPublicMetric: noPublicMetricCount,
+        bestSignalCoverageRate:
+          visibleReleaseCount > 0
+            ? roundToOneDecimal(((visibleReleaseCount - noPublicMetricCount) / visibleReleaseCount) * 100)
+            : 0,
       },
       topSavedReleases: topSavedReleaseGroups
         .map((entry) => ({

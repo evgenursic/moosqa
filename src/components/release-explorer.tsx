@@ -21,6 +21,8 @@ type ReleaseExplorerProps = {
     sourceUrl: string;
     youtubeUrl?: string | null;
     youtubeMusicUrl?: string | null;
+    youtubeViewCount?: number | null;
+    youtubePublishedAt?: Date | string | null;
     bandcampUrl?: string | null;
     officialWebsiteUrl?: string | null;
     officialStoreUrl?: string | null;
@@ -34,6 +36,8 @@ type ReleaseExplorerProps = {
     scoreCount: number;
     positiveReactionCount: number;
     negativeReactionCount: number;
+    score?: number | null;
+    commentCount?: number | null;
   }>;
 };
 
@@ -130,6 +134,7 @@ export function ReleaseExplorer({ releases }: ReleaseExplorerProps) {
               release={{
                 ...release,
                 publishedAt: new Date(release.publishedAt),
+                youtubePublishedAt: release.youtubePublishedAt ? new Date(release.youtubePublishedAt) : null,
               }}
               compact={index > 5}
               priority={index < 2}

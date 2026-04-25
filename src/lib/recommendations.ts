@@ -12,6 +12,9 @@ export type RadarRecommendation = {
   labelName: string | null;
   genreName: string | null;
   publishedAt: Date;
+  youtubeViewCount: number | null;
+  redditUpvotes: number | null;
+  redditComments: number | null;
   reasons: string[];
   score: number;
 };
@@ -259,6 +262,9 @@ export function scoreRecommendationCandidate(
     labelName: candidate.labelName,
     genreName: candidate.genreName,
     publishedAt: candidate.publishedAt,
+    youtubeViewCount: candidate.youtubeViewCount,
+    redditUpvotes: candidate.score,
+    redditComments: candidate.commentCount,
     reasons: [...reasons].slice(0, 3),
     score: Math.round(score),
   };

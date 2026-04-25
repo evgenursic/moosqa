@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
+import { ReleaseMetricBadge } from "@/components/release-metric-badge";
 import { loadSearchIndex, readCachedSearchIndex } from "@/lib/client-search-index";
 import { type SearchOverlayIndexItem } from "@/lib/search-overlay";
 import { filterAndRankReleaseListings } from "@/lib/release-search";
@@ -619,6 +620,15 @@ function SearchLiveResults({
                 <span>{formatReleaseTypeLabel(result.releaseType)}</span>
                 <span>{formatRedditDateLabel(new Date(result.publishedAt))}</span>
               </div>
+
+              <ReleaseMetricBadge
+                youtubeViewCount={result.youtubeViewCount}
+                redditUpvotes={result.score}
+                redditComments={result.commentCount}
+                className="mt-3"
+                compact
+                tone="dark"
+              />
 
               <h3 className="mt-3 text-[1.9rem] leading-[0.94] text-white serif-display md:text-[2.25rem]">
                 <span className="card-title-underline">

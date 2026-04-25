@@ -128,6 +128,14 @@ async function AdminContent({ searchParams }: AdminPageProps) {
         <StatCard label="Eligible / radar" value={`${dashboard.productAnalytics.funnel.notificationEligibleRate}%`} />
       </section>
 
+      <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <StatCard label="Signal coverage" value={`${dashboard.productAnalytics.publicMetricCoverage.bestSignalCoverageRate}%`} />
+        <StatCard label="YouTube cards" value={String(dashboard.productAnalytics.publicMetricCoverage.youtubeVisible)} />
+        <StatCard label="Upvote cards" value={String(dashboard.productAnalytics.publicMetricCoverage.redditUpvoteVisible)} />
+        <StatCard label="Comment cards" value={String(dashboard.productAnalytics.publicMetricCoverage.redditCommentVisible)} />
+        <StatCard label="No public metric" value={String(dashboard.productAnalytics.publicMetricCoverage.noPublicMetric)} />
+      </section>
+
       <section className="mt-8 grid gap-4 lg:grid-cols-2">
         <PanelCard title="Top saved releases">
           <div className="grid gap-3">

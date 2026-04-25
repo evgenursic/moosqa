@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import type { ReactNode } from "react";
 
+import { ReleaseMetricBadge } from "@/components/release-metric-badge";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getRecommendedReleasesForUser, type RadarRecommendation } from "@/lib/recommendations";
@@ -131,6 +132,13 @@ function RadarReleaseList({
               {release.artistName && release.projectTitle ? (
                 <p className="mt-1 text-sm text-black/62">{release.projectTitle}</p>
               ) : null}
+              <ReleaseMetricBadge
+                youtubeViewCount={release.youtubeViewCount}
+                redditUpvotes={release.score}
+                redditComments={release.commentCount}
+                className="mt-3"
+                compact
+              />
               <div className="mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.16em] text-black/48">
                 {release.genreName ? <span>{release.genreName}</span> : null}
                 {release.labelName ? <span>{release.labelName}</span> : null}
@@ -164,6 +172,13 @@ function RadarRecommendationList({ releases }: { releases: RadarRecommendation[]
               {release.artistName && release.projectTitle ? (
                 <p className="mt-1 text-sm text-black/62">{release.projectTitle}</p>
               ) : null}
+              <ReleaseMetricBadge
+                youtubeViewCount={release.youtubeViewCount}
+                redditUpvotes={release.redditUpvotes}
+                redditComments={release.redditComments}
+                className="mt-3"
+                compact
+              />
               <div className="mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.16em] text-black/48">
                 {release.genreName ? <span>{release.genreName}</span> : null}
                 {release.labelName ? <span>{release.labelName}</span> : null}

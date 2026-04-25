@@ -2,6 +2,7 @@ import { cacheLife, cacheTag } from "next/cache";
 
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ensureDatabase } from "@/lib/database";
+import { applyReleaseEditorialFields, buildVisibleReleaseWhere } from "@/lib/editorial";
 import { isSpecificGenreProfile } from "@/lib/genre-profile";
 import { prisma } from "@/lib/prisma";
 import { resolveBestGenreProfile } from "@/lib/genre-resolution";
@@ -19,12 +20,15 @@ export type SearchOverlayIndexItem = {
   sourceUrl: string;
   youtubeUrl: string | null;
   youtubeMusicUrl: string | null;
+  youtubeViewCount: number | null;
   bandcampUrl: string | null;
   officialWebsiteUrl: string | null;
   officialStoreUrl: string | null;
   genreName: string | null;
   summary: string | null;
   aiSummary: string | null;
+  score: number | null;
+  commentCount: number | null;
   publishedAt: string;
 };
 
@@ -49,12 +53,19 @@ const searchOverlaySelect = {
   sourceUrl: true,
   youtubeUrl: true,
   youtubeMusicUrl: true,
+  youtubeViewCount: true,
   bandcampUrl: true,
   officialWebsiteUrl: true,
   officialStoreUrl: true,
   genreName: true,
+  genreOverride: true,
   summary: true,
+  summaryOverride: true,
+  imageUrlOverride: true,
+  sourceUrlOverride: true,
   aiSummary: true,
+  score: true,
+  commentCount: true,
   publishedAt: true,
 } as const;
 
@@ -68,17 +79,38 @@ export async function getSearchOverlayPayload(): Promise<SearchOverlayPayload> {
 
   const releases = await prisma.release.findMany({
     select: searchOverlaySelect,
+    where: buildVisibleReleaseWhere(),
     orderBy: { publishedAt: "desc" },
   });
 
-  const results = releases.map((release) => ({
-    ...release,
-    publishedAt: release.publishedAt.toISOString(),
+  const editedReleases = releases.map((release) => applyReleaseEditorialFields(release));
+  const results = editedReleases.map((editedRelease) => ({
+    id: editedRelease.id,
+    slug: editedRelease.slug,
+    title: editedRelease.title,
+    artistName: editedRelease.artistName,
+    projectTitle: editedRelease.projectTitle,
+    releaseType: editedRelease.releaseType,
+    imageUrl: editedRelease.imageUrl,
+    thumbnailUrl: editedRelease.thumbnailUrl,
+    sourceUrl: editedRelease.sourceUrl,
+    youtubeUrl: editedRelease.youtubeUrl,
+    youtubeMusicUrl: editedRelease.youtubeMusicUrl,
+    youtubeViewCount: editedRelease.youtubeViewCount,
+    bandcampUrl: editedRelease.bandcampUrl,
+    officialWebsiteUrl: editedRelease.officialWebsiteUrl,
+    officialStoreUrl: editedRelease.officialStoreUrl,
+    genreName: editedRelease.genreName,
+    summary: editedRelease.summary,
+    aiSummary: editedRelease.aiSummary,
+    score: editedRelease.score,
+    commentCount: editedRelease.commentCount,
+    publishedAt: editedRelease.publishedAt.toISOString(),
   }));
 
   return {
     generatedAt: new Date().toISOString(),
-    genres: buildGenreFacets(releases),
+    genres: buildGenreFacets(editedReleases),
     results,
   };
 }

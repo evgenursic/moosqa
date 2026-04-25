@@ -2,15 +2,16 @@ import { ReleaseType } from "@/generated/prisma/enums";
 import { getListeningLinks } from "@/lib/listening-links";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
+import { ReleaseMetricBadge } from "@/components/release-metric-badge";
 import {
   cn,
   formatContextualReleaseDateLabel,
   formatCompactUtcDate,
-  formatCompactWholeCount,
   formatRedditDateLabel,
   formatScore,
   getDisplayGenre,
 } from "@/lib/utils";
+import { buildBestReleaseMetricSignal } from "@/lib/release-metrics";
 
 type ReleaseBriefProps = {
   release: {
@@ -28,6 +29,8 @@ type ReleaseBriefProps = {
     youtubeMusicUrl?: string | null;
     youtubeViewCount?: number | null;
     youtubePublishedAt?: Date | string | null;
+    score?: number | null;
+    commentCount?: number | null;
     bandcampUrl?: string | null;
     officialWebsiteUrl?: string | null;
     officialStoreUrl?: string | null;
@@ -50,7 +53,14 @@ export function ReleaseBrief({
 }: ReleaseBriefProps) {
   const directLinks = getListeningLinks(release).filter((link) => link.isDirect);
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
-  const youtubeMetadata = buildYouTubeMetadataLine(release);
+  const youtubePublished = formatCompactUtcDate(release.youtubePublishedAt);
+  const hasFrontMetric = Boolean(
+    buildBestReleaseMetricSignal({
+      youtubeViewCount: release.youtubeViewCount,
+      redditUpvotes: release.score,
+      redditComments: release.commentCount,
+    }),
+  );
 
   return (
     <ReleaseLink
@@ -90,13 +100,23 @@ export function ReleaseBrief({
           {release.artistName && release.projectTitle ? release.projectTitle : release.title}
         </p>
 
-        {youtubeMetadata ? (
-          <p
-            aria-label={youtubeMetadata.ariaLabel}
-            className="mt-2 text-[11px] uppercase tracking-[0.18em] text-black/52"
-          >
-            {youtubeMetadata.label}
-          </p>
+        {hasFrontMetric || youtubePublished ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <ReleaseMetricBadge
+              youtubeViewCount={release.youtubeViewCount}
+              redditUpvotes={release.score}
+              redditComments={release.commentCount}
+              compact
+            />
+            {youtubePublished ? (
+              <span
+                aria-label={`Published on YouTube ${youtubePublished}`}
+                className="text-[9px] uppercase tracking-[0.16em] text-black/48"
+              >
+                Published {youtubePublished}
+              </span>
+            ) : null}
+          </div>
         ) : null}
 
         <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-black/52">
@@ -105,24 +125,6 @@ export function ReleaseBrief({
       </div>
     </ReleaseLink>
   );
-}
-
-function buildYouTubeMetadataLine(release: ReleaseBriefProps["release"]) {
-  const youtubeViews = formatCompactWholeCount(release.youtubeViewCount);
-  const youtubePublished = formatCompactUtcDate(release.youtubePublishedAt);
-  const parts = [
-    youtubeViews ? `${youtubeViews} views` : null,
-    youtubePublished ? `Published ${youtubePublished}` : null,
-  ].filter((part): part is string => Boolean(part));
-
-  if (parts.length === 0) {
-    return null;
-  }
-
-  return {
-    label: `YouTube ${parts.join(" / ")}`,
-    ariaLabel: `YouTube metadata: ${parts.join("; ")}`,
-  };
 }
 
 function renderEmphasis(
