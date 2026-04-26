@@ -4,8 +4,6 @@ import { ReleaseCardActions } from "@/components/release-card-actions";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
 import { ReleaseMetricBadge } from "@/components/release-metric-badge";
-import { ReleaseStatsSummary } from "@/components/release-stats-summary";
-import { TopEngagedVisual } from "@/components/top-engaged-visual";
 import { TopRatedVisual } from "@/components/top-rated-visual";
 import {
   formatContextualReleaseDateLabel,
@@ -69,7 +67,6 @@ export function ReleaseCard({
 }: ReleaseCardProps) {
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
   const metaItems = getMetaItems(release, context);
-  const showEngagementVisual = context === "top-engaged" && hasEngagementData(release);
 
   return (
     <article className="group min-w-0 border-t border-[var(--color-line)] pt-6">
@@ -123,12 +120,12 @@ export function ReleaseCard({
         <p className="section-kicker text-black/43">
           {formatReleaseTypeLabel(release.releaseType)}
         </p>
-        <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="mt-3">
           <ReleaseLink
             releaseId={release.id}
             slug={release.slug}
             fromHref={fromHref}
-            className="block min-w-0 flex-1 cursor-pointer"
+            className="block min-w-0 cursor-pointer"
           >
             <h3
               className={
@@ -145,17 +142,6 @@ export function ReleaseCard({
               {release.artistName && release.projectTitle ? release.projectTitle : release.title}
             </p>
           </ReleaseLink>
-
-          <ReleaseStatsSummary
-            youtubeViewCount={release.youtubeViewCount}
-            youtubePublishedAt={release.youtubePublishedAt}
-            redditUpvotes={release.score}
-            redditComments={release.commentCount}
-            bandcampSupporterCount={release.bandcampSupporterCount}
-            bandcampFollowerCount={release.bandcampFollowerCount}
-            compact
-            className="w-full md:w-[13.5rem] md:shrink-0"
-          />
         </div>
 
         <div className="mt-4 flex flex-wrap gap-3 break-words text-[11px] uppercase tracking-[0.18em] text-black/55">
@@ -165,14 +151,6 @@ export function ReleaseCard({
         </div>
         {context === "top-rated" ? (
           <TopRatedVisual average={release.scoreAverage} count={release.scoreCount} />
-        ) : null}
-
-        {showEngagementVisual ? (
-          <TopEngagedVisual
-            score={release.score}
-            commentCount={release.commentCount}
-            compact
-          />
         ) : null}
 
         <p className="mt-4 text-sm leading-6 text-black/66">
@@ -241,11 +219,4 @@ function getMetaItems(
   }
 
   return items;
-}
-
-function hasEngagementData(release: ReleaseCardProps["release"]) {
-  return (
-    (release.score ?? 0) > 0 ||
-    (release.commentCount ?? 0) > 0
-  );
 }

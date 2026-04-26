@@ -6,7 +6,6 @@ import { ReleaseMetricBadge } from "@/components/release-metric-badge";
 import {
   cn,
   formatContextualReleaseDateLabel,
-  formatCompactUtcDate,
   formatRedditDateLabel,
   formatScore,
   getDisplayGenre,
@@ -54,7 +53,6 @@ export function ReleaseBrief({
 }: ReleaseBriefProps) {
   const directLinks = getListeningLinks(release).filter((link) => link.isDirect);
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
-  const youtubePublished = formatCompactUtcDate(release.youtubePublishedAt);
 
   return (
     <ReleaseLink
@@ -104,15 +102,6 @@ export function ReleaseBrief({
         <p className="mt-1 truncate text-sm leading-6 text-black/60">
           {release.artistName && release.projectTitle ? release.projectTitle : release.title}
         </p>
-
-        {youtubePublished ? (
-          <p
-            aria-label={`Published on YouTube ${youtubePublished}`}
-            className="mt-2 text-[9px] uppercase tracking-[0.16em] text-black/48"
-          >
-            Published {youtubePublished}
-          </p>
-        ) : null}
 
         <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-black/52">
           {renderEmphasis(emphasis, release, directLinks.length)}

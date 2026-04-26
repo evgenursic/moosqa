@@ -9,9 +9,7 @@ import { MobileReleaseNav } from "@/components/mobile-release-nav";
 import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleasePublicCounters } from "@/components/release-public-counters";
-import { ReleaseStatsSummary } from "@/components/release-stats-summary";
 import { ReleaseUserActions } from "@/components/release-user-actions";
-import { TopEngagedVisual } from "@/components/top-engaged-visual";
 import { formatExternalSourceTypeLabel, getVisibleExternalSources } from "@/lib/external-sources";
 import { sanitizeInternalHref } from "@/lib/navigation";
 import { normalizePublicHttpUrl } from "@/lib/safe-url";
@@ -253,11 +251,6 @@ function renderReleasePage(
               </p>
             </div>
 
-            <TopEngagedVisual
-              score={release.score}
-              commentCount={release.commentCount}
-            />
-
             {renderReleasePublicCounters(release)}
 
             <ClientWidgetBoundary
@@ -319,16 +312,6 @@ function renderReleasePage(
 
             <div className="border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
               <p className="section-kicker text-black/45">At a glance</p>
-              <div className="mt-4">
-                <ReleaseStatsSummary
-                  youtubeViewCount={release.youtubeViewCount}
-                  youtubePublishedAt={release.youtubePublishedAt}
-                  redditUpvotes={release.score}
-                  redditComments={release.commentCount}
-                  bandcampSupporterCount={release.bandcampSupporterCount}
-                  bandcampFollowerCount={release.bandcampFollowerCount}
-                />
-              </div>
               <div className="mt-4 flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.18em] text-black/55">
                 <span className="border border-[var(--color-line)] px-3 py-2">{displayGenre}</span>
                 {release.labelName ? (

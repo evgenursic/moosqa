@@ -4,7 +4,6 @@ import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
 import { ReleaseMetricBadge } from "@/components/release-metric-badge";
-import { ReleaseStatsSummary } from "@/components/release-stats-summary";
 import {
   formatContextualReleaseDateLabel,
   formatRedditDateLabel,
@@ -155,15 +154,6 @@ export function HeroFeature({ release, fromHref = null }: HeroFeatureProps) {
         </div>
 
         <div>
-          <ReleaseStatsSummary
-            youtubeViewCount={release.youtubeViewCount}
-            youtubePublishedAt={release.youtubePublishedAt}
-            redditUpvotes={release.score}
-            redditComments={release.commentCount}
-            bandcampSupporterCount={release.bandcampSupporterCount}
-            bandcampFollowerCount={release.bandcampFollowerCount}
-          />
-
           <RatingMeter
             releaseId={release.id}
             initialAverage={release.scoreAverage}
