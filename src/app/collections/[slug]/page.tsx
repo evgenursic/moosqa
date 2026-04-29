@@ -6,6 +6,7 @@ import { ReleaseBrief } from "@/components/release-brief";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getPublicEditorialCollection } from "@/lib/public-editorial";
+import { getPopularityMaxForReleases } from "@/lib/release-metrics";
 import { getSiteUrl } from "@/lib/site";
 import { formatDetailedUtcDate } from "@/lib/utils";
 
@@ -94,6 +95,7 @@ async function CollectionContent({ params }: CollectionPageProps) {
       </section>
     );
   }
+  const popularityMaxRaw = getPopularityMaxForReleases(collection.entries.map((entry) => entry.release));
 
   return (
     <section className="border-t border-[var(--color-line)] py-10 md:py-14">
@@ -123,7 +125,12 @@ async function CollectionContent({ params }: CollectionPageProps) {
               {entry.note ? <span>{entry.note}</span> : null}
             </div>
             <div className="mt-4">
-              <ReleaseBrief release={entry.release} className="border-t-0 pt-0" fromHref={`/collections/${collection.slug}`} />
+              <ReleaseBrief
+                release={entry.release}
+                className="border-t-0 pt-0"
+                fromHref={`/collections/${collection.slug}`}
+                popularityMaxRaw={popularityMaxRaw}
+              />
             </div>
           </article>
         ))}

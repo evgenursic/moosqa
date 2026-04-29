@@ -34,6 +34,7 @@ type HeroFeatureProps = {
     scoreCount: number;
     score?: number | null;
     commentCount?: number | null;
+    popularityMaxRaw?: number | null;
     redditPermalink: string;
     sourceUrl: string;
     youtubeUrl: string | null;
@@ -47,9 +48,10 @@ type HeroFeatureProps = {
     officialStoreUrl: string | null;
   };
   fromHref?: string | null;
+  popularityMaxRaw?: number | null;
 };
 
-export function HeroFeature({ release, fromHref = null }: HeroFeatureProps) {
+export function HeroFeature({ release, fromHref = null, popularityMaxRaw = null }: HeroFeatureProps) {
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
   const releaseDateLabel = formatContextualReleaseDateLabel(
     release.releaseType,
@@ -85,6 +87,7 @@ export function HeroFeature({ release, fromHref = null }: HeroFeatureProps) {
           youtubeViewCount={release.youtubeViewCount}
           redditUpvotes={release.score}
           redditComments={release.commentCount}
+          popularityMaxRaw={popularityMaxRaw ?? release.popularityMaxRaw ?? null}
           bandcampSupporterCount={release.bandcampSupporterCount}
           bandcampFollowerCount={release.bandcampFollowerCount}
           fallbackLabel={formatReleaseTypeLabel(release.releaseType)}

@@ -7,6 +7,7 @@ import { isSpecificGenreProfile } from "@/lib/genre-profile";
 import { prisma } from "@/lib/prisma";
 import { resolveBestGenreProfile } from "@/lib/genre-resolution";
 import { normalizeSearchText } from "@/lib/release-search";
+import { getPopularityMaxForReleases } from "@/lib/release-metrics";
 
 export type SearchOverlayIndexItem = {
   id: string;
@@ -32,6 +33,7 @@ export type SearchOverlayIndexItem = {
   aiSummary: string | null;
   score: number | null;
   commentCount: number | null;
+  popularityMaxRaw?: number | null;
   publishedAt: string;
 };
 
@@ -90,7 +92,7 @@ export async function getSearchOverlayPayload(): Promise<SearchOverlayPayload> {
   });
 
   const editedReleases = releases.map((release) => applyReleaseEditorialFields(release));
-  const results = editedReleases.map((editedRelease) => ({
+  const baseResults = editedReleases.map((editedRelease) => ({
     id: editedRelease.id,
     slug: editedRelease.slug,
     title: editedRelease.title,
@@ -115,6 +117,11 @@ export async function getSearchOverlayPayload(): Promise<SearchOverlayPayload> {
     score: editedRelease.score,
     commentCount: editedRelease.commentCount,
     publishedAt: editedRelease.publishedAt.toISOString(),
+  }));
+  const popularityMaxRaw = getPopularityMaxForReleases(baseResults);
+  const results = baseResults.map((result) => ({
+    ...result,
+    popularityMaxRaw,
   }));
 
   return {

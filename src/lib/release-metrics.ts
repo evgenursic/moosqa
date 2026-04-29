@@ -5,6 +5,7 @@ export type ReleaseMetricSignal = {
   kind:
     | "reddit-upvotes"
     | "youtube"
+    | "popularity"
     | "reddit-comments"
     | "bandcamp-supporters"
     | "bandcamp-followers"
@@ -20,6 +21,7 @@ export type ReleaseMetricInput = {
   youtubeViewCount?: number | string | null;
   redditUpvotes?: number | string | null;
   redditComments?: number | string | null;
+  popularityMaxRaw?: number | string | null;
   bandcampSupporterCount?: number | string | null;
   bandcampFollowerCount?: number | string | null;
   fallbackLabel?: string | null;
@@ -29,6 +31,7 @@ export function getPrimaryReleaseMetric(input: ReleaseMetricInput): ReleaseMetri
   const youtubeViewCount = coerceMetricNumber(input.youtubeViewCount);
   const redditUpvotes = coerceMetricNumber(input.redditUpvotes);
   const redditComments = coerceMetricNumber(input.redditComments);
+  const popularityMaxRaw = coerceMetricNumber(input.popularityMaxRaw);
   const bandcampSupporterCount = coerceMetricNumber(input.bandcampSupporterCount);
   const bandcampFollowerCount = coerceMetricNumber(input.bandcampFollowerCount);
   const preferYoutubeViews = isYouTubeFirstMetricInput(input);
@@ -45,6 +48,15 @@ export function getPrimaryReleaseMetric(input: ReleaseMetricInput): ReleaseMetri
   }
 
   const upvotes = formatCompactWholeCount(redditUpvotes);
+  const popularity = formatPopularityPercent(redditUpvotes, redditComments, popularityMaxRaw);
+  if (popularity !== null) {
+    return {
+      kind: "popularity",
+      label: `${popularity}% popular`,
+      ariaLabel: `${popularity}% popular relative to this MooSQA set`,
+    };
+  }
+
   if (upvotes) {
     return buildRedditUpvotesMetric(upvotes);
   }
@@ -108,6 +120,24 @@ export function getPrimaryReleaseMetric(input: ReleaseMetricInput): ReleaseMetri
 
 export const buildBestReleaseMetricSignal = getPrimaryReleaseMetric;
 
+type PopularitySource = {
+  score?: number | string | null;
+  commentCount?: number | string | null;
+  redditUpvotes?: number | string | null;
+  redditComments?: number | string | null;
+};
+
+export function getPopularityRaw(input: PopularitySource) {
+  const upvotes = coerceMetricNumber(input.redditUpvotes ?? input.score);
+  const comments = coerceMetricNumber(input.redditComments ?? input.commentCount);
+  return Math.max(upvotes || 0, 0) + Math.max(comments || 0, 0);
+}
+
+export function getPopularityMaxForReleases<T extends PopularitySource>(releases: T[]) {
+  const max = Math.max(0, ...releases.map(getPopularityRaw));
+  return max > 0 ? max : null;
+}
+
 export function isYouTubeFirstMetricInput(input: ReleaseMetricInput) {
   const sourcePlatform = detectPlatform(input.sourceUrl || "");
   if (sourcePlatform === "youtube" || sourcePlatform === "youtube-music") {
@@ -115,6 +145,23 @@ export function isYouTubeFirstMetricInput(input: ReleaseMetricInput) {
   }
 
   return /\byoutube(?:\s+music)?\b/i.test(input.outletName || "");
+}
+
+function formatPopularityPercent(
+  redditUpvotes: number | null,
+  redditComments: number | null,
+  popularityMaxRaw: number | null,
+) {
+  if (!popularityMaxRaw || popularityMaxRaw <= 0) {
+    return null;
+  }
+
+  const raw = Math.max(redditUpvotes || 0, 0) + Math.max(redditComments || 0, 0);
+  if (raw <= 0) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(100, Math.round((raw / popularityMaxRaw) * 100)));
 }
 
 function buildRedditUpvotesMetric(upvotes: string): ReleaseMetricSignal {

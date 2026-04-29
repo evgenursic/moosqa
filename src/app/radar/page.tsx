@@ -8,6 +8,7 @@ import { ReleaseMetricBadge } from "@/components/release-metric-badge";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getRecommendedReleasesForUser, type RadarRecommendation } from "@/lib/recommendations";
+import { getPopularityMaxForReleases } from "@/lib/release-metrics";
 import { getSiteUrl } from "@/lib/site";
 import { isSupabaseAuthConfigured } from "@/lib/supabase/config";
 import { getSupabaseServerUser } from "@/lib/supabase/server";
@@ -115,6 +116,8 @@ function RadarReleaseList({
   releases: PersonalRadarRelease[];
   empty: string;
 }) {
+  const popularityMaxRaw = getPopularityMaxForReleases(releases);
+
   return (
     <section className="border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
       <p className="section-kicker text-black/45">{title}</p>
@@ -132,6 +135,7 @@ function RadarReleaseList({
                 youtubeViewCount={release.youtubeViewCount}
                 redditUpvotes={release.score}
                 redditComments={release.commentCount}
+                popularityMaxRaw={popularityMaxRaw}
                 bandcampSupporterCount={release.bandcampSupporterCount}
                 bandcampFollowerCount={release.bandcampFollowerCount}
                 fallbackLabel="New"
@@ -160,6 +164,8 @@ function RadarReleaseList({
 }
 
 function RadarRecommendationList({ releases }: { releases: RadarRecommendation[] }) {
+  const popularityMaxRaw = getPopularityMaxForReleases(releases);
+
   return (
     <section className="border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
       <p className="section-kicker text-black/45">Recommended next</p>
@@ -177,6 +183,7 @@ function RadarRecommendationList({ releases }: { releases: RadarRecommendation[]
                 youtubeViewCount={release.youtubeViewCount}
                 redditUpvotes={release.redditUpvotes}
                 redditComments={release.redditComments}
+                popularityMaxRaw={popularityMaxRaw}
                 bandcampSupporterCount={release.bandcampSupporterCount}
                 bandcampFollowerCount={release.bandcampFollowerCount}
                 fallbackLabel="New"

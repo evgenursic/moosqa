@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildBestReleaseMetricSignal } from "../../src/lib/release-metrics";
+import {
+  buildBestReleaseMetricSignal,
+  getPopularityMaxForReleases,
+  getPopularityRaw,
+} from "../../src/lib/release-metrics";
 
 describe("release metric badge helpers", () => {
   it("prefers Reddit upvotes over YouTube and Bandcamp signals", () => {
@@ -17,6 +21,24 @@ describe("release metric badge helpers", () => {
         kind: "reddit-upvotes",
         label: "84 upvotes",
         ariaLabel: "84 Reddit upvotes",
+      },
+    );
+  });
+
+  it("shows relative popularity when a visible set max is available", () => {
+    assert.deepEqual(
+      buildBestReleaseMetricSignal({
+        sourceUrl: "https://www.reddit.com/r/indieheads/comments/test",
+        youtubeViewCount: 12400,
+        redditUpvotes: 84,
+        redditComments: 16,
+        popularityMaxRaw: 200,
+        bandcampSupporterCount: 320,
+      }),
+      {
+        kind: "popularity",
+        label: "50% popular",
+        ariaLabel: "50% popular relative to this MooSQA set",
       },
     );
   });
@@ -66,6 +88,20 @@ describe("release metric badge helpers", () => {
       "16 comments",
     );
     assert.equal(buildBestReleaseMetricSignal({ youtubeViewCount: 0, redditUpvotes: 0, redditComments: 0 }), null);
+  });
+
+  it("derives popularity max from safe Reddit response values", () => {
+    assert.equal(getPopularityRaw({ score: "84", commentCount: "16" }), 100);
+    assert.equal(getPopularityRaw({ redditUpvotes: -4, redditComments: Number.NaN }), 0);
+    assert.equal(
+      getPopularityMaxForReleases([
+        { score: 84, commentCount: 16 },
+        { redditUpvotes: "160", redditComments: "40" },
+        { score: 0, commentCount: 0 },
+      ]),
+      200,
+    );
+    assert.equal(getPopularityMaxForReleases([{ score: 0, commentCount: 0 }]), null);
   });
 
   it("uses a safe non-numeric fallback when no trusted metric exists", () => {

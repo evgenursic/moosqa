@@ -9,6 +9,7 @@ import { ReleaseLink } from "@/components/release-link";
 import { ReleaseMetricBadge } from "@/components/release-metric-badge";
 import { loadSearchIndex, readCachedSearchIndex } from "@/lib/client-search-index";
 import { type SearchOverlayIndexItem } from "@/lib/search-overlay";
+import { getPopularityMaxForReleases } from "@/lib/release-metrics";
 import { filterAndRankReleaseListings } from "@/lib/release-search";
 import { formatRedditDateLabel, formatReleaseTypeLabel, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
 
@@ -581,6 +582,8 @@ function SearchLiveResults({
     );
   }
 
+  const popularityMaxRaw = getPopularityMaxForReleases(results);
+
   return (
     <div className="mt-6 md:mt-8">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-white/48">
@@ -620,6 +623,7 @@ function SearchLiveResults({
                 youtubeViewCount={result.youtubeViewCount}
                 redditUpvotes={result.score}
                 redditComments={result.commentCount}
+                popularityMaxRaw={popularityMaxRaw ?? result.popularityMaxRaw ?? null}
                 bandcampSupporterCount={result.bandcampSupporterCount}
                 bandcampFollowerCount={result.bandcampFollowerCount}
                 fallbackLabel={formatReleaseTypeLabel(result.releaseType)}

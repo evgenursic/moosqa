@@ -24,6 +24,7 @@ import {
   type ReleaseSectionKey,
   releaseSectionDefinitions,
 } from "@/lib/release-sections";
+import { getPopularityMaxForReleases } from "@/lib/release-metrics";
 import { getHomepageGenreFilters } from "@/lib/search-overlay";
 import { getSiteUrl } from "@/lib/site";
 import { refreshHomepageData, shouldBlockForHomepageRefresh } from "@/lib/sync-releases";
@@ -128,6 +129,7 @@ async function HomeContent({ searchParams }: HomePageProps) {
   }
 
   const latestReleases = sections.latest;
+  const latestPopularityMaxRaw = getPopularityMaxForReleases(latestReleases);
 
   return (
     <>
@@ -161,19 +163,32 @@ async function HomeContent({ searchParams }: HomePageProps) {
           <div className="grid gap-8 lg:grid-cols-12">
             {latestReleases[0] ? (
               <div className="lg:col-span-6">
-                <ReleaseCard release={latestReleases[0]} priority fromHref="/#latest" />
+                <ReleaseCard
+                  release={latestReleases[0]}
+                  priority
+                  fromHref="/#latest"
+                  popularityMaxRaw={latestPopularityMaxRaw}
+                />
               </div>
             ) : null}
 
             {latestReleases[1] ? (
               <div className="lg:col-span-3">
-                <ReleaseCard release={latestReleases[1]} fromHref="/#latest" />
+                <ReleaseCard
+                  release={latestReleases[1]}
+                  fromHref="/#latest"
+                  popularityMaxRaw={latestPopularityMaxRaw}
+                />
               </div>
             ) : null}
 
             {latestReleases[2] ? (
               <div className="lg:col-span-3">
-                <ReleaseCard release={latestReleases[2]} fromHref="/#latest" />
+                <ReleaseCard
+                  release={latestReleases[2]}
+                  fromHref="/#latest"
+                  popularityMaxRaw={latestPopularityMaxRaw}
+                />
               </div>
             ) : null}
           </div>
@@ -182,7 +197,12 @@ async function HomeContent({ searchParams }: HomePageProps) {
         {latestReleases.length > 3 ? (
           <div className="mt-10 grid gap-8 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
             {latestReleases.slice(3).map((release) => (
-              <ReleaseCard key={release.id} release={release} fromHref="/#latest" />
+              <ReleaseCard
+                key={release.id}
+                release={release}
+                fromHref="/#latest"
+                popularityMaxRaw={latestPopularityMaxRaw}
+              />
             ))}
           </div>
         ) : null}
@@ -285,6 +305,7 @@ type ReleaseCardSectionProps = {
 
 function ReleaseCardSection({ section, releases }: ReleaseCardSectionProps) {
   const definition = releaseSectionDefinitions[section];
+  const popularityMaxRaw = getPopularityMaxForReleases(releases);
 
   return (
     <section
@@ -305,6 +326,7 @@ function ReleaseCardSection({ section, releases }: ReleaseCardSectionProps) {
               priority={index < 2}
               context={getReleaseCardContext(section)}
               fromHref={`/#${definition.homeId}`}
+              popularityMaxRaw={popularityMaxRaw}
             />
           ))}
         </div>

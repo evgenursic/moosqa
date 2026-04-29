@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 import { ReleaseType } from "@/generated/prisma/enums";
 import { ReleaseCard } from "@/components/release-card";
+import { getPopularityMaxForReleases } from "@/lib/release-metrics";
 import { filterAndRankReleaseListings } from "@/lib/release-search";
 
 type ReleaseExplorerProps = {
@@ -40,6 +41,7 @@ type ReleaseExplorerProps = {
     negativeReactionCount: number;
     score?: number | null;
     commentCount?: number | null;
+    popularityMaxRaw?: number | null;
   }>;
 };
 
@@ -105,6 +107,7 @@ export function ReleaseExplorer({ releases }: ReleaseExplorerProps) {
   }, [filteredReleases.length]);
 
   const visibleReleases = filteredReleases.slice(0, visibleCount);
+  const popularityMaxRaw = getPopularityMaxForReleases(visibleReleases);
 
   return (
     <section className="border-t border-[var(--color-line)] py-8 md:py-10" id="explore">
@@ -141,6 +144,7 @@ export function ReleaseExplorer({ releases }: ReleaseExplorerProps) {
               compact={index > 5}
               priority={index < 2}
               fromHref={explorerHref}
+              popularityMaxRaw={popularityMaxRaw}
             />
           ))}
         </div>

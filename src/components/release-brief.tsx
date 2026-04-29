@@ -30,6 +30,7 @@ type ReleaseBriefProps = {
     youtubePublishedAt?: Date | string | null;
     score?: number | null;
     commentCount?: number | null;
+    popularityMaxRaw?: number | null;
     bandcampUrl?: string | null;
     bandcampSupporterCount?: number | null;
     bandcampFollowerCount?: number | null;
@@ -44,6 +45,7 @@ type ReleaseBriefProps = {
   emphasis?: "score" | "time" | "listen";
   className?: string;
   fromHref?: string | null;
+  popularityMaxRaw?: number | null;
 };
 
 export function ReleaseBrief({
@@ -51,6 +53,7 @@ export function ReleaseBrief({
   emphasis = "time",
   className,
   fromHref = null,
+  popularityMaxRaw = null,
 }: ReleaseBriefProps) {
   const directLinks = getListeningLinks(release).filter((link) => link.isDirect);
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
@@ -88,6 +91,7 @@ export function ReleaseBrief({
           youtubeViewCount={release.youtubeViewCount}
           redditUpvotes={release.score}
           redditComments={release.commentCount}
+          popularityMaxRaw={popularityMaxRaw ?? release.popularityMaxRaw ?? null}
           bandcampSupporterCount={release.bandcampSupporterCount}
           bandcampFollowerCount={release.bandcampFollowerCount}
           fallbackLabel={formatReleaseTypeLabel(release.releaseType)}

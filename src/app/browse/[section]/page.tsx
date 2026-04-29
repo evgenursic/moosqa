@@ -15,6 +15,7 @@ import {
   isReleaseSectionKey,
 } from "@/lib/release-sections";
 import { buildArchiveHref, parseArchiveViewMode } from "@/lib/archive-links";
+import { getPopularityMaxForReleases } from "@/lib/release-metrics";
 import { getSiteUrl } from "@/lib/site";
 import { refreshHomepageData, shouldBlockForHomepageRefresh } from "@/lib/sync-releases";
 
@@ -176,6 +177,7 @@ export default async function BrowseSectionPage({
       })),
     },
   };
+  const popularityMaxRaw = getPopularityMaxForReleases(archive.releases);
 
   return (
     <main className="editorial-shell flex-1 px-4 pb-10 pt-4 md:px-8">
@@ -300,6 +302,7 @@ export default async function BrowseSectionPage({
                   priority={index < 2}
                   context={getReleaseCardContext(section)}
                   fromHref={archiveHref}
+                  popularityMaxRaw={popularityMaxRaw}
                 />
               ))}
             </div>

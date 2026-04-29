@@ -7,6 +7,7 @@ import { ReleaseCard } from "@/components/release-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getPublicEditorialHubData } from "@/lib/public-editorial";
+import { getPopularityMaxForReleases } from "@/lib/release-metrics";
 import { getSiteUrl } from "@/lib/site";
 import { formatDetailedUtcDate } from "@/lib/utils";
 
@@ -39,8 +40,12 @@ export default function PicksPage() {
 
 async function PicksContent() {
   const editorial = await getPublicEditorialHubData();
-  const hasFeaturedReleases = editorial.featuredReleases.length > 0;
+  const featuredReleases = editorial.featuredReleases.filter(
+    (release): release is NonNullable<typeof release> => Boolean(release),
+  );
+  const hasFeaturedReleases = featuredReleases.length > 0;
   const hasCollections = editorial.collections.length > 0;
+  const featuredPopularityMaxRaw = getPopularityMaxForReleases(featuredReleases);
 
   return (
     <section className="border-t border-[var(--color-line)] py-10 md:py-14">
@@ -80,13 +85,14 @@ async function PicksContent() {
 
         {hasFeaturedReleases ? (
           <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
-            {editorial.featuredReleases.map((release, index) => (
+            {featuredReleases.map((release, index) => (
               <ReleaseCard
                 key={release.id}
                 release={release}
                 compact={index > 1}
                 priority={index < 2}
                 fromHref="/picks"
+                popularityMaxRaw={featuredPopularityMaxRaw}
               />
             ))}
           </div>
@@ -110,7 +116,13 @@ async function PicksContent() {
 
         {hasCollections ? (
           <div className="grid gap-6 xl:grid-cols-2">
-            {editorial.collections.map((collection) => (
+            {editorial.collections.map((collection) => {
+              const collectionReleases = collection.entries.filter(
+                (release): release is NonNullable<typeof release> => Boolean(release),
+              );
+              const collectionPopularityMaxRaw = getPopularityMaxForReleases(collectionReleases);
+
+              return (
               <article key={collection.id} className="border border-[var(--color-line)] bg-[var(--color-panel)] p-5">
                 <div className="flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.18em] text-black/50">
                   <span>{collection.type.replaceAll("_", " ")}</span>
@@ -126,8 +138,13 @@ async function PicksContent() {
                   <p className="mt-3 max-w-2xl text-sm leading-7 text-black/64">{collection.description}</p>
                 ) : null}
                 <div className="mt-5 grid gap-4">
-                  {collection.entries.map((release) => (
-                    <ReleaseBrief key={release.id} release={release} fromHref={`/collections/${collection.slug}`} />
+                  {collectionReleases.map((release) => (
+                    <ReleaseBrief
+                      key={release.id}
+                      release={release}
+                      fromHref={`/collections/${collection.slug}`}
+                      popularityMaxRaw={collectionPopularityMaxRaw}
+                    />
                   ))}
                 </div>
                 <div className="mt-5">
@@ -139,7 +156,8 @@ async function PicksContent() {
                   </Link>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <EditorialEmptyState

@@ -9,6 +9,7 @@ import { getGenreOverride } from "@/lib/genre-overrides";
 import { prisma } from "@/lib/prisma";
 import { resolveBestGenreProfile } from "@/lib/genre-resolution";
 import { normalizeSearchText } from "@/lib/release-search";
+import { getPopularityMaxForReleases } from "@/lib/release-metrics";
 import { computeTrendingScore } from "@/lib/trending-score";
 import type { ArchiveViewMode } from "@/lib/archive-links";
 
@@ -56,12 +57,13 @@ export type ReleaseListingItem = {
   negativeReactionCount: number;
   score: number | null;
   commentCount: number | null;
+  popularityMaxRaw: number | null;
   upvoteRatio: number | null;
   awardCount: number | null;
   crosspostCount: number | null;
 };
 
-type ReleaseListingRow = ReleaseListingItem & {
+type ReleaseListingRow = Omit<ReleaseListingItem, "popularityMaxRaw"> & {
   isHidden: boolean;
   isFeatured: boolean;
   editorialRank: number;
@@ -688,7 +690,7 @@ async function getSectionReleasesUncached(section: ReleaseSectionKey) {
 }
 
 function prepareDisplayReleases(releases: ReleaseListingRow[]) {
-  return dedupeReleasesForDisplay(
+  const preparedReleases = dedupeReleasesForDisplay(
     releases
       .filter((release) => !release.isHidden)
       .map((release) => {
@@ -730,12 +732,19 @@ function prepareDisplayReleases(releases: ReleaseListingRow[]) {
           negativeReactionCount: edited.negativeReactionCount,
           score: edited.score,
           commentCount: edited.commentCount,
+          popularityMaxRaw: null,
           upvoteRatio: edited.upvoteRatio,
           awardCount: edited.awardCount,
           crosspostCount: edited.crosspostCount,
         } satisfies ReleaseListingItem;
       }),
   ).map(refineDisplayGenre);
+  const popularityMaxRaw = getPopularityMaxForReleases(preparedReleases);
+
+  return preparedReleases.map((release) => ({
+    ...release,
+    popularityMaxRaw,
+  }));
 }
 
 function buildSectionGenreFacets(releases: ReleaseListingItem[]) {
@@ -858,7 +867,19 @@ function refineDisplayGenre(release: ReleaseListingItem): ReleaseListingItem {
   };
 }
 
-function sortByEngagement(left: ReleaseListingItem, right: ReleaseListingItem) {
+function sortByEngagement<
+  T extends Pick<
+    ReleaseListingItem,
+    | "publishedAt"
+    | "commentCount"
+    | "score"
+    | "upvoteRatio"
+    | "awardCount"
+    | "crosspostCount"
+    | "scoreCount"
+    | "scoreAverage"
+  >,
+>(left: T, right: T) {
   const engagementDelta = getEngagementScore(right) - getEngagementScore(left);
   if (engagementDelta !== 0) {
     return engagementDelta;

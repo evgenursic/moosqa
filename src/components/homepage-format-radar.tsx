@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Disc3, Radio, Rows3 } from "lucide-react";
 
 import { ReleaseBrief } from "@/components/release-brief";
+import { getPopularityMaxForReleases } from "@/lib/release-metrics";
 import type { ReleaseListingItem, ReleaseSectionKey } from "@/lib/release-sections";
 
 type HomepageFormatRadarProps = {
@@ -67,6 +68,7 @@ export function HomepageFormatRadar({ albums, eps, live }: HomepageFormatRadarPr
       <div className="grid gap-4 lg:grid-cols-3">
         {lanes.map((lane) => {
           const Icon = lane.icon;
+          const popularityMaxRaw = getPopularityMaxForReleases(lane.releases);
 
           return (
             <div key={lane.key} className="border border-[var(--color-line)] bg-[var(--color-panel)] p-4">
@@ -92,6 +94,7 @@ export function HomepageFormatRadar({ albums, eps, live }: HomepageFormatRadarPr
                     release={release}
                     emphasis={lane.key === "live" ? "listen" : "time"}
                     fromHref="/#format-radar"
+                    popularityMaxRaw={popularityMaxRaw}
                   />
                 ))}
               </div>

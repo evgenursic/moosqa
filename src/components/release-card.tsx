@@ -48,6 +48,7 @@ type ReleaseCardProps = {
     negativeReactionCount: number;
     score?: number | null;
     commentCount?: number | null;
+    popularityMaxRaw?: number | null;
     upvoteRatio?: number | null;
     awardCount?: number | null;
     crosspostCount?: number | null;
@@ -56,6 +57,7 @@ type ReleaseCardProps = {
   priority?: boolean;
   context?: "default" | "top-rated" | "top-engaged";
   fromHref?: string | null;
+  popularityMaxRaw?: number | null;
 };
 
 export function ReleaseCard({
@@ -64,6 +66,7 @@ export function ReleaseCard({
   priority = false,
   context = "default",
   fromHref = null,
+  popularityMaxRaw = null,
 }: ReleaseCardProps) {
   const displayGenre = getDisplayGenre(release.genreName, release.releaseType);
   const metaItems = getMetaItems(release, context);
@@ -100,6 +103,7 @@ export function ReleaseCard({
             youtubeViewCount={release.youtubeViewCount}
             redditUpvotes={release.score}
             redditComments={release.commentCount}
+            popularityMaxRaw={popularityMaxRaw ?? release.popularityMaxRaw ?? null}
             bandcampSupporterCount={release.bandcampSupporterCount}
             bandcampFollowerCount={release.bandcampFollowerCount}
             fallbackLabel={formatReleaseTypeLabel(release.releaseType)}
