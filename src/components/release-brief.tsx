@@ -7,6 +7,7 @@ import {
   cn,
   formatContextualReleaseDateLabel,
   formatRedditDateLabel,
+  formatReleaseTypeLabel,
   formatScore,
   getDisplayGenre,
 } from "@/lib/utils";
@@ -82,11 +83,14 @@ export function ReleaseBrief({
           imageClassName="h-full"
         />
         <ReleaseMetricBadge
+          sourceUrl={release.sourceUrl}
+          outletName={release.outletName}
           youtubeViewCount={release.youtubeViewCount}
           redditUpvotes={release.score}
           redditComments={release.commentCount}
           bandcampSupporterCount={release.bandcampSupporterCount}
           bandcampFollowerCount={release.bandcampFollowerCount}
+          fallbackLabel={formatReleaseTypeLabel(release.releaseType)}
           className="absolute right-1.5 top-1.5 z-10 max-w-[calc(100%-0.75rem)]"
           compact
         />

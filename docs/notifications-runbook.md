@@ -45,12 +45,12 @@ Current status:
 4. `NotificationJob` provides idempotent per-user per-period dedupe.
 5. `NotificationDeliveryLog` records sent, failed, and skipped outcomes for ops review.
 
-## GitHub Actions
+## Scheduled execution
 
-- Workflow: `.github/workflows/notifications.yml`
-- Recommended cadence: hourly
+- Primary schedule: Vercel Cron in `vercel.json` calls `/api/notifications` hourly.
+- Manual retry/debug workflow: `.github/workflows/notifications.yml`
 
-The workflow reports status to `/api/internal/workflow-status` under the `notifications` workflow name so ops staleness alerts can detect missed runs.
+The GitHub workflow intentionally has no scheduled trigger. This avoids GitHub Actions runner-queue cancellations being reported as failed notification runs. Use it manually when Vercel Cron or the endpoint needs verification.
 
 ## Ops debugging
 
@@ -67,6 +67,7 @@ Recommended first checks:
 2. `/api/notifications` without secret -> expect `401`
 3. `/api/notifications?phase=enqueue&mode=all` with secret -> expect `200`
 4. `/ops?secret=<DEBUG_SECRET>` -> inspect recent notification job rows
+5. If Vercel Cron appears stale, run `.github/workflows/notifications.yml` manually to verify the endpoint outside the Vercel scheduler.
 
 ## Safe re-run behavior
 

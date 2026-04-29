@@ -9,7 +9,7 @@
 5. Re-run `npm run db:inspect` and confirm the runtime target still reports the required tables.
 6. Verify `https://moosqa-ci4e.vercel.app/api/health?scope=ready`.
 7. Run `npm run smoke:prod`.
-8. Check `/ops?secret=<DEBUG_SECRET>` for workflow freshness, sync health, alerts, production smoke status, and notification delivery totals.
+8. Check `/ops?secret=<DEBUG_SECRET>` for workflow freshness, sync health, alerts, latest production smoke status, and notification delivery totals.
 
 ## Database Activation
 
@@ -34,7 +34,7 @@ Do not claim migration success unless `db:inspect` shows the required tables on 
 1. Promote the last known good Vercel deployment.
 2. Run `npm run smoke:prod` against production.
 3. Check `/api/health?scope=ready` and `/api/health`.
-4. Confirm GitHub workflow status reporting recovers in `/ops`.
+4. Confirm workflow status reporting recovers in `/ops`.
 5. If a schema-bearing change partially applied, re-run `npm run db:inspect` before making additional DB changes.
 
 ## Failed Sync
@@ -57,9 +57,9 @@ Do not claim migration success unless `db:inspect` shows the required tables on 
 
 - Public cards read stored `Release.youtubeViewCount` and `Release.youtubePublishedAt`; they must not fetch YouTube data during page or card rendering.
 - `Release.youtubeMetadataUpdatedAt` records the last pipeline/manual attempt to refresh YouTube metadata.
-- Front-card metric badges use persisted public signals only: YouTube views first, then Reddit upvotes/comments, then trusted/editor-entered Bandcamp supporter/follower counts.
+- Front-card metric badges use persisted public signals only. YouTube-source releases prefer YouTube views when available; other cards prefer Reddit upvotes, then YouTube views, Reddit comments, trusted/editor-entered Bandcamp supporter/follower counts, and a small release-type fallback when no numeric metric exists.
 - Bandcamp supporter/follower fields are manual/editorial overrides unless a reliable provider is added later. Do not add runtime Bandcamp scraping to page renders.
-- Sync, enrichment, artwork repair, and admin overrides may update the stored YouTube fields. Complete metadata is considered fresh for about one week; incomplete metadata retries after a short cooldown to avoid quota or source-fetch storms.
+- Sync, enrichment, artwork repair, and admin overrides may update the stored YouTube fields. Complete metadata is considered fresh for about one week; incomplete metadata retries after a short cooldown to avoid quota or source-fetch storms. Admin coverage includes YouTube gap counts so recent YouTube-linked releases without view counts are visible.
 - If source metadata fetching fails or YouTube data is missing, preserve the last known stored values and keep cards renderable with omitted metrics.
 - If YouTube extraction behavior changes, fix the metadata parser or repair/enrichment job first, then run the normal smoke flow.
 
@@ -79,6 +79,12 @@ Do not claim migration success unless `db:inspect` shows the required tables on 
 4. Trigger `/api/notifications?phase=enqueue&mode=all` with a valid bearer or query secret.
 5. If jobs remain skipped, inspect missing profile emails, disabled preferences, or transport configuration before retrying.
 6. Re-run `npm run db:inspect` if the route unexpectedly returns `503`.
+
+## GitHub Actions Cancellation Noise
+
+- `Production smoke test` runs on push and manual dispatch only; it is not scheduled hourly because GitHub scheduled jobs can be cancelled before the first step during runner-queue delays.
+- `Notification digests` are scheduled by Vercel Cron and the GitHub workflow is manual-only for endpoint verification.
+- If a GitHub workflow is cancelled before any step starts, treat it as CI scheduler noise unless `/ops`, `/api/health`, or endpoint-level checks also show a product failure.
 
 ## Secret Rotation
 

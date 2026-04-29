@@ -11,6 +11,8 @@ export type RadarRecommendation = {
   projectTitle: string | null;
   labelName: string | null;
   genreName: string | null;
+  outletName?: string | null;
+  sourceUrl?: string | null;
   publishedAt: Date;
   youtubeViewCount: number | null;
   redditUpvotes: number | null;
@@ -31,6 +33,8 @@ type RecommendationCandidate = {
   labelName: string | null;
   genreName: string | null;
   genreOverride: string | null;
+  outletName?: string | null;
+  sourceUrl?: string | null;
   publishedAt: Date;
   qualityScore: number;
   score: number | null;
@@ -118,6 +122,8 @@ export async function getRecommendedReleasesForUser(userId: string) {
       labelName: true,
       genreName: true,
       genreOverride: true,
+      outletName: true,
+      sourceUrl: true,
       publishedAt: true,
       qualityScore: true,
       score: true,
@@ -267,6 +273,8 @@ export function scoreRecommendationCandidate(
     projectTitle: candidate.projectTitle,
     labelName: candidate.labelName,
     genreName: candidate.genreName,
+    outletName: candidate.outletName,
+    sourceUrl: candidate.sourceUrl,
     publishedAt: candidate.publishedAt,
     youtubeViewCount: candidate.youtubeViewCount,
     redditUpvotes: candidate.score,

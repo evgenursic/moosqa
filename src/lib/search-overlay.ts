@@ -17,6 +17,7 @@ export type SearchOverlayIndexItem = {
   releaseType: ReleaseType;
   imageUrl: string | null;
   thumbnailUrl: string | null;
+  outletName: string | null;
   sourceUrl: string;
   youtubeUrl: string | null;
   youtubeMusicUrl: string | null;
@@ -52,6 +53,7 @@ const searchOverlaySelect = {
   releaseType: true,
   imageUrl: true,
   thumbnailUrl: true,
+  outletName: true,
   sourceUrl: true,
   youtubeUrl: true,
   youtubeMusicUrl: true,
@@ -97,6 +99,7 @@ export async function getSearchOverlayPayload(): Promise<SearchOverlayPayload> {
     releaseType: editedRelease.releaseType,
     imageUrl: editedRelease.imageUrl,
     thumbnailUrl: editedRelease.thumbnailUrl,
+    outletName: editedRelease.outletName,
     sourceUrl: editedRelease.sourceUrl,
     youtubeUrl: editedRelease.youtubeUrl,
     youtubeMusicUrl: editedRelease.youtubeMusicUrl,

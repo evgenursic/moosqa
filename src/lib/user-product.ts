@@ -77,6 +77,8 @@ export type PersonalRadarRelease = {
   projectTitle: string | null;
   labelName: string | null;
   genreName: string | null;
+  outletName: string | null;
+  sourceUrl: string;
   publishedAt: Date;
   youtubeViewCount: number | null;
   score: number | null;
@@ -304,6 +306,8 @@ const personalRadarReleaseSelect = {
   projectTitle: true,
   labelName: true,
   genreName: true,
+  outletName: true,
+  sourceUrl: true,
   publishedAt: true,
   youtubeViewCount: true,
   score: true,

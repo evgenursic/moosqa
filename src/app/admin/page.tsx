@@ -133,10 +133,13 @@ async function AdminContent({ searchParams }: AdminPageProps) {
       <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Signal coverage" value={`${dashboard.productAnalytics.publicMetricCoverage.bestSignalCoverageRate}%`} />
         <StatCard label="YouTube cards" value={String(dashboard.productAnalytics.publicMetricCoverage.youtubeVisible)} />
+        <StatCard label="YouTube gaps" value={String(dashboard.productAnalytics.publicMetricCoverage.youtubeMissingViews)} />
+        <StatCard label="Recent YouTube gaps" value={String(dashboard.productAnalytics.publicMetricCoverage.recentYoutubeMissingViews)} />
         <StatCard label="Upvote cards" value={String(dashboard.productAnalytics.publicMetricCoverage.redditUpvoteVisible)} />
         <StatCard label="Comment cards" value={String(dashboard.productAnalytics.publicMetricCoverage.redditCommentVisible)} />
         <StatCard label="Bandcamp cards" value={String(dashboard.productAnalytics.publicMetricCoverage.bandcampMetricVisible)} />
         <StatCard label="YouTube stale" value={String(dashboard.productAnalytics.publicMetricCoverage.youtubeMetadataStale)} />
+        <StatCard label="Missing Reddit score" value={String(dashboard.productAnalytics.publicMetricCoverage.missingRedditScoreForRedditSource)} />
         <StatCard label="No public metric" value={String(dashboard.productAnalytics.publicMetricCoverage.noPublicMetric)} />
       </section>
 

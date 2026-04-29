@@ -14,14 +14,6 @@ const WORKFLOW_STALENESS_THRESHOLDS: Record<string, { thresholdMs: number; caden
     thresholdMs: 3 * HOUR_MS,
     cadenceLabel: "hourly",
   },
-  notifications: {
-    thresholdMs: 3 * HOUR_MS,
-    cadenceLabel: "hourly",
-  },
-  "production-smoke": {
-    thresholdMs: 3 * HOUR_MS,
-    cadenceLabel: "hourly",
-  },
 };
 
 const DETAIL_LABELS: Record<string, string> = {

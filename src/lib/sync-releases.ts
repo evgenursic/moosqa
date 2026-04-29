@@ -1078,11 +1078,31 @@ async function upsertNormalizedReleases(
     existingReleases.map((release) => [release.sourceItemId, release]),
   );
   const artistGenreHints = await loadArtistGenreHints(releases);
+  const needsYoutubeMetadataLookup = (release: NormalizedReleaseRecord) => {
+    const existing = existingBySourceItemId.get(release.sourceItemId) || null;
+    return shouldRefreshYouTubeMetadata({
+      sourceUrl: release.sourceUrl,
+      youtubeUrl: existing?.youtubeUrl || null,
+      youtubeMusicUrl: existing?.youtubeMusicUrl || null,
+      youtubeViewCount: existing?.youtubeViewCount || null,
+      youtubePublishedAt: existing?.youtubePublishedAt || null,
+      youtubeMetadataUpdatedAt: existing?.youtubeMetadataUpdatedAt || null,
+      metadataEnrichedAt: existing?.metadataEnrichedAt || null,
+    });
+  };
   const lightweightLookupEligibleIds = lightweight
     ? new Set(
         releases
           .slice()
-          .sort((left, right) => right.publishedAt.getTime() - left.publishedAt.getTime())
+          .sort((left, right) => {
+            const youtubeDelta =
+              Number(needsYoutubeMetadataLookup(right)) - Number(needsYoutubeMetadataLookup(left));
+            if (youtubeDelta !== 0) {
+              return youtubeDelta;
+            }
+
+            return right.publishedAt.getTime() - left.publishedAt.getTime();
+          })
           .filter((release) => {
             const existing = existingBySourceItemId.get(release.sourceItemId) || null;
             return (
@@ -1091,7 +1111,8 @@ async function upsertNormalizedReleases(
               !existing.thumbnailUrl ||
               !existing.genreName ||
               !isSpecificGenreProfile(existing.genreName) ||
-              !existing.releaseDate
+              !existing.releaseDate ||
+              needsYoutubeMetadataLookup(release)
             );
           })
           .slice(0, LIGHTWEIGHT_SOURCE_LOOKUP_LIMIT)
@@ -1366,8 +1387,17 @@ async function buildReleaseDataForUpsert(
     return withQualityFields(nextReleaseData);
   }
 
+  const shouldRefreshYoutubeMetadataNow = shouldRefreshYouTubeMetadata({
+    sourceUrl: release.sourceUrl,
+    youtubeUrl: existing?.youtubeUrl || null,
+    youtubeMusicUrl: existing?.youtubeMusicUrl || null,
+    youtubeViewCount: existing?.youtubeViewCount || null,
+    youtubePublishedAt: existing?.youtubePublishedAt || null,
+    youtubeMetadataUpdatedAt: existing?.youtubeMetadataUpdatedAt || null,
+    metadataEnrichedAt: existing?.metadataEnrichedAt || null,
+  });
   const sourceMetadata =
-    !release.imageUrl && !existing?.imageUrl
+    (!release.imageUrl && !existing?.imageUrl) || shouldRefreshYoutubeMetadataNow
       ? await resolveSourceMetadata(release.sourceUrl, {
           artistName: release.artistName,
           projectTitle: release.projectTitle,
@@ -1412,15 +1442,6 @@ async function buildReleaseDataForUpsert(
     limit: 3,
   });
   const summaryCheckedAt = new Date();
-  const shouldRefreshYoutubeMetadataNow = shouldRefreshYouTubeMetadata({
-    sourceUrl: release.sourceUrl,
-    youtubeUrl: existing?.youtubeUrl || null,
-    youtubeMusicUrl: existing?.youtubeMusicUrl || null,
-    youtubeViewCount: existing?.youtubeViewCount || null,
-    youtubePublishedAt: existing?.youtubePublishedAt || null,
-    youtubeMetadataUpdatedAt: existing?.youtubeMetadataUpdatedAt || null,
-    metadataEnrichedAt: existing?.metadataEnrichedAt || null,
-  });
   const nextYoutubeUrl = sourceMetadata?.youtubeUrl || existing?.youtubeUrl || null;
   const nextYoutubeMusicUrl = sourceMetadata?.youtubeMusicUrl || existing?.youtubeMusicUrl || null;
   const nextYoutubeViewCount = sourceMetadata?.youtubeViewCount || existing?.youtubeViewCount || null;

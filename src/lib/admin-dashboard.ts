@@ -58,12 +58,15 @@ type DailyTrendRow = {
 type PublicMetricCoverageRow = {
   visibleReleases: bigint;
   youtubeVisible: bigint;
+  youtubeMissingViews: bigint;
+  recentYoutubeMissingViews: bigint;
   redditUpvoteVisible: bigint;
   redditCommentVisible: bigint;
   bandcampSupporterVisible: bigint;
   bandcampFollowerVisible: bigint;
   bandcampMetricVisible: bigint;
   youtubeMetadataStale: bigint;
+  missingRedditScoreForRedditSource: bigint;
   noPublicMetric: bigint;
 };
 
@@ -437,6 +440,25 @@ const getProductAnalyticsData = unstable_cache(
         select
           count(*)::bigint as "visibleReleases",
           count(*) filter (where coalesce(r."youtubeViewCount", 0) > 0)::bigint as "youtubeVisible",
+          count(*) filter (
+            where (
+              r."youtubeUrl" is not null
+              or r."youtubeMusicUrl" is not null
+              or r."sourceUrl" ilike '%youtube.com%'
+              or r."sourceUrl" ilike '%youtu.be%'
+            )
+            and coalesce(r."youtubeViewCount", 0) <= 0
+          )::bigint as "youtubeMissingViews",
+          count(*) filter (
+            where (
+              r."youtubeUrl" is not null
+              or r."youtubeMusicUrl" is not null
+              or r."sourceUrl" ilike '%youtube.com%'
+              or r."sourceUrl" ilike '%youtu.be%'
+            )
+            and coalesce(r."youtubeViewCount", 0) <= 0
+            and r."publishedAt" >= now() - interval '3 day'
+          )::bigint as "recentYoutubeMissingViews",
           count(*) filter (where coalesce(r."score", 0) > 0)::bigint as "redditUpvoteVisible",
           count(*) filter (where coalesce(r."commentCount", 0) > 0)::bigint as "redditCommentVisible",
           count(*) filter (where coalesce(r."bandcampSupporterCount", 0) > 0)::bigint as "bandcampSupporterVisible",
@@ -457,6 +479,10 @@ const getProductAnalyticsData = unstable_cache(
               or r."youtubeMetadataUpdatedAt" < now() - interval '8 day'
             )
           )::bigint as "youtubeMetadataStale",
+          count(*) filter (
+            where r."redditPermalink" is not null
+              and coalesce(r."score", 0) <= 0
+          )::bigint as "missingRedditScoreForRedditSource",
           count(*) filter (
             where coalesce(r."youtubeViewCount", 0) <= 0
               and coalesce(r."score", 0) <= 0
@@ -529,12 +555,15 @@ const getProductAnalyticsData = unstable_cache(
       publicMetricCoverage: {
         visibleReleases: visibleReleaseCount,
         youtubeVisible: Number(publicMetricCoverage?.youtubeVisible || 0),
+        youtubeMissingViews: Number(publicMetricCoverage?.youtubeMissingViews || 0),
+        recentYoutubeMissingViews: Number(publicMetricCoverage?.recentYoutubeMissingViews || 0),
         redditUpvoteVisible: Number(publicMetricCoverage?.redditUpvoteVisible || 0),
         redditCommentVisible: Number(publicMetricCoverage?.redditCommentVisible || 0),
         bandcampSupporterVisible: Number(publicMetricCoverage?.bandcampSupporterVisible || 0),
         bandcampFollowerVisible: Number(publicMetricCoverage?.bandcampFollowerVisible || 0),
         bandcampMetricVisible: Number(publicMetricCoverage?.bandcampMetricVisible || 0),
         youtubeMetadataStale: Number(publicMetricCoverage?.youtubeMetadataStale || 0),
+        missingRedditScoreForRedditSource: Number(publicMetricCoverage?.missingRedditScoreForRedditSource || 0),
         noPublicMetric: noPublicMetricCount,
         bestSignalCoverageRate:
           visibleReleaseCount > 0

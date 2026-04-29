@@ -1,13 +1,16 @@
 name: Notification digests
 
 on:
-  schedule:
-    - cron: "27 * * * *"
   workflow_dispatch:
+
+concurrency:
+  group: notifications-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   notifications:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
     steps:
       - name: Call MooSQA notifications endpoint
         id: notifications_call

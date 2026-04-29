@@ -597,22 +597,37 @@ function SearchLiveResults({
             onClick={onResultSelect}
             className="group grid gap-4 border border-white/10 bg-white/[0.03] p-4 transition duration-300 hover:border-white/24 hover:bg-white/[0.045] md:grid-cols-[12rem_1fr]"
           >
-            <ReleaseArtwork
-              releaseId={result.id}
-              title={result.title}
-              artistName={result.artistName}
-              projectTitle={result.projectTitle}
-              imageUrl={result.imageUrl}
-              thumbnailUrl={result.thumbnailUrl}
-              sourceUrl={result.sourceUrl || null}
-              youtubeUrl={result.youtubeUrl || null}
-              youtubeMusicUrl={result.youtubeMusicUrl || null}
-              bandcampUrl={result.bandcampUrl || null}
-              officialWebsiteUrl={result.officialWebsiteUrl || null}
-              officialStoreUrl={result.officialStoreUrl || null}
-              genreName={result.genreName}
-              imageClassName="aspect-[4/3] md:aspect-[16/10]"
-            />
+            <div className="relative">
+              <ReleaseArtwork
+                releaseId={result.id}
+                title={result.title}
+                artistName={result.artistName}
+                projectTitle={result.projectTitle}
+                imageUrl={result.imageUrl}
+                thumbnailUrl={result.thumbnailUrl}
+                sourceUrl={result.sourceUrl || null}
+                youtubeUrl={result.youtubeUrl || null}
+                youtubeMusicUrl={result.youtubeMusicUrl || null}
+                bandcampUrl={result.bandcampUrl || null}
+                officialWebsiteUrl={result.officialWebsiteUrl || null}
+                officialStoreUrl={result.officialStoreUrl || null}
+                genreName={result.genreName}
+                imageClassName="aspect-[4/3] md:aspect-[16/10]"
+              />
+              <ReleaseMetricBadge
+                sourceUrl={result.sourceUrl || null}
+                outletName={result.outletName || null}
+                youtubeViewCount={result.youtubeViewCount}
+                redditUpvotes={result.score}
+                redditComments={result.commentCount}
+                bandcampSupporterCount={result.bandcampSupporterCount}
+                bandcampFollowerCount={result.bandcampFollowerCount}
+                fallbackLabel={formatReleaseTypeLabel(result.releaseType)}
+                className="absolute right-2 top-2 z-10 max-w-[calc(100%-1rem)]"
+                compact
+                tone="dark"
+              />
+            </div>
 
             <div className="min-w-0">
               <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
@@ -620,17 +635,6 @@ function SearchLiveResults({
                 <span>{formatReleaseTypeLabel(result.releaseType)}</span>
                 <span>{formatRedditDateLabel(new Date(result.publishedAt))}</span>
               </div>
-
-              <ReleaseMetricBadge
-                youtubeViewCount={result.youtubeViewCount}
-                redditUpvotes={result.score}
-                redditComments={result.commentCount}
-                bandcampSupporterCount={result.bandcampSupporterCount}
-                bandcampFollowerCount={result.bandcampFollowerCount}
-                className="mt-3"
-                compact
-                tone="dark"
-              />
 
               <h3 className="mt-3 text-[1.9rem] leading-[0.94] text-white serif-display md:text-[2.25rem]">
                 <span className="card-title-underline">

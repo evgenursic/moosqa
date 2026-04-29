@@ -69,7 +69,6 @@ for (const workflow of endpointWorkflows) {
 const smoke = readWorkflow(".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "push:", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "branches:", ".github/workflows/production-smoke.yml");
-expectIncludes(smoke, "schedule:", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "workflow_dispatch:", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "base_url:", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "statuses: read", ".github/workflows/production-smoke.yml");
@@ -91,6 +90,18 @@ expectIncludes(smoke, "--data @workflow-status.json", ".github/workflows/product
 expectIncludes(smoke, "baseUrl=", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "tests=passed", ".github/workflows/production-smoke.yml");
 expectIncludes(smoke, "tests=failed", ".github/workflows/production-smoke.yml");
+
+const notifications = readWorkflow(".github/workflows/notifications.yml");
+expectIncludes(notifications, "workflow_dispatch:", ".github/workflows/notifications.yml");
+expectIncludes(notifications, "cancel-in-progress: false", ".github/workflows/notifications.yml");
+expectIncludes(notifications, "timeout-minutes: 8", ".github/workflows/notifications.yml");
+expectIncludes(notifications, "NOTIFICATIONS_URL: https://moosqa-ci4e.vercel.app/api/notifications", ".github/workflows/notifications.yml");
+expectIncludes(notifications, 'workflowName": "notifications"', ".github/workflows/notifications.yml");
+expectIncludes(notifications, "--data @workflow-status.json", ".github/workflows/notifications.yml");
+
+const vercel = readWorkflow("vercel.json");
+expectIncludes(vercel, '"path": "/api/sync"', "vercel.json");
+expectIncludes(vercel, '"path": "/api/notifications"', "vercel.json");
 
 if (failures.length > 0) {
   console.error("Workflow checks failed:");

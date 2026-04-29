@@ -95,11 +95,14 @@ export function ReleaseCard({
             priority={priority}
           />
           <ReleaseMetricBadge
+            sourceUrl={release.sourceUrl}
+            outletName={release.outletName}
             youtubeViewCount={release.youtubeViewCount}
             redditUpvotes={release.score}
             redditComments={release.commentCount}
             bandcampSupporterCount={release.bandcampSupporterCount}
             bandcampFollowerCount={release.bandcampFollowerCount}
+            fallbackLabel={formatReleaseTypeLabel(release.releaseType)}
             className="absolute right-3 top-3 z-10 max-w-[calc(100%-1.5rem)]"
             compact={compact}
           />

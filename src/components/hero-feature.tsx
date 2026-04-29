@@ -80,11 +80,14 @@ export function HeroFeature({ release, fromHref = null }: HeroFeatureProps) {
           priority
         />
         <ReleaseMetricBadge
+          sourceUrl={release.sourceUrl}
+          outletName={release.outletName}
           youtubeViewCount={release.youtubeViewCount}
           redditUpvotes={release.score}
           redditComments={release.commentCount}
           bandcampSupporterCount={release.bandcampSupporterCount}
           bandcampFollowerCount={release.bandcampFollowerCount}
+          fallbackLabel={formatReleaseTypeLabel(release.releaseType)}
           className="absolute right-4 top-4 z-10 max-w-[calc(100%-2rem)]"
         />
       </div>

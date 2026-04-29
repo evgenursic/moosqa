@@ -22,6 +22,7 @@ export function ReleaseMetricBadge({
   return (
     <span
       aria-label={signal.ariaLabel}
+      data-release-metric-kind={signal.kind}
       className={cn(
         "inline-flex max-w-full items-center border font-medium uppercase tracking-[0.16em] shadow-[0_10px_28px_rgba(29,34,48,0.12)]",
         compact ? "px-2 py-1 text-[9px]" : "px-3 py-2 text-[10px]",

@@ -124,23 +124,26 @@ function RadarReleaseList({
             <Link
               key={release.id}
               href={`/releases/${release.slug}?from=%2Fradar`}
-              className="block border border-[var(--color-soft-line)] bg-[var(--color-paper)] p-4 transition hover:border-[var(--color-accent-strong)]"
+              className="relative block border border-[var(--color-soft-line)] bg-[var(--color-paper)] p-4 pt-12 transition hover:border-[var(--color-accent-strong)] sm:pr-32 sm:pt-4"
             >
+              <ReleaseMetricBadge
+                sourceUrl={release.sourceUrl}
+                outletName={release.outletName}
+                youtubeViewCount={release.youtubeViewCount}
+                redditUpvotes={release.score}
+                redditComments={release.commentCount}
+                bandcampSupporterCount={release.bandcampSupporterCount}
+                bandcampFollowerCount={release.bandcampFollowerCount}
+                fallbackLabel="New"
+                className="absolute right-3 top-3 z-10 max-w-[calc(100%-1.5rem)]"
+                compact
+              />
               <p className="text-xl leading-tight text-[var(--color-ink)] serif-display">
                 {release.artistName || release.projectTitle || release.title}
               </p>
               {release.artistName && release.projectTitle ? (
                 <p className="mt-1 text-sm text-black/62">{release.projectTitle}</p>
               ) : null}
-              <ReleaseMetricBadge
-                youtubeViewCount={release.youtubeViewCount}
-                redditUpvotes={release.score}
-                redditComments={release.commentCount}
-                bandcampSupporterCount={release.bandcampSupporterCount}
-                bandcampFollowerCount={release.bandcampFollowerCount}
-                className="mt-3"
-                compact
-              />
               <div className="mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.16em] text-black/48">
                 {release.genreName ? <span>{release.genreName}</span> : null}
                 {release.labelName ? <span>{release.labelName}</span> : null}
@@ -166,23 +169,26 @@ function RadarRecommendationList({ releases }: { releases: RadarRecommendation[]
             <Link
               key={release.id}
               href={`/releases/${release.slug}?from=%2Fradar`}
-              className="block border border-[var(--color-soft-line)] bg-[var(--color-paper)] p-4 transition hover:border-[var(--color-accent-strong)]"
+              className="relative block border border-[var(--color-soft-line)] bg-[var(--color-paper)] p-4 pt-12 transition hover:border-[var(--color-accent-strong)] sm:pr-32 sm:pt-4"
             >
+              <ReleaseMetricBadge
+                sourceUrl={release.sourceUrl}
+                outletName={release.outletName}
+                youtubeViewCount={release.youtubeViewCount}
+                redditUpvotes={release.redditUpvotes}
+                redditComments={release.redditComments}
+                bandcampSupporterCount={release.bandcampSupporterCount}
+                bandcampFollowerCount={release.bandcampFollowerCount}
+                fallbackLabel="New"
+                className="absolute right-3 top-3 z-10 max-w-[calc(100%-1.5rem)]"
+                compact
+              />
               <p className="text-xl leading-tight text-[var(--color-ink)] serif-display">
                 {release.artistName || release.projectTitle || release.title}
               </p>
               {release.artistName && release.projectTitle ? (
                 <p className="mt-1 text-sm text-black/62">{release.projectTitle}</p>
               ) : null}
-              <ReleaseMetricBadge
-                youtubeViewCount={release.youtubeViewCount}
-                redditUpvotes={release.redditUpvotes}
-                redditComments={release.redditComments}
-                bandcampSupporterCount={release.bandcampSupporterCount}
-                bandcampFollowerCount={release.bandcampFollowerCount}
-                className="mt-3"
-                compact
-              />
               <div className="mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.16em] text-black/48">
                 {release.genreName ? <span>{release.genreName}</span> : null}
                 {release.labelName ? <span>{release.labelName}</span> : null}
