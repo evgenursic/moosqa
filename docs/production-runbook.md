@@ -83,7 +83,7 @@ Do not claim migration success unless `db:inspect` shows the required tables on 
 ## GitHub Actions Cancellation Noise
 
 - `Production smoke test` runs on push and manual dispatch only; it is not scheduled hourly because GitHub scheduled jobs can be cancelled before the first step during runner-queue delays.
-- `Notification digests` are scheduled by Vercel Cron and the GitHub workflow is manual-only for endpoint verification.
+- `Notification digests` are scheduled by daily Vercel Cron and the GitHub workflow is manual-only for endpoint verification. Do not use an hourly Vercel cron on Hobby-tier projects; it can block deployment.
 - If a GitHub workflow is cancelled before any step starts, treat it as CI scheduler noise unless `/ops`, `/api/health`, or endpoint-level checks also show a product failure.
 
 ## Secret Rotation

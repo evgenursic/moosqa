@@ -47,7 +47,7 @@ Current status:
 
 ## Scheduled execution
 
-- Primary schedule: Vercel Cron in `vercel.json` calls `/api/notifications` hourly.
+- Primary schedule: Vercel Cron in `vercel.json` calls `/api/notifications` daily. Keep this daily unless the Vercel plan explicitly supports more frequent cron schedules.
 - Manual retry/debug workflow: `.github/workflows/notifications.yml`
 
 The GitHub workflow intentionally has no scheduled trigger. This avoids GitHub Actions runner-queue cancellations being reported as failed notification runs. Use it manually when Vercel Cron or the endpoint needs verification.
