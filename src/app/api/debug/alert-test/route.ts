@@ -16,11 +16,6 @@ const DEBUG_ALERT_TEST_RATE_LIMIT = {
 } as const;
 
 export async function POST(request: Request) {
-  const rateLimit = await takeRateLimit(DEBUG_ALERT_TEST_RATE_LIMIT, getRateLimitIdentity(request));
-  if (!rateLimit.allowed) {
-    return createRateLimitResponse(rateLimit, "Too many alert delivery tests.");
-  }
-
   const secret = readRequestSecret(request, {
     queryParam: "secret",
     headerName: "x-debug-secret",
@@ -29,6 +24,11 @@ export async function POST(request: Request) {
 
   if (!allowedSecret || secret !== allowedSecret) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rateLimit = await takeRateLimit(DEBUG_ALERT_TEST_RATE_LIMIT, getRateLimitIdentity(request));
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit, "Too many alert delivery tests.");
   }
 
   const { searchParams } = new URL(request.url);

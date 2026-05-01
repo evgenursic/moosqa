@@ -117,7 +117,7 @@ async function takeDatabaseRateLimit(config: RateLimitConfig, identity: string):
   };
 }
 
-function takeMemoryRateLimit(config: RateLimitConfig, identity: string): RateLimitResult {
+export function takeMemoryRateLimit(config: RateLimitConfig, identity: string): RateLimitResult {
   const now = Date.now();
   const store = getRateLimitStore();
   pruneExpiredEntries(store, now);

@@ -17,14 +17,6 @@ const DEBUG_REPROCESS_RATE_LIMIT = {
 } as const;
 
 export async function POST(request: Request) {
-  const rateLimit = await takeRateLimit(
-    DEBUG_REPROCESS_RATE_LIMIT,
-    getRateLimitIdentity(request),
-  );
-  if (!rateLimit.allowed) {
-    return createRateLimitResponse(rateLimit, "Too many debug reprocess requests.");
-  }
-
   const { searchParams } = new URL(request.url);
   const secret = readRequestSecret(request, {
     queryParam: "secret",
@@ -34,6 +26,14 @@ export async function POST(request: Request) {
 
   if (!allowedSecret || secret !== allowedSecret) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rateLimit = await takeRateLimit(
+    DEBUG_REPROCESS_RATE_LIMIT,
+    getRateLimitIdentity(request),
+  );
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit, "Too many debug reprocess requests.");
   }
 
   const limit = clampReprocessLimit(searchParams.get("limit"));

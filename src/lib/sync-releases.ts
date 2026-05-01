@@ -92,7 +92,7 @@ const SYNC_STATUS_STALE_MS = 1000 * 60 * 12;
 const RECENT_FEED_PRUNE_MIN_POSTS = 50;
 const LIGHTWEIGHT_SOURCE_LOOKUP_LIMIT = 3;
 const QUALITY_AUDIT_LOOKBACK_DAYS = 14;
-const RELEASES_CACHE_REVALIDATE_SECONDS = 300;
+const RELEASE_DETAIL_CACHE_REVALIDATE_SECONDS = 3_600;
 
 declare global {
   var __moosqaHomepageSyncPromise: Promise<SyncResult> | null | undefined;
@@ -335,7 +335,7 @@ const getCachedReleaseBySlug = unstable_cache(
   },
   ["release-by-slug"],
   {
-    revalidate: RELEASES_CACHE_REVALIDATE_SECONDS,
+    revalidate: RELEASE_DETAIL_CACHE_REVALIDATE_SECONDS,
     tags: ["releases", "release-detail"],
   },
 );

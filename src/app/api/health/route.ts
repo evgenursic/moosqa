@@ -5,7 +5,7 @@ import { buildPublicHealthPayload, buildPublicReadinessPayload } from "@/lib/pub
 import {
   createRateLimitResponse,
   getRateLimitIdentity,
-  takeRateLimit,
+  takeMemoryRateLimit,
   withRateLimitHeaders,
 } from "@/lib/rate-limit";
 
@@ -16,7 +16,7 @@ const HEALTH_RATE_LIMIT = {
 } as const;
 
 export async function GET(request: Request) {
-  const rateLimit = await takeRateLimit(HEALTH_RATE_LIMIT, getRateLimitIdentity(request));
+  const rateLimit = takeMemoryRateLimit(HEALTH_RATE_LIMIT, getRateLimitIdentity(request));
   if (!rateLimit.allowed) {
     return createRateLimitResponse(rateLimit, "Too many health check requests.");
   }

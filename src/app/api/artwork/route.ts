@@ -12,6 +12,12 @@ import { fetchPublicHttpUrl, normalizePublicHttpUrl } from "@/lib/safe-url";
 import { getSiteUrl } from "@/lib/site";
 import { resolveSourceMetadata } from "@/lib/source-metadata";
 import { shouldRefreshYouTubeMetadata } from "@/lib/youtube-metadata";
+import {
+  createRateLimitResponse,
+  getRateLimitIdentity,
+  takeMemoryRateLimit,
+  withRateLimitHeaders,
+} from "@/lib/rate-limit";
 
 const ARTWORK_PROXY_REVALIDATE_SECONDS = 60 * 60;
 const ARTWORK_PROXY_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=86400";
@@ -19,8 +25,18 @@ const ARTWORK_FETCH_USER_AGENT =
   process.env.SOURCE_FETCH_USER_AGENT ||
   `MooSQA/0.4 (${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"})`;
 const MAX_ARTWORK_SOURCE_LOOKUPS = 6;
+const ARTWORK_PROXY_RATE_LIMIT = {
+  key: "api-artwork",
+  windowMs: 60_000,
+  max: 180,
+} as const;
 
 export async function GET(request: Request) {
+  const rateLimit = takeMemoryRateLimit(ARTWORK_PROXY_RATE_LIMIT, getRateLimitIdentity(request));
+  if (!rateLimit.allowed) {
+    return createRateLimitResponse(rateLimit, "Too many artwork requests.");
+  }
+
   await ensureDatabase();
   const { searchParams } = new URL(request.url);
   const releaseId = searchParams.get("releaseId")?.trim() || "";
@@ -43,16 +59,16 @@ export async function GET(request: Request) {
 
     await persistResolvedArtworkCandidate(artworkPayload, candidateUrl);
 
-    return new Response(imageResponse.body, {
+    return withRateLimitHeaders(new Response(imageResponse.body, {
       headers: {
         "Cache-Control": ARTWORK_PROXY_CACHE_CONTROL,
         "Content-Disposition": "inline",
         "Content-Type": imageResponse.contentType,
       },
-    });
+    }), rateLimit);
   }
 
-  return NextResponse.json({ error: "Artwork unavailable" }, { status: 404 });
+  return withRateLimitHeaders(NextResponse.json({ error: "Artwork unavailable" }, { status: 404 }), rateLimit);
 }
 
 const getCachedArtworkPayload = unstable_cache(

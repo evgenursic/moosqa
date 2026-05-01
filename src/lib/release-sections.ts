@@ -95,10 +95,12 @@ const HOMEPAGE_LIMITS = {
 const TOP_ENGAGED_LOOKBACK_DAYS = 60;
 
 const ARCHIVE_PAGE_SIZE = 24;
-const SECTION_CACHE_TTL_MS = 12_000;
-const SEARCH_INDEX_CACHE_TTL_MS = 15_000;
+const SECTION_CACHE_TTL_MS = 60_000;
+const SEARCH_INDEX_CACHE_TTL_MS = 60_000;
 const SEARCH_GENRE_FACET_LIMIT = 96;
-const RELEASES_CACHE_REVALIDATE_SECONDS = 300;
+const HOMEPAGE_CACHE_REVALIDATE_SECONDS = 900;
+const SECTION_CACHE_REVALIDATE_SECONDS = 1_800;
+const SEARCH_CACHE_REVALIDATE_SECONDS = 900;
 const RELEASES_CACHE_TAG = "releases";
 let homepageSectionsCache:
   | {
@@ -239,7 +241,8 @@ export async function getHomepageSectionsData() {
     return homepageSectionsCache.data;
   }
 
-  const data = await getHomepageSectionsDataUncached();
+  await ensureDatabase();
+  const data = await getCachedHomepageSectionsData();
   homepageSectionsCache = {
     expiresAt: now + SECTION_CACHE_TTL_MS,
     data,
@@ -247,6 +250,15 @@ export async function getHomepageSectionsData() {
 
   return data;
 }
+
+const getCachedHomepageSectionsData = unstable_cache(
+  async () => getHomepageSectionsDataUncached(),
+  ["homepage-sections"],
+  {
+    revalidate: HOMEPAGE_CACHE_REVALIDATE_SECONDS,
+    tags: [RELEASES_CACHE_TAG, "release-sections", "homepage-sections"],
+  },
+);
 
 async function getHomepageSectionsDataUncached() {
   await ensureDatabase();
@@ -338,13 +350,9 @@ export async function getSearchReleases(options?: { useCache?: boolean; ttlMs?: 
     return searchIndexCache.data;
   }
 
-  const releases = await prisma.release.findMany({
-    select: releaseListingSelect,
-    where: buildVisibleReleaseWhere(),
-    orderBy: { publishedAt: "desc" },
-  });
-
-  const preparedReleases = prepareDisplayReleases(releases);
+  const preparedReleases = useCache
+    ? await getCachedSearchReleases()
+    : await getSearchReleasesUncached();
 
   if (useCache) {
     searchIndexCache = {
@@ -356,6 +364,25 @@ export async function getSearchReleases(options?: { useCache?: boolean; ttlMs?: 
   return preparedReleases;
 }
 
+const getCachedSearchReleases = unstable_cache(
+  async () => getSearchReleasesUncached(),
+  ["search-releases"],
+  {
+    revalidate: SEARCH_CACHE_REVALIDATE_SECONDS,
+    tags: [RELEASES_CACHE_TAG, "search-index"],
+  },
+);
+
+async function getSearchReleasesUncached() {
+  const releases = await prisma.release.findMany({
+    select: releaseListingSelect,
+    where: buildVisibleReleaseWhere(),
+    orderBy: { publishedAt: "desc" },
+  });
+
+  return prepareDisplayReleases(releases);
+}
+
 export async function getSearchGenreFacets(options?: { useCache?: boolean; ttlMs?: number }) {
   await ensureDatabase();
   const useCache = options?.useCache ?? true;
@@ -365,6 +392,30 @@ export async function getSearchGenreFacets(options?: { useCache?: boolean; ttlMs
     return searchGenreFacetCache.data;
   }
 
+  const genres = useCache
+    ? await getCachedSearchGenreFacets()
+    : await getSearchGenreFacetsUncached();
+
+  if (useCache) {
+    searchGenreFacetCache = {
+      expiresAt: Date.now() + ttlMs,
+      data: genres,
+    };
+  }
+
+  return genres;
+}
+
+const getCachedSearchGenreFacets = unstable_cache(
+  async () => getSearchGenreFacetsUncached(),
+  ["search-genre-facets"],
+  {
+    revalidate: SEARCH_CACHE_REVALIDATE_SECONDS,
+    tags: [RELEASES_CACHE_TAG, "genre-facets"],
+  },
+);
+
+async function getSearchGenreFacetsUncached() {
   const recentCutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
   const releases = await prisma.release.findMany({
     where: buildVisibleReleaseWhere({
@@ -436,7 +487,7 @@ export async function getSearchGenreFacets(options?: { useCache?: boolean; ttlMs
     });
   }
 
-  const genres = [...genreMap.values()]
+  return [...genreMap.values()]
     .sort((left, right) => {
       const countDelta = right.count - left.count;
       if (countDelta !== 0) {
@@ -452,15 +503,6 @@ export async function getSearchGenreFacets(options?: { useCache?: boolean; ttlMs
     })
     .slice(0, SEARCH_GENRE_FACET_LIMIT)
     .map((entry) => entry.label);
-
-  if (useCache) {
-    searchGenreFacetCache = {
-      expiresAt: Date.now() + ttlMs,
-      data: genres,
-    };
-  }
-
-  return genres;
 }
 
 export async function getSectionArchivePage(
@@ -518,7 +560,34 @@ export async function getSectionArchivePageLightweight(
   requestedView: ArchiveViewMode = "latest",
 ) {
   await ensureDatabase();
+  return getCachedSectionArchivePageLightweight(
+    section,
+    requestedPage,
+    requestedGenre || null,
+    requestedView,
+  );
+}
 
+const getCachedSectionArchivePageLightweight = unstable_cache(
+  async (
+    section: ReleaseSectionKey,
+    requestedPage: number,
+    requestedGenre: string | null,
+    requestedView: ArchiveViewMode,
+  ) => getSectionArchivePageLightweightUncached(section, requestedPage, requestedGenre, requestedView),
+  ["release-section-archive-lightweight"],
+  {
+    revalidate: SECTION_CACHE_REVALIDATE_SECONDS,
+    tags: [RELEASES_CACHE_TAG, "release-sections"],
+  },
+);
+
+async function getSectionArchivePageLightweightUncached(
+  section: ReleaseSectionKey,
+  requestedPage = 1,
+  requestedGenre?: string | null,
+  requestedView: ArchiveViewMode = "latest",
+) {
   const matchedGenre = requestedGenre?.trim() || null;
   const overscanTake = Math.max(ARCHIVE_PAGE_SIZE * 4, requestedPage * ARCHIVE_PAGE_SIZE * 3);
   const where = buildLightweightArchiveWhere(section, matchedGenre);
@@ -625,7 +694,7 @@ const getCachedSectionReleases = unstable_cache(
   async (section: ReleaseSectionKey) => getSectionReleasesUncached(section),
   ["release-section-list"],
   {
-    revalidate: RELEASES_CACHE_REVALIDATE_SECONDS,
+    revalidate: SECTION_CACHE_REVALIDATE_SECONDS,
     tags: [RELEASES_CACHE_TAG, "release-sections"],
   },
 );

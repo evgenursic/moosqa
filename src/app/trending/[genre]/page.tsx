@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { connection } from "next/server";
 import { Suspense } from "react";
 
 import { ArchivePagination } from "@/components/archive-pagination";
@@ -14,7 +13,6 @@ import { SiteHeader } from "@/components/site-header";
 import { buildTrendingGenreHref, slugifyGenre } from "@/lib/archive-links";
 import { getSectionArchivePageLightweight, getSearchGenreFacets } from "@/lib/release-sections";
 import { getSiteUrl } from "@/lib/site";
-import { refreshHomepageData, shouldBlockForHomepageRefresh } from "@/lib/sync-releases";
 
 type TrendingGenrePageProps = {
   params: Promise<{
@@ -72,23 +70,11 @@ async function TrendingGenreContent({
   params,
   searchParams,
 }: TrendingGenrePageProps) {
-  await connection();
   const { genre: genreSlug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const page = parsePageParam(resolvedSearchParams.page);
 
-  const [allGenres, shouldWaitForRefresh] = await Promise.all([
-    getSearchGenreFacets(),
-    shouldBlockForHomepageRefresh(),
-  ]);
-
-  if (shouldWaitForRefresh) {
-    try {
-      await refreshHomepageData();
-    } catch (error) {
-      console.error(`Trending genre refresh failed for ${genreSlug}. Continuing with cached data.`, error);
-    }
-  }
+  const allGenres = await getSearchGenreFacets();
 
   const matchedGenre =
     allGenres.find((genre) => slugifyGenre(genre) === genreSlug) || null;

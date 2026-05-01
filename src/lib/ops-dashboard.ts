@@ -141,7 +141,7 @@ const getCachedOpsDashboardData = unstable_cache(
   },
   ["ops-dashboard"],
   {
-    revalidate: 60,
+    revalidate: 300,
     tags: ["releases", "analytics", "quality-dashboard", "ops-dashboard"],
   },
 );
@@ -174,7 +174,7 @@ const getCachedPublicHealthSummary = unstable_cache(
   },
   ["public-health-summary"],
   {
-    revalidate: 60,
+    revalidate: 300,
     tags: ["ops-dashboard", "analytics", "quality-dashboard", "releases"],
   },
 );

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { after, connection } from "next/server";
 import { Suspense } from "react";
 
 import { getPublicAnalyticsInsights } from "@/lib/analytics";
@@ -27,7 +26,6 @@ import {
 import { getPopularityMaxForReleases } from "@/lib/release-metrics";
 import { getHomepageGenreFilters } from "@/lib/search-overlay";
 import { getSiteUrl } from "@/lib/site";
-import { refreshHomepageData, shouldBlockForHomepageRefresh } from "@/lib/sync-releases";
 
 type HomePageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -73,7 +71,6 @@ export default function Home({ searchParams }: HomePageProps) {
 }
 
 async function HomeContent({ searchParams }: HomePageProps) {
-  await connection();
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const hasSearchResults = Boolean(
     getSearchParamValue(resolvedSearchParams.q) ||
@@ -90,39 +87,12 @@ async function HomeContent({ searchParams }: HomePageProps) {
   let loadError = false;
 
   try {
-    const shouldWaitForRefresh = await shouldBlockForHomepageRefresh();
-
-    if (shouldWaitForRefresh) {
-      await refreshHomepageData();
-    }
-
-    after(async () => {
-      try {
-        await refreshHomepageData();
-      } catch (error) {
-        console.error("Deferred homepage refresh failed.", error);
-      }
-    });
-
     [sections, searchReleases, homepageGenres, analyticsInsights] = await Promise.all([
       getHomepageSectionsData(),
       hasSearchResults ? getSearchReleases() : Promise.resolve([] as ReleaseListingItem[]),
       getHomepageGenreFilters(),
       getPublicAnalyticsInsights(),
     ]);
-
-    if (sections.latest.length === 0) {
-      await refreshHomepageData();
-
-      [sections, searchReleases, homepageGenres, analyticsInsights] = await Promise.all([
-        getHomepageSectionsData(),
-        hasSearchResults
-          ? getSearchReleases({ useCache: false, ttlMs: 0 })
-          : Promise.resolve([] as ReleaseListingItem[]),
-        getHomepageGenreFilters(),
-        getPublicAnalyticsInsights(),
-      ]);
-    }
   } catch (error) {
     loadError = true;
     console.error("Homepage content failed to load.", error);

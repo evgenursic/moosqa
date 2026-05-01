@@ -80,7 +80,7 @@ const getCachedPublicEditorialHubData = unstable_cache(
   },
   ["public-editorial-hub"],
   {
-    revalidate: 300,
+    revalidate: 3_600,
     tags: ["releases", "editorial"],
   },
 );
@@ -135,7 +135,7 @@ const getCachedPublicEditorialCollection = unstable_cache(
   },
   ["public-editorial-collection"],
   {
-    revalidate: 300,
+    revalidate: 3_600,
     tags: ["releases", "editorial"],
   },
 );

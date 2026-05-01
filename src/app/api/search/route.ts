@@ -3,10 +3,11 @@ import { getSearchReleases } from "@/lib/release-sections";
 import {
   createRateLimitResponse,
   getRateLimitIdentity,
-  takeRateLimit,
+  takeMemoryRateLimit,
   withRateLimitHeaders,
 } from "@/lib/rate-limit";
 
+const SEARCH_CACHE_CONTROL = "public, max-age=60, stale-while-revalidate=300";
 const DEFAULT_LIMIT = 8;
 const MAX_LIMIT = 16;
 const SEARCH_RATE_LIMIT = {
@@ -16,7 +17,7 @@ const SEARCH_RATE_LIMIT = {
 } as const;
 
 export async function GET(request: Request) {
-  const rateLimit = await takeRateLimit(SEARCH_RATE_LIMIT, getRateLimitIdentity(request));
+  const rateLimit = takeMemoryRateLimit(SEARCH_RATE_LIMIT, getRateLimitIdentity(request));
   if (!rateLimit.allowed) {
     return createRateLimitResponse(rateLimit, "Too many search requests.");
   }
@@ -44,6 +45,10 @@ export async function GET(request: Request) {
       ...release,
       publishedAt: release.publishedAt.toISOString(),
     })),
+  }, {
+    headers: {
+      "Cache-Control": SEARCH_CACHE_CONTROL,
+    },
   }), rateLimit);
 }
 

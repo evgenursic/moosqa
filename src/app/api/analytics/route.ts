@@ -6,7 +6,7 @@ import { recordAnalyticsEvent } from "@/lib/analytics";
 import {
   createRateLimitResponse,
   getRateLimitIdentity,
-  takeRateLimit,
+  takeMemoryRateLimit,
   withRateLimitHeaders,
 } from "@/lib/rate-limit";
 
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid analytics payload." }, { status: 400 });
   }
 
-  const rateLimit = await takeRateLimit(
+  const rateLimit = takeMemoryRateLimit(
     ANALYTICS_RATE_LIMIT,
     getRateLimitIdentity(request, body.data.releaseId || body.data.action),
   );
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     body.data.releaseId &&
     (body.data.action === "REACTION_POSITIVE" || body.data.action === "REACTION_NEGATIVE")
   ) {
-    const reactionLimit = await takeRateLimit(
+    const reactionLimit = takeMemoryRateLimit(
       REACTION_RATE_LIMIT,
       getRateLimitIdentity(request, `${body.data.releaseId}:${body.data.action}`),
     );
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
   }
 
   if (body.data.releaseId && body.data.action === "SHARE") {
-    const shareLimit = await takeRateLimit(
+    const shareLimit = takeMemoryRateLimit(
       SHARE_RATE_LIMIT,
       getRateLimitIdentity(request, `${body.data.releaseId}:share`),
     );

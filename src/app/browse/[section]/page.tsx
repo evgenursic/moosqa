@@ -17,7 +17,6 @@ import {
 import { buildArchiveHref, parseArchiveViewMode } from "@/lib/archive-links";
 import { getPopularityMaxForReleases } from "@/lib/release-metrics";
 import { getSiteUrl } from "@/lib/site";
-import { refreshHomepageData, shouldBlockForHomepageRefresh } from "@/lib/sync-releases";
 
 type BrowseSectionPageProps = {
   params: Promise<{
@@ -98,23 +97,6 @@ export default async function BrowseSectionPage({
   const view = parseArchiveViewMode(resolvedSearchParams.view);
   let archive: Awaited<ReturnType<typeof getSectionArchivePageLightweight>> | null = null;
   let archiveLoadError = false;
-  let refreshFailed = false;
-
-  try {
-    const shouldWaitForRefresh = await shouldBlockForHomepageRefresh();
-
-    if (shouldWaitForRefresh) {
-      try {
-        await refreshHomepageData();
-      } catch (error) {
-        refreshFailed = true;
-        console.error(`Archive refresh failed for section ${section}. Continuing with cached archive.`, error);
-      }
-    }
-  } catch (error) {
-    refreshFailed = true;
-    console.error(`Archive refresh gate failed for section ${section}. Continuing with cached archive.`, error);
-  }
 
   try {
     archive = await getSectionArchivePageLightweight(section, page, genre, view);
@@ -208,11 +190,6 @@ export default async function BrowseSectionPage({
                   ? `${archive.total} matching posts`
                   : `${archive.total} total posts`}
               </span>
-              {refreshFailed ? (
-                <span className="border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2">
-                  Cached view
-                </span>
-              ) : null}
               {archive.selectedGenre && archive.overallTotal !== archive.total ? (
                 <span className="border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-2">
                   {archive.overallTotal} overall

@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 import {
   createRateLimitResponse,
   getRateLimitIdentity,
-  takeRateLimit,
+  takeMemoryRateLimit,
   withRateLimitHeaders,
 } from "@/lib/rate-limit";
 
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     deviceId = crypto.randomUUID();
   }
 
-  const rateLimit = await takeRateLimit(
+  const rateLimit = takeMemoryRateLimit(
     VOTE_RATE_LIMIT,
     getRateLimitIdentity(request, `${deviceId}:${body.data.releaseId}`),
   );

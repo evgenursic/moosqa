@@ -718,7 +718,7 @@ const getCachedPublicAnalyticsInsights = unstable_cache(
   },
   ["public-analytics-insights"],
   {
-    revalidate: 300,
+    revalidate: 900,
     tags: [ANALYTICS_TAG, "releases"],
   },
 );
@@ -784,7 +784,7 @@ const getCachedPlatformArchivePage = unstable_cache(
   },
   ["platform-archive-page"],
   {
-    revalidate: 300,
+    revalidate: 1_800,
     tags: [ANALYTICS_TAG, "releases"],
   },
 );
@@ -834,7 +834,7 @@ const getCachedSceneArchivePage = unstable_cache(
   },
   ["scene-archive-page"],
   {
-    revalidate: 300,
+    revalidate: 1_800,
     tags: [ANALYTICS_TAG, "releases"],
   },
 );
@@ -877,7 +877,7 @@ const getCachedSignalArchivePage = unstable_cache(
   },
   ["signal-archive-page"],
   {
-    revalidate: 300,
+    revalidate: 1_800,
     tags: [ANALYTICS_TAG, "releases"],
   },
 );

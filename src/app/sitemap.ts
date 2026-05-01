@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { unstable_cache } from "next/cache";
 
 import { ensureDatabase } from "@/lib/database";
 import { applyReleaseEditorialFields } from "@/lib/editorial";
@@ -14,6 +15,19 @@ import {
 } from "@/lib/sitemap";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  return getCachedSitemap();
+}
+
+const getCachedSitemap = unstable_cache(
+  async (): Promise<MetadataRoute.Sitemap> => buildSitemap(),
+  ["sitemap"],
+  {
+    revalidate: 3_600,
+    tags: ["releases", "editorial", "genre-facets", "sitemap"],
+  },
+);
+
+async function buildSitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = getSiteUrl();
   const generatedAt = new Date();
   const staticEntries = buildStaticSitemapEntries(siteUrl, generatedAt);
