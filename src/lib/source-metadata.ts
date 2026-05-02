@@ -7,6 +7,7 @@ const USER_AGENT =
   `MooSQA/0.3 (${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"})`;
 
 const MAX_SOURCE_METADATA_DEPTH = 2;
+const YOUTUBE_OEMBED_TIMEOUT_MS = 4_500;
 
 type SourceMetadata = {
   sourceTitle?: string | null;
@@ -1198,6 +1199,8 @@ async function resolveYouTubeOEmbedMetadata(url: string) {
   const normalizedUrl = youtubeId
     ? `https://www.youtube.com/watch?v=${youtubeId}`
     : url;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), YOUTUBE_OEMBED_TIMEOUT_MS);
 
   try {
     const response = await fetch(
@@ -1207,6 +1210,7 @@ async function resolveYouTubeOEmbedMetadata(url: string) {
           "User-Agent": USER_AGENT,
         },
         cache: "no-store",
+        signal: controller.signal,
       },
     );
 
@@ -1228,6 +1232,8 @@ async function resolveYouTubeOEmbedMetadata(url: string) {
     };
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

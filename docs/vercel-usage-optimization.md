@@ -1,6 +1,6 @@
 # Vercel Usage Optimization
 
-Last updated: 2026-05-01
+Last updated: 2026-05-02
 
 ## Goal
 
@@ -30,7 +30,7 @@ These routes are blocked in `robots.txt` and/or expose `robots: { index: false, 
 
 ### Higher CPU routes
 
-- `/api/sync`: cron/manual sync, Reddit ingestion, quality enrichment, cache revalidation, optional cache warming. Secret protected.
+- `/api/sync`: cron/manual sync, Reddit ingestion, quality enrichment, cache revalidation, and cache warming only for full sync mode. Secret protected.
 - `/api/notifications`: digest enqueue/send work. Secret protected.
 - `/api/artwork`: public artwork proxy and bounded repair path. Uses persisted/cached release metadata and now has memory rate limiting.
 - `/api/analytics` and `/api/vote`: public write endpoints. They still write to the database by design, but no longer add extra DB writes for rate limiting.
@@ -46,6 +46,7 @@ These routes are blocked in `robots.txt` and/or expose `robots: { index: false, 
 - YouTube/Reddit metrics on cards come from persisted database fields.
 - Missing metrics degrade to stored fallback badge labels.
 - External source/artwork metadata refresh belongs in sync, enrichment, repair, or bounded `/api/artwork` behavior, not the main page render path.
+- Scheduled quality and repair runs use small batches plus external-fetch timeouts and a runtime budget. They do not run broad cache warming. This keeps intermittent slow MusicBrainz/Bandcamp/YouTube/source metadata fetches from failing the GitHub Actions workflow.
 
 ## Database Optimization Notes
 
@@ -76,6 +77,8 @@ These routes are blocked in `robots.txt` and/or expose `robots: { index: false, 
 - Sync/enrichment: 60 seconds.
 
 This prevents accidental long-running public functions while still allowing scheduled jobs enough time to complete.
+
+The hourly `Quality enrichment` and `Repair weak cards` workflows intentionally call small bounded batches. If the retry queue grows, prefer increasing schedule frequency or running manual repair in admin over raising the per-run limit.
 
 ## How To Verify Impact
 

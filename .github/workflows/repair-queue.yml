@@ -13,7 +13,7 @@ jobs:
         id: repair_call
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          SYNC_URL: https://moosqa-ci4e.vercel.app/api/sync?repair=1&limit=8
+          SYNC_URL: https://moosqa-ci4e.vercel.app/api/sync?repair=1&limit=3
         run: |
           set -euo pipefail
           RESPONSE_FILE="$(mktemp)"

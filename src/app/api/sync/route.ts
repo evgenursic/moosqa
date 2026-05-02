@@ -55,14 +55,9 @@ export async function GET(request: Request) {
       const result = await runQualityEnrichmentCycle(limit);
       revalidatePath("/");
       revalidateTag("releases", "max");
-      await evaluateProductionAlerts();
       revalidateTag("ops-dashboard", "max");
       revalidateTag("quality-dashboard", "max");
-      after(async () => {
-        await warmCriticalCaches().catch((error) => {
-          console.error("Cache warming after quality sync failed.", error);
-        });
-      });
+      schedulePostSyncMaintenance("quality");
 
       return withRateLimitHeaders(NextResponse.json({
         ok: true,
@@ -77,14 +72,9 @@ export async function GET(request: Request) {
       const result = await runWeakCardReprocess(limit);
       revalidatePath("/");
       revalidateTag("releases", "max");
-      await evaluateProductionAlerts();
       revalidateTag("ops-dashboard", "max");
       revalidateTag("quality-dashboard", "max");
-      after(async () => {
-        await warmCriticalCaches().catch((error) => {
-          console.error("Cache warming after repair sync failed.", error);
-        });
-      });
+      schedulePostSyncMaintenance("repair");
 
       return withRateLimitHeaders(NextResponse.json({
         ok: true,
@@ -100,14 +90,9 @@ export async function GET(request: Request) {
     });
     revalidatePath("/");
     revalidateTag("releases", "max");
-    await evaluateProductionAlerts();
     revalidateTag("ops-dashboard", "max");
     revalidateTag("quality-dashboard", "max");
-    after(async () => {
-      await warmCriticalCaches().catch((error) => {
-        console.error("Cache warming after sync failed.", error);
-      });
-    });
+    schedulePostSyncMaintenance("sync");
 
     return withRateLimitHeaders(NextResponse.json({
       ok: true,
@@ -128,4 +113,19 @@ function clampQualityLimit(value: string | null) {
   }
 
   return Math.min(parsed, 12);
+}
+
+function schedulePostSyncMaintenance(mode: "quality" | "repair" | "sync") {
+  after(async () => {
+    await evaluateProductionAlerts().catch((error) => {
+      console.error(`Alert evaluation after ${mode} sync failed.`, error);
+    });
+    if (mode !== "sync") {
+      return;
+    }
+
+    await warmCriticalCaches().catch((error) => {
+      console.error(`Cache warming after ${mode} sync failed.`, error);
+    });
+  });
 }

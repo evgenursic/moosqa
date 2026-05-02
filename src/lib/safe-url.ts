@@ -1,4 +1,5 @@
 const MAX_PUBLIC_HTTP_REDIRECTS = 4;
+const DEFAULT_PUBLIC_HTTP_TIMEOUT_MS = 6_000;
 
 export function normalizePublicHttpUrl(value: string | null | undefined) {
   const raw = value?.trim() || "";
@@ -32,7 +33,7 @@ export async function fetchPublicHttpUrl(
   }
 
   for (let redirectCount = 0; redirectCount <= MAX_PUBLIC_HTTP_REDIRECTS; redirectCount += 1) {
-    const response = await fetch(currentUrl, {
+    const response = await fetchWithTimeout(currentUrl, {
       ...init,
       redirect: "manual",
     });
@@ -55,6 +56,24 @@ export async function fetchPublicHttpUrl(
   }
 
   return null;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit) {
+  if (init.signal) {
+    return fetch(url, init);
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DEFAULT_PUBLIC_HTTP_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function isRedirectResponse(status: number) {

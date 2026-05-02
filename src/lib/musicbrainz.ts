@@ -3,6 +3,8 @@ import { buildGenreProfile } from "@/lib/genre-profile";
 
 const MUSICBRAINZ_API = "https://musicbrainz.org/ws/2";
 const COVER_ART_ARCHIVE_API = "https://coverartarchive.org";
+const MUSICBRAINZ_FETCH_TIMEOUT_MS = 5_000;
+const COVER_ART_FETCH_TIMEOUT_MS = 5_000;
 const USER_AGENT =
   process.env.MUSICBRAINZ_USER_AGENT ||
   `MooSQA/0.3 (${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"})`;
@@ -223,7 +225,7 @@ async function fetchMusicBrainzJson<T>(url: string) {
   }
 
   lastMusicBrainzRequest = Date.now();
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, MUSICBRAINZ_FETCH_TIMEOUT_MS, {
     headers: {
       "User-Agent": USER_AGENT,
       Accept: "application/json",
@@ -637,7 +639,7 @@ async function fetchCoverArt(
 
 async function fetchReleaseCoverJson(releaseId: string): Promise<CoverArtMetadata> {
   try {
-    const response = await fetch(`${COVER_ART_ARCHIVE_API}/release/${releaseId}`, {
+    const response = await fetchWithTimeout(`${COVER_ART_ARCHIVE_API}/release/${releaseId}`, COVER_ART_FETCH_TIMEOUT_MS, {
       headers: {
         "User-Agent": USER_AGENT,
         Accept: "application/json",
@@ -673,7 +675,7 @@ async function fetchReleaseCoverJson(releaseId: string): Promise<CoverArtMetadat
 
 async function resolveCoverArtUrl(url: string) {
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, COVER_ART_FETCH_TIMEOUT_MS, {
       method: "HEAD",
       redirect: "follow",
       headers: {
@@ -689,5 +691,19 @@ async function resolveCoverArtUrl(url: string) {
     return response.url;
   } catch {
     return null;
+  }
+}
+
+async function fetchWithTimeout(url: string, timeoutMs: number, init: RequestInit) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
   }
 }

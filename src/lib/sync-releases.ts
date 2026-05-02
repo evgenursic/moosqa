@@ -93,6 +93,7 @@ const RECENT_FEED_PRUNE_MIN_POSTS = 50;
 const LIGHTWEIGHT_SOURCE_LOOKUP_LIMIT = 3;
 const QUALITY_AUDIT_LOOKBACK_DAYS = 14;
 const RELEASE_DETAIL_CACHE_REVALIDATE_SECONDS = 3_600;
+const QUALITY_PASS_RUNTIME_BUDGET_MS = 42_000;
 
 declare global {
   var __moosqaHomepageSyncPromise: Promise<SyncResult> | null | undefined;
@@ -790,6 +791,7 @@ async function runRecentReleaseQualityPass(
     return { checked: 0, improved: 0 };
   }
 
+  const startedAt = Date.now();
   const queuedIds = await readQualityRetryQueue();
   const pinnedIds = options.pinnedReleaseIds || [];
   const targetQueuedIds = [...new Set([...queuedIds, ...pinnedIds])];
@@ -846,6 +848,14 @@ async function runRecentReleaseQualityPass(
   let improved = 0;
 
   for (const candidate of candidates) {
+    if (Date.now() - startedAt >= QUALITY_PASS_RUNTIME_BUDGET_MS) {
+      console.warn("Quality pass stopped early to stay within the workflow runtime budget.", {
+        checked,
+        remaining: candidates.length - checked,
+      });
+      break;
+    }
+
     const checkedAt = new Date();
     const beforeScore = candidate.snapshot.qualityScore;
     const beforeSummaryQualityScore = getEffectiveSummaryQualityScore(candidate.release);

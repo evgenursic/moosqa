@@ -2,6 +2,8 @@ import { ReleaseType } from "@/generated/prisma/enums";
 import { decodeHtmlEntities } from "@/lib/utils";
 
 const BANDCAMP_SEARCH_URL = "https://bandcamp.com/search";
+const BANDCAMP_SEARCH_TIMEOUT_MS = 6_000;
+const BANDCAMP_SEARCH_BUDGET_MS = 10_000;
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 
@@ -14,8 +16,13 @@ type SearchInput = {
 
 export async function searchBandcampRelease(input: SearchInput) {
   const queries = buildBandcampQueries(input);
+  const deadline = Date.now() + BANDCAMP_SEARCH_BUDGET_MS;
 
   for (const { query, itemType, strictTitleMatch } of queries) {
+    if (Date.now() >= deadline) {
+      return null;
+    }
+
     const result = await fetchBandcampSearchResult(input, query, itemType, strictTitleMatch);
     if (result) {
       return result;
@@ -32,6 +39,8 @@ async function fetchBandcampSearchResult(
   strictTitleMatch: boolean,
 ) {
   const searchUrl = `${BANDCAMP_SEARCH_URL}?q=${encodeURIComponent(query)}&item_type=${itemType}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), BANDCAMP_SEARCH_TIMEOUT_MS);
 
   try {
     const response = await fetch(searchUrl, {
@@ -40,17 +49,20 @@ async function fetchBandcampSearchResult(
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
       cache: "no-store",
+      signal: controller.signal,
     });
 
     if (!response.ok) {
       return null;
     }
 
-      const html = await response.text();
-      const results = parseBandcampSearchResults(html, input, itemType, strictTitleMatch);
-      return results[0] || null;
+    const html = await response.text();
+    const results = parseBandcampSearchResults(html, input, itemType, strictTitleMatch);
+    return results[0] || null;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
