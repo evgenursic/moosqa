@@ -39,9 +39,9 @@ Do not claim migration success unless `db:inspect` shows the required tables on 
 
 ## Failed Sync
 
-1. Check the `sync` workflow run and `/ops`.
-2. Confirm `CRON_SECRET` is present in GitHub Actions and Vercel.
-3. Run the workflow manually from GitHub Actions.
+1. Check `/ops`, Vercel Cron logs for `/api/sync`, and `/api/health?scope=ready`.
+2. Confirm `CRON_SECRET` is present in Vercel.
+3. Run the `Sync Reddit feed` GitHub workflow manually only as an endpoint verification fallback.
 4. If Reddit is unavailable, wait for the next scheduled run; the app should keep serving the latest stored releases.
 5. If cards are stale or weak after sync recovers, run the repair workflow.
 
@@ -50,8 +50,9 @@ Do not claim migration success unless `db:inspect` shows the required tables on 
 1. Check `quality` and `repair` workflow rows in `/ops`.
 2. Confirm `OPENAI_API_KEY` is present if AI summaries are expected.
 3. Confirm outbound metadata fetches are not blocked by source websites.
-4. Run `Repair weak cards` manually.
-5. Use `/debug?secret=<DEBUG_SECRET>` to inspect weak-card reasons before broad code changes.
+4. Check Vercel Cron logs for `/api/sync/quality` and `/api/sync/repair`.
+5. Run `Repair weak cards` manually from GitHub Actions only as an endpoint verification fallback.
+6. Use `/debug?secret=<DEBUG_SECRET>` to inspect weak-card reasons before broad code changes.
 
 ## YouTube Metadata Refresh
 
@@ -83,7 +84,8 @@ Do not claim migration success unless `db:inspect` shows the required tables on 
 ## GitHub Actions Cancellation Noise
 
 - `Production smoke test` runs on push and manual dispatch only; it is not scheduled hourly because GitHub scheduled jobs can be cancelled before the first step during runner-queue delays.
-- `Notification digests` are scheduled by daily Vercel Cron and the GitHub workflow is manual-only for endpoint verification. Do not use an hourly Vercel cron on Hobby-tier projects; it can block deployment.
+- `Notification digests` are scheduled by daily Vercel Cron and the GitHub workflow is manual-only for endpoint verification.
+- `Sync Reddit feed`, `Quality enrichment`, and `Repair weak cards` are scheduled by Vercel Cron. Their GitHub workflows are manual-only endpoint checks to avoid GitHub scheduled-runner cancellations.
 - If a GitHub workflow is cancelled before any step starts, treat it as CI scheduler noise unless `/ops`, `/api/health`, or endpoint-level checks also show a product failure.
 
 ## Secret Rotation
@@ -108,7 +110,7 @@ Rotation order:
 3. Update GitHub Actions secrets, especially `CRON_SECRET`.
 4. Redeploy production.
 5. Run `npm run smoke:prod`.
-6. Manually trigger `Sync Reddit feed`, `Quality enrichment`, `Repair weak cards`, and `Production smoke test`.
+6. Manually trigger `Sync Reddit feed`, `Quality enrichment`, `Repair weak cards`, and `Production smoke test` as endpoint checks.
 7. Revoke the old values after the new values are verified.
 
 ## Security Checks

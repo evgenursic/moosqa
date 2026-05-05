@@ -27,13 +27,13 @@ describe("workflow health helpers", () => {
     ]);
   });
 
-  it("marks the frequent sync workflow stale after the production grace window", () => {
+  it("uses the hourly Vercel cron grace window for sync workflow health", () => {
     const now = new Date("2026-04-22T06:00:00.000Z");
-    const stale = getWorkflowStaleness("sync", new Date("2026-04-22T05:20:00.000Z"), now);
-    const fresh = getWorkflowStaleness("sync", new Date("2026-04-22T05:45:00.000Z"), now);
+    const stale = getWorkflowStaleness("sync", new Date("2026-04-22T02:45:00.000Z"), now);
+    const fresh = getWorkflowStaleness("sync", new Date("2026-04-22T03:15:00.000Z"), now);
 
     assert.equal(stale?.isStale, true);
-    assert.equal(formatWorkflowAgeMinutes(stale?.ageMs ?? null), "40 min");
+    assert.equal(formatWorkflowAgeMinutes(stale?.ageMs ?? null), "195 min");
     assert.equal(fresh?.isStale, false);
   });
 

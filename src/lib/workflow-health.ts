@@ -3,8 +3,8 @@ const HOUR_MS = 60 * MINUTE_MS;
 
 const WORKFLOW_STALENESS_THRESHOLDS: Record<string, { thresholdMs: number; cadenceLabel: string }> = {
   sync: {
-    thresholdMs: 30 * MINUTE_MS,
-    cadenceLabel: "5 min",
+    thresholdMs: 3 * HOUR_MS,
+    cadenceLabel: "hourly",
   },
   quality: {
     thresholdMs: 3 * HOUR_MS,

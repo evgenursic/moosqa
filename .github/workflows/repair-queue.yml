@@ -1,13 +1,16 @@
 name: Repair weak cards
 
 on:
-  schedule:
-    - cron: "43 * * * *"
   workflow_dispatch:
+
+concurrency:
+  group: repair-weak-cards-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   repair:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
     steps:
       - name: Call MooSQA repair endpoint
         id: repair_call

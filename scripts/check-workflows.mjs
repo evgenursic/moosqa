@@ -47,11 +47,20 @@ function expectIncludes(text, needle, context) {
   }
 }
 
+function expectExcludes(text, needle, context) {
+  if (text.includes(needle)) {
+    failures.push(`${context}: unexpected ${JSON.stringify(needle)}`);
+  }
+}
+
 for (const workflow of endpointWorkflows) {
   const text = readWorkflow(workflow.file);
   const context = workflow.file;
 
   expectIncludes(text, "workflow_dispatch:", context);
+  expectIncludes(text, "cancel-in-progress: false", context);
+  expectIncludes(text, "timeout-minutes: 8", context);
+  expectExcludes(text, "schedule:", context);
   expectIncludes(text, 'RESPONSE_FILE="$(mktemp)"', context);
   expectIncludes(text, '--output "${RESPONSE_FILE}"', context);
   expectIncludes(text, 'cat "${RESPONSE_FILE}"', context);
@@ -101,6 +110,8 @@ expectIncludes(notifications, "--data @workflow-status.json", ".github/workflows
 
 const vercel = readWorkflow("vercel.json");
 expectIncludes(vercel, '"path": "/api/sync"', "vercel.json");
+expectIncludes(vercel, '"path": "/api/sync/quality"', "vercel.json");
+expectIncludes(vercel, '"path": "/api/sync/repair"', "vercel.json");
 expectIncludes(vercel, '"path": "/api/notifications"', "vercel.json");
 
 if (failures.length > 0) {

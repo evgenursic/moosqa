@@ -1,6 +1,6 @@
 # Vercel Usage Optimization
 
-Last updated: 2026-05-02
+Last updated: 2026-05-05
 
 ## Goal
 
@@ -30,7 +30,8 @@ These routes are blocked in `robots.txt` and/or expose `robots: { index: false, 
 
 ### Higher CPU routes
 
-- `/api/sync`: cron/manual sync, Reddit ingestion, quality enrichment, cache revalidation, and cache warming only for full sync mode. Secret protected.
+- `/api/sync`: hourly Vercel Cron/manual sync, Reddit ingestion, cache revalidation, and cache warming only for full sync mode. Secret protected.
+- `/api/sync/quality` and `/api/sync/repair`: hourly Vercel Cron wrappers for bounded quality and weak-card maintenance. They delegate to `/api/sync` with small safe limits and update internal workflow health.
 - `/api/notifications`: digest enqueue/send work. Secret protected.
 - `/api/artwork`: public artwork proxy and bounded repair path. Uses persisted/cached release metadata and now has memory rate limiting.
 - `/api/analytics` and `/api/vote`: public write endpoints. They still write to the database by design, but no longer add extra DB writes for rate limiting.
@@ -46,7 +47,8 @@ These routes are blocked in `robots.txt` and/or expose `robots: { index: false, 
 - YouTube/Reddit metrics on cards come from persisted database fields.
 - Missing metrics degrade to stored fallback badge labels.
 - External source/artwork metadata refresh belongs in sync, enrichment, repair, or bounded `/api/artwork` behavior, not the main page render path.
-- Scheduled quality and repair runs use small batches plus external-fetch timeouts and a runtime budget. They do not run broad cache warming. This keeps intermittent slow MusicBrainz/Bandcamp/YouTube/source metadata fetches from failing the GitHub Actions workflow.
+- Scheduled sync, quality, and repair runs are driven by Vercel Cron instead of scheduled GitHub Actions. This avoids GitHub runner-queue cancellations while preserving manual GitHub workflows for endpoint verification.
+- Scheduled quality and repair runs use small batches plus external-fetch timeouts and a runtime budget. They do not run broad cache warming. This keeps intermittent slow MusicBrainz/Bandcamp/YouTube/source metadata fetches from failing the maintenance cycle.
 
 ## Database Optimization Notes
 
@@ -78,14 +80,14 @@ These routes are blocked in `robots.txt` and/or expose `robots: { index: false, 
 
 This prevents accidental long-running public functions while still allowing scheduled jobs enough time to complete.
 
-The hourly `Quality enrichment` and `Repair weak cards` workflows intentionally call small bounded batches. If the retry queue grows, prefer increasing schedule frequency or running manual repair in admin over raising the per-run limit.
+The hourly `Quality enrichment` and `Repair weak cards` Vercel Cron jobs intentionally call small bounded batches. If the retry queue grows, prefer increasing schedule frequency or running manual repair in admin over raising the per-run limit.
 
 ## How To Verify Impact
 
 1. Deploy to Vercel.
 2. In Vercel Usage Dashboard, compare Function Active CPU and Function Invocations against the previous 24 hour period.
 3. Check top functions by CPU. Expected reduction should be most visible on `/`, `/browse/[section]`, `/api/health`, `/api/search*`, and bot/crawler traffic to public pages.
-4. Confirm `/api/sync` and `/api/notifications` remain low-frequency cron/manual work.
+4. Confirm `/api/sync`, `/api/sync/quality`, `/api/sync/repair`, and `/api/notifications` remain low-frequency cron/manual work.
 5. Run `npm run smoke:prod` and verify `/api/notifications` without a secret returns `401`.
 
 ## Known Limitations

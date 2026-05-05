@@ -61,7 +61,7 @@
 - curated source creates/updates are audited as `external-source.create` or `external-source.update`
 - external source summaries should be short editorial context only; do not paste copyrighted review text
 - hiding a curated source by unchecking public visibility preserves the row for audit/history but removes it from public release pages
-- run admin-triggered repair in small batches; use the scheduled repair workflow for routine background maintenance
+- run admin-triggered repair in small batches; routine background maintenance runs through the Vercel Cron repair job
 
 ## Debugging
 

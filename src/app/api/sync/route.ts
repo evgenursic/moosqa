@@ -3,7 +3,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getRequiredCronSecret, isValidRequestSecret, readRequestSecret } from "@/lib/admin-auth";
-import { evaluateProductionAlerts } from "@/lib/analytics";
+import { updateWorkflowRunState } from "@/lib/analytics";
 import { warmCriticalCaches } from "@/lib/cache-warming";
 import {
   createRateLimitResponse,
@@ -16,6 +16,8 @@ import {
   runWeakCardReprocess,
   syncIndieheadsReleases,
 } from "@/lib/sync-releases";
+
+type SyncEndpointMode = "sync" | "quality" | "repair";
 
 const SYNC_RATE_LIMIT = {
   key: "api-sync",
@@ -48,6 +50,7 @@ export async function GET(request: Request) {
     searchParams.get("quality") === "1" || searchParams.get("deep") === "1";
   const wantsRepairOnly = searchParams.get("repair") === "1";
   const wantsEnrichment = searchParams.get("enrich") === "1";
+  const mode: SyncEndpointMode = wantsQualityOnly ? "quality" : wantsRepairOnly ? "repair" : "sync";
 
   try {
     if (wantsQualityOnly) {
@@ -57,14 +60,15 @@ export async function GET(request: Request) {
       revalidateTag("releases", "max");
       revalidateTag("ops-dashboard", "max");
       revalidateTag("quality-dashboard", "max");
-      schedulePostSyncMaintenance("quality");
-
-      return withRateLimitHeaders(NextResponse.json({
+      const payload = {
         ok: true,
         mode: "quality",
         ...result,
         syncedAt: new Date().toISOString(),
-      }), rateLimit);
+      };
+      schedulePostSyncMaintenance("quality", payload);
+
+      return withRateLimitHeaders(NextResponse.json(payload), rateLimit);
     }
 
     if (wantsRepairOnly) {
@@ -74,14 +78,15 @@ export async function GET(request: Request) {
       revalidateTag("releases", "max");
       revalidateTag("ops-dashboard", "max");
       revalidateTag("quality-dashboard", "max");
-      schedulePostSyncMaintenance("repair");
-
-      return withRateLimitHeaders(NextResponse.json({
+      const payload = {
         ok: true,
         mode: "repair",
         ...result,
         syncedAt: new Date().toISOString(),
-      }), rateLimit);
+      };
+      schedulePostSyncMaintenance("repair", payload);
+
+      return withRateLimitHeaders(NextResponse.json(payload), rateLimit);
     }
 
     const result = await syncIndieheadsReleases({
@@ -92,15 +97,22 @@ export async function GET(request: Request) {
     revalidateTag("releases", "max");
     revalidateTag("ops-dashboard", "max");
     revalidateTag("quality-dashboard", "max");
-    schedulePostSyncMaintenance("sync");
-
-    return withRateLimitHeaders(NextResponse.json({
+    const payload = {
       ok: true,
       ...result,
       syncedAt: new Date().toISOString(),
-    }), rateLimit);
+    };
+    schedulePostSyncMaintenance("sync", payload);
+
+    return withRateLimitHeaders(NextResponse.json(payload), rateLimit);
   } catch (error) {
-    await evaluateProductionAlerts().catch(() => undefined);
+    await updateWorkflowRunState({
+      workflowName: mode,
+      status: "FAILURE",
+      branch: getWorkflowBranch(),
+      commitSha: getWorkflowCommitSha(),
+      details: normalizeEndpointError(error),
+    }).catch(() => undefined);
     throw error;
   }
 }
@@ -115,10 +127,16 @@ function clampQualityLimit(value: string | null) {
   return Math.min(parsed, 12);
 }
 
-function schedulePostSyncMaintenance(mode: "quality" | "repair" | "sync") {
+function schedulePostSyncMaintenance(mode: SyncEndpointMode, payload: Record<string, unknown>) {
   after(async () => {
-    await evaluateProductionAlerts().catch((error) => {
-      console.error(`Alert evaluation after ${mode} sync failed.`, error);
+    await updateWorkflowRunState({
+      workflowName: mode,
+      status: "SUCCESS",
+      branch: getWorkflowBranch(),
+      commitSha: getWorkflowCommitSha(),
+      details: buildWorkflowDetails(payload),
+    }).catch((error) => {
+      console.error(`Workflow status update after ${mode} sync failed.`, error);
     });
     if (mode !== "sync") {
       return;
@@ -128,4 +146,39 @@ function schedulePostSyncMaintenance(mode: "quality" | "repair" | "sync") {
       console.error(`Cache warming after ${mode} sync failed.`, error);
     });
   });
+}
+
+function buildWorkflowDetails(payload: Record<string, unknown>) {
+  const fields = [
+    "mode",
+    "scanned",
+    "matched",
+    "created",
+    "updated",
+    "removed",
+    "sanitized",
+    "enriched",
+    "qualityChecked",
+    "qualityImproved",
+    "queued",
+    "checked",
+    "improved",
+    "syncedAt",
+  ]
+    .filter((key) => key in payload)
+    .map((key) => `${key}=${String(payload[key])}`);
+
+  return fields.join(", ").slice(0, 480);
+}
+
+function getWorkflowBranch() {
+  return process.env.VERCEL_GIT_COMMIT_REF || process.env.VERCEL_ENV || null;
+}
+
+function getWorkflowCommitSha() {
+  return process.env.VERCEL_GIT_COMMIT_SHA || null;
+}
+
+function normalizeEndpointError(error: unknown) {
+  return error instanceof Error ? error.message.slice(0, 480) : "sync endpoint failed";
 }
