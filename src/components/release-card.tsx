@@ -4,11 +4,12 @@ import { ReleaseCardActions } from "@/components/release-card-actions";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
 import { ReleaseMetricBadge } from "@/components/release-metric-badge";
+import { ReleaseRedditStats } from "@/components/release-reddit-stats";
+import { ReleaseTypeRibbon } from "@/components/release-type-ribbon";
 import { TopRatedVisual } from "@/components/top-rated-visual";
 import {
   formatContextualReleaseDateLabel,
   formatRedditDateLabel,
-  formatReleaseTypeLabel,
   formatScore,
   getDisplayGenre,
   getDisplaySummary,
@@ -106,7 +107,6 @@ export function ReleaseCard({
             popularityMaxRaw={popularityMaxRaw ?? release.popularityMaxRaw ?? null}
             bandcampSupporterCount={release.bandcampSupporterCount}
             bandcampFollowerCount={release.bandcampFollowerCount}
-            fallbackLabel={formatReleaseTypeLabel(release.releaseType)}
             className="absolute right-3 top-3 z-10 max-w-[calc(100%-1.5rem)]"
             compact={compact}
           />
@@ -124,9 +124,7 @@ export function ReleaseCard({
             </span>
           ) : null}
         </div>
-        <p className="section-kicker text-black/43">
-          {formatReleaseTypeLabel(release.releaseType)}
-        </p>
+        <ReleaseTypeRibbon releaseType={release.releaseType} className="mt-3" />
         <div className="mt-3">
           <ReleaseLink
             releaseId={release.id}
@@ -150,6 +148,13 @@ export function ReleaseCard({
             </p>
           </ReleaseLink>
         </div>
+
+        <ReleaseRedditStats
+          upvotes={release.score}
+          comments={release.commentCount}
+          className="mt-4"
+          compact={compact}
+        />
 
         <div className="mt-4 flex flex-wrap gap-3 break-words text-[11px] uppercase tracking-[0.18em] text-black/55">
           {metaItems.map((item) => (

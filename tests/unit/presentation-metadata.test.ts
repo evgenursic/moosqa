@@ -14,6 +14,7 @@ import {
   formatPrimaryReleaseDateLabel,
   formatRedditDateLabel,
   formatYouTubeViewsLabel,
+  getDisplayGenre,
 } from "../../src/lib/utils";
 import { ReleaseType } from "../../src/generated/prisma/enums";
 
@@ -57,6 +58,12 @@ describe("presentation metadata helpers", () => {
       ),
       "YouTube Friday, April 24, 2026 at 14:00 UTC",
     );
+  });
+
+  it("keeps release type separate from public genre labels", () => {
+    assert.equal(getDisplayGenre("Alternative folk", ReleaseType.PERFORMANCE), "Alternative folk");
+    assert.equal(getDisplayGenre("Singer-songwriter", ReleaseType.SINGLE), "Singer-songwriter");
+    assert.equal(getDisplayGenre(null, ReleaseType.ALBUM), "Genre pending");
   });
 
   it("extracts youtube view count from source html", () => {

@@ -4,10 +4,11 @@ import { RatingMeter } from "@/components/rating-meter";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
 import { ReleaseMetricBadge } from "@/components/release-metric-badge";
+import { ReleaseRedditStats } from "@/components/release-reddit-stats";
+import { ReleaseTypeRibbon } from "@/components/release-type-ribbon";
 import {
   formatContextualReleaseDateLabel,
   formatRedditDateLabel,
-  formatReleaseTypeLabel,
   getDisplayGenre,
   getDisplaySummary,
 } from "@/lib/utils";
@@ -90,7 +91,6 @@ export function HeroFeature({ release, fromHref = null, popularityMaxRaw = null 
           popularityMaxRaw={popularityMaxRaw ?? release.popularityMaxRaw ?? null}
           bandcampSupporterCount={release.bandcampSupporterCount}
           bandcampFollowerCount={release.bandcampFollowerCount}
-          fallbackLabel={formatReleaseTypeLabel(release.releaseType)}
           className="absolute right-4 top-4 z-10 max-w-[calc(100%-2rem)]"
         />
       </div>
@@ -98,6 +98,7 @@ export function HeroFeature({ release, fromHref = null, popularityMaxRaw = null 
       <div className="grid gap-8 pt-6 lg:grid-cols-[1.1fr_0.55fr]">
         <div>
           <p className="section-kicker text-black/45">Lead story</p>
+          <ReleaseTypeRibbon releaseType={release.releaseType} className="mt-4" />
           <h1 className="mt-4 max-w-5xl text-6xl leading-[0.92] text-[var(--color-ink)] serif-display md:text-7xl">
             {release.artistName || release.projectTitle || release.title}
           </h1>
@@ -124,11 +125,11 @@ export function HeroFeature({ release, fromHref = null, popularityMaxRaw = null 
           </p>
           <div className="mt-6 flex flex-wrap gap-3 text-[11px] uppercase tracking-[0.18em] text-black/55">
             <span>{displayGenre}</span>
-            <span>{formatReleaseTypeLabel(release.releaseType)}</span>
             <span>{release.outletName || "Source pending"}</span>
             {releaseDateLabel ? <span>{releaseDateLabel}</span> : null}
             {redditDateLabel ? <span>{redditDateLabel}</span> : null}
           </div>
+          <ReleaseRedditStats upvotes={release.score} comments={release.commentCount} className="mt-5" />
 
           <ListeningLinks release={release} />
 

@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import type { ReactNode } from "react";
 
 import { ReleaseMetricBadge } from "@/components/release-metric-badge";
+import { ReleaseRedditStats } from "@/components/release-reddit-stats";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getRecommendedReleasesForUser, type RadarRecommendation } from "@/lib/recommendations";
@@ -153,6 +154,12 @@ function RadarReleaseList({
                 {release.labelName ? <span>{release.labelName}</span> : null}
                 <span>{formatRedditDateLabel(release.publishedAt)}</span>
               </div>
+              <ReleaseRedditStats
+                upvotes={release.score}
+                comments={release.commentCount}
+                compact
+                className="mt-3"
+              />
             </Link>
           ))}
         </div>
@@ -201,6 +208,12 @@ function RadarRecommendationList({ releases }: { releases: RadarRecommendation[]
                 {release.labelName ? <span>{release.labelName}</span> : null}
                 <span>{formatRedditDateLabel(release.publishedAt)}</span>
               </div>
+              <ReleaseRedditStats
+                upvotes={release.redditUpvotes}
+                comments={release.redditComments}
+                compact
+                className="mt-3"
+              />
               <div className="mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.16em] text-black/52">
                 {release.reasons.map((reason) => (
                   <span key={reason} className="border border-[var(--color-soft-line)] px-2 py-1">

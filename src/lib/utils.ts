@@ -228,13 +228,13 @@ export function getDisplayGenre(
   genreName: string | null | undefined,
   releaseType: ReleaseType,
 ) {
+  void releaseType;
   const normalizedGenre = genreName?.trim() || null;
   if (normalizedGenre && isMeaningfulDisplayGenre(normalizedGenre)) {
-    const prefix = getDisplayReleasePrefix(releaseType);
-    return prefix ? `${prefix} / ${normalizedGenre}` : normalizedGenre;
+    return normalizedGenre;
   }
 
-  return getFallbackReleaseLabel(releaseType);
+  return "Genre pending";
 }
 
 function isMeaningfulDisplayGenre(value: string) {
@@ -254,18 +254,6 @@ function isMeaningfulDisplayGenre(value: string) {
   }
 
   return true;
-}
-
-function getDisplayReleasePrefix(releaseType: ReleaseType) {
-  if (releaseType === ReleaseType.PERFORMANCE || releaseType === ReleaseType.LIVE_SESSION) {
-    return "Live performance";
-  }
-
-  if (releaseType === ReleaseType.SINGLE) {
-    return "Single release";
-  }
-
-  return null;
 }
 
 function getFallbackReleaseLabel(releaseType: ReleaseType) {

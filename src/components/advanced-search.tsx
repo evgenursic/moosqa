@@ -7,11 +7,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
 import { ReleaseMetricBadge } from "@/components/release-metric-badge";
+import { ReleaseRedditStats } from "@/components/release-reddit-stats";
+import { ReleaseTypeRibbon } from "@/components/release-type-ribbon";
 import { loadSearchIndex, readCachedSearchIndex } from "@/lib/client-search-index";
 import { type SearchOverlayIndexItem } from "@/lib/search-overlay";
 import { getPopularityMaxForReleases } from "@/lib/release-metrics";
 import { filterAndRankReleaseListings } from "@/lib/release-search";
-import { formatRedditDateLabel, formatReleaseTypeLabel, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
+import { formatRedditDateLabel, getDisplayGenre, getDisplaySummary } from "@/lib/utils";
 
 const ACTIVE_RESULTS_LIMIT = 12;
 
@@ -626,7 +628,6 @@ function SearchLiveResults({
                 popularityMaxRaw={popularityMaxRaw ?? result.popularityMaxRaw ?? null}
                 bandcampSupporterCount={result.bandcampSupporterCount}
                 bandcampFollowerCount={result.bandcampFollowerCount}
-                fallbackLabel={formatReleaseTypeLabel(result.releaseType)}
                 className="absolute right-2 top-2 z-10 max-w-[calc(100%-1rem)]"
                 compact
                 tone="dark"
@@ -636,8 +637,16 @@ function SearchLiveResults({
             <div className="min-w-0">
               <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
                 <span>{getDisplayGenre(result.genreName, result.releaseType)}</span>
-                <span>{formatReleaseTypeLabel(result.releaseType)}</span>
                 <span>{formatRedditDateLabel(new Date(result.publishedAt))}</span>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <ReleaseTypeRibbon releaseType={result.releaseType} compact tone="dark" />
+                <ReleaseRedditStats
+                  upvotes={result.score}
+                  comments={result.commentCount}
+                  compact
+                  tone="dark"
+                />
               </div>
 
               <h3 className="mt-3 text-[1.9rem] leading-[0.94] text-white serif-display md:text-[2.25rem]">

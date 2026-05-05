@@ -3,11 +3,12 @@ import { getListeningLinks } from "@/lib/listening-links";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
 import { ReleaseMetricBadge } from "@/components/release-metric-badge";
+import { ReleaseRedditStats } from "@/components/release-reddit-stats";
+import { ReleaseTypeRibbon } from "@/components/release-type-ribbon";
 import {
   cn,
   formatContextualReleaseDateLabel,
   formatRedditDateLabel,
-  formatReleaseTypeLabel,
   formatScore,
   getDisplayGenre,
 } from "@/lib/utils";
@@ -94,7 +95,6 @@ export function ReleaseBrief({
           popularityMaxRaw={popularityMaxRaw ?? release.popularityMaxRaw ?? null}
           bandcampSupporterCount={release.bandcampSupporterCount}
           bandcampFollowerCount={release.bandcampFollowerCount}
-          fallbackLabel={formatReleaseTypeLabel(release.releaseType)}
           className="absolute right-1.5 top-1.5 z-10 max-w-[calc(100%-0.75rem)]"
           compact
         />
@@ -110,6 +110,11 @@ export function ReleaseBrief({
         <p className="mt-1 truncate text-sm leading-6 text-black/60">
           {release.artistName && release.projectTitle ? release.projectTitle : release.title}
         </p>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <ReleaseTypeRibbon releaseType={release.releaseType} compact />
+          <ReleaseRedditStats upvotes={release.score} comments={release.commentCount} compact />
+        </div>
 
         <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-black/52">
           {renderEmphasis(emphasis, release, directLinks.length)}
