@@ -85,7 +85,8 @@ Do not claim migration success unless `db:inspect` shows the required tables on 
 
 - `Production smoke test` runs on push and manual dispatch only; it is not scheduled hourly because GitHub scheduled jobs can be cancelled before the first step during runner-queue delays.
 - `Notification digests` are scheduled by daily Vercel Cron and the GitHub workflow is manual-only for endpoint verification.
-- `Sync Reddit feed`, `Quality enrichment`, and `Repair weak cards` are scheduled by Vercel Cron. Their GitHub workflows are manual-only endpoint checks to avoid GitHub scheduled-runner cancellations.
+- `Sync Reddit feed`, `Quality enrichment`, and `Repair weak cards` are scheduled by daily Vercel Cron because the current free/Hobby cron limit does not allow hourly schedules. Their GitHub workflows are manual-only endpoint checks to avoid GitHub scheduled-runner cancellations.
+- If fresher-than-daily sync becomes a product requirement, upgrade Vercel to a plan that supports more frequent cron schedules before changing `vercel.json`; do not re-enable scheduled GitHub Actions for routine maintenance.
 - If a GitHub workflow is cancelled before any step starts, treat it as CI scheduler noise unless `/ops`, `/api/health`, or endpoint-level checks also show a product failure.
 
 ## Secret Rotation

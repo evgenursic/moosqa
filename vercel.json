@@ -38,15 +38,15 @@
   "crons": [
     {
       "path": "/api/sync",
-      "schedule": "11 * * * *"
+      "schedule": "11 6 * * *"
     },
     {
       "path": "/api/sync/quality",
-      "schedule": "23 * * * *"
+      "schedule": "23 7 * * *"
     },
     {
       "path": "/api/sync/repair",
-      "schedule": "47 * * * *"
+      "schedule": "47 8 * * *"
     },
     {
       "path": "/api/notifications",

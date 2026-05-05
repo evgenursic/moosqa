@@ -27,25 +27,25 @@ describe("workflow health helpers", () => {
     ]);
   });
 
-  it("uses the hourly Vercel cron grace window for sync workflow health", () => {
+  it("uses the daily Vercel cron grace window for sync workflow health", () => {
     const now = new Date("2026-04-22T06:00:00.000Z");
-    const stale = getWorkflowStaleness("sync", new Date("2026-04-22T02:45:00.000Z"), now);
-    const fresh = getWorkflowStaleness("sync", new Date("2026-04-22T03:15:00.000Z"), now);
+    const stale = getWorkflowStaleness("sync", new Date("2026-04-20T23:00:00.000Z"), now);
+    const fresh = getWorkflowStaleness("sync", new Date("2026-04-21T06:30:00.000Z"), now);
 
     assert.equal(stale?.isStale, true);
-    assert.equal(formatWorkflowAgeMinutes(stale?.ageMs ?? null), "195 min");
+    assert.equal(formatWorkflowAgeMinutes(stale?.ageMs ?? null), "1860 min");
     assert.equal(fresh?.isStale, false);
   });
 
-  it("uses wider grace windows for hourly repair workflows", () => {
+  it("uses daily grace windows for quality and repair workflows", () => {
     const now = new Date("2026-04-22T06:00:00.000Z");
 
     assert.equal(
-      getWorkflowStaleness("quality", new Date("2026-04-22T03:15:00.000Z"), now)?.isStale,
+      getWorkflowStaleness("quality", new Date("2026-04-21T06:15:00.000Z"), now)?.isStale,
       false,
     );
     assert.equal(
-      getWorkflowStaleness("repair", new Date("2026-04-22T02:45:00.000Z"), now)?.isStale,
+      getWorkflowStaleness("repair", new Date("2026-04-20T23:30:00.000Z"), now)?.isStale,
       true,
     );
   });

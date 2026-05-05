@@ -30,8 +30,8 @@ These routes are blocked in `robots.txt` and/or expose `robots: { index: false, 
 
 ### Higher CPU routes
 
-- `/api/sync`: hourly Vercel Cron/manual sync, Reddit ingestion, cache revalidation, and cache warming only for full sync mode. Secret protected.
-- `/api/sync/quality` and `/api/sync/repair`: hourly Vercel Cron wrappers for bounded quality and weak-card maintenance. They delegate to `/api/sync` with small safe limits and update internal workflow health.
+- `/api/sync`: daily Vercel Cron/manual sync, Reddit ingestion, cache revalidation, and cache warming only for full sync mode. Secret protected.
+- `/api/sync/quality` and `/api/sync/repair`: daily Vercel Cron wrappers for bounded quality and weak-card maintenance. They delegate to `/api/sync` with small safe limits and update internal workflow health.
 - `/api/notifications`: digest enqueue/send work. Secret protected.
 - `/api/artwork`: public artwork proxy and bounded repair path. Uses persisted/cached release metadata and now has memory rate limiting.
 - `/api/analytics` and `/api/vote`: public write endpoints. They still write to the database by design, but no longer add extra DB writes for rate limiting.
@@ -80,7 +80,7 @@ These routes are blocked in `robots.txt` and/or expose `robots: { index: false, 
 
 This prevents accidental long-running public functions while still allowing scheduled jobs enough time to complete.
 
-The hourly `Quality enrichment` and `Repair weak cards` Vercel Cron jobs intentionally call small bounded batches. If the retry queue grows, prefer increasing schedule frequency or running manual repair in admin over raising the per-run limit.
+The daily `Quality enrichment` and `Repair weak cards` Vercel Cron jobs intentionally call small bounded batches to stay compatible with the current free/Hobby cron limit. If the retry queue grows, prefer manual repair in admin or a Vercel plan upgrade over raising the per-run limit.
 
 ## How To Verify Impact
 
