@@ -13,9 +13,11 @@ const USER_AGENT = "moosqa/0.1 (+https://moosqa.local)";
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 const REDDIT_FETCH_TIMEOUT_MS = 10000;
+const REDDIT_DETAIL_FETCH_TIMEOUT_MS = 6000;
 const REDDIT_PAGE_LIMIT = 100;
 const REDDIT_LOOKBACK_DAYS = 4;
 const REDDIT_MAX_PAGES = 8;
+const REDDIT_DETAIL_METRIC_LIMIT = 80;
 
 type RedditListing = {
   data?: {
@@ -26,7 +28,7 @@ type RedditListing = {
   };
 };
 
-type RedditPost = {
+export type RedditPost = {
   id: string;
   title: string;
   created_utc: number;
@@ -97,20 +99,111 @@ export async function fetchRedditPosts() {
     const rssPosts = await fetchRedditPostsFromRss(headerVariants);
     if (rssPosts.length > 0) {
       if (jsonPosts.length > 0) {
-        return mergeRedditPostLists(jsonPosts, rssPosts);
+        return hydrateRedditEngagementMetrics(mergeRedditPostLists(jsonPosts, rssPosts), headerVariants);
       }
 
-      return rssPosts;
+      return hydrateRedditEngagementMetrics(rssPosts, headerVariants);
     }
   } catch (error) {
     lastError = error instanceof Error ? error : new Error(String(error));
   }
 
   if (jsonPosts.length > 0) {
-    return jsonPosts;
+    return hydrateRedditEngagementMetrics(jsonPosts, headerVariants);
   }
 
   throw lastError || new Error("Reddit sync failed for all endpoints.");
+}
+
+export async function hydrateRedditEngagementMetrics(
+  posts: RedditPost[],
+  headerVariants = getRedditHeaderVariants(),
+) {
+  let remainingLookups = REDDIT_DETAIL_METRIC_LIMIT;
+  const hydrated: RedditPost[] = [];
+
+  for (const post of posts) {
+    if (hasRedditEngagementMetrics(post) || remainingLookups <= 0) {
+      hydrated.push(post);
+      continue;
+    }
+
+    remainingLookups -= 1;
+    hydrated.push(await fetchRedditPostEngagement(post, headerVariants));
+  }
+
+  return hydrated;
+}
+
+function hasRedditEngagementMetrics(post: RedditPost) {
+  return typeof post.score === "number" && typeof post.num_comments === "number";
+}
+
+async function fetchRedditPostEngagement(
+  post: RedditPost,
+  headerVariants: Array<Record<string, string>>,
+) {
+  const detailUrl = buildRedditDetailJsonUrl(post.permalink);
+  if (!detailUrl) {
+    return post;
+  }
+
+  for (const headers of headerVariants) {
+    try {
+      const response = await fetch(detailUrl, {
+        headers,
+        cache: "no-store",
+        next: { revalidate: 0 },
+        signal: AbortSignal.timeout(REDDIT_DETAIL_FETCH_TIMEOUT_MS),
+      });
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const payload = (await response.json()) as RedditPostDetailPayload;
+      const metrics = payload?.[0]?.data?.children?.[0]?.data;
+      if (!metrics) {
+        continue;
+      }
+
+      return {
+        ...post,
+        score: metrics.score ?? post.score,
+        num_comments: metrics.num_comments ?? post.num_comments,
+        upvote_ratio: metrics.upvote_ratio ?? post.upvote_ratio,
+        total_awards_received: metrics.total_awards_received ?? post.total_awards_received,
+        num_crossposts: metrics.num_crossposts ?? post.num_crossposts,
+      };
+    } catch {
+      // RSS fallback should keep sync resilient even when a detail lookup fails.
+    }
+  }
+
+  return post;
+}
+
+type RedditPostDetailPayload = Array<{
+  data?: {
+    children?: Array<{
+      data?: Pick<
+        RedditPost,
+        "score" | "num_comments" | "upvote_ratio" | "total_awards_received" | "num_crossposts"
+      >;
+    }>;
+  };
+}>;
+
+function buildRedditDetailJsonUrl(permalink: string) {
+  try {
+    const parsed = permalink.startsWith("http")
+      ? new URL(permalink)
+      : new URL(permalink, "https://www.reddit.com");
+    const pathname = parsed.pathname.replace(/\/?$/, "/");
+    return `https://www.reddit.com${pathname}.json?raw_json=1`;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchRedditPostsFromJson(headerVariants: Array<Record<string, string>>) {

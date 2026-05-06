@@ -17,8 +17,8 @@ export function ReleaseRedditStats({
 }: ReleaseRedditStatsProps) {
   const upvoteValue = coerceStat(upvotes);
   const commentValue = coerceStat(comments);
-  const upvoteLabel = formatCompactWholeCount(upvoteValue) ?? "Syncing";
-  const commentLabel = formatCompactWholeCount(commentValue) ?? "Syncing";
+  const upvoteLabel = formatRedditStat(upvoteValue);
+  const commentLabel = formatRedditStat(commentValue);
   const stats = [
     { label: "Upvotes", value: upvoteLabel, aria: buildAriaLabel(upvoteLabel, "upvotes") },
     { label: "Comments", value: commentLabel, aria: buildAriaLabel(commentLabel, "comments") },
@@ -61,21 +61,29 @@ export function ReleaseRedditStats({
 }
 
 function buildAriaLabel(value: string, label: "upvotes" | "comments") {
-  if (value === "Syncing") {
-    return `Reddit ${label} are syncing`;
+  if (value === "/") {
+    return `Reddit ${label} unavailable`;
   }
 
   return `${value} Reddit ${label}`;
 }
 
+function formatRedditStat(value: number | null) {
+  if (value === null) {
+    return "/";
+  }
+
+  return formatCompactWholeCount(value) ?? "0";
+}
+
 function coerceStat(value: number | string | null | undefined) {
   if (typeof value === "number") {
-    return Number.isFinite(value) && value > 0 ? value : null;
+    return Number.isFinite(value) && value >= 0 ? value : null;
   }
 
   if (typeof value === "string") {
     const parsed = Number(value.replace(/,/g, "").trim());
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
   }
 
   return null;

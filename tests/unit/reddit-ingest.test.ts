@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { ReleaseType } from "../../src/generated/prisma/enums";
-import { normalizeRedditPost, shouldKeepReleaseRecord } from "../../src/lib/reddit";
+import {
+  hydrateRedditEngagementMetrics,
+  normalizeRedditPost,
+  shouldKeepReleaseRecord,
+} from "../../src/lib/reddit";
 
 type RedditPostFixture = Parameters<typeof normalizeRedditPost>[0];
 
@@ -135,6 +139,57 @@ describe("reddit ingest release matching", () => {
       }),
       false,
     );
+  });
+
+  it("hydrates RSS fallback posts with Reddit detail metrics", async () => {
+    const originalFetch = globalThis.fetch;
+    const rssPost = redditPost({
+      id: "rss1",
+      permalink: "/r/indieheads/comments/rss1/fresh_fixture/",
+      score: undefined,
+      num_comments: undefined,
+      upvote_ratio: undefined,
+      total_awards_received: undefined,
+      num_crossposts: undefined,
+    });
+
+    globalThis.fetch = async (input) => {
+      assert.equal(String(input), "https://www.reddit.com/r/indieheads/comments/rss1/fresh_fixture/.json?raw_json=1");
+      return new Response(
+        JSON.stringify([
+          {
+            data: {
+              children: [
+                {
+                  data: {
+                    score: 84,
+                    num_comments: 16,
+                    upvote_ratio: 0.96,
+                    total_awards_received: 1,
+                    num_crossposts: 2,
+                  },
+                },
+              ],
+            },
+          },
+        ]),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    };
+
+    try {
+      const [hydrated] = await hydrateRedditEngagementMetrics([rssPost], [
+        { "User-Agent": "test" },
+      ]);
+
+      assert.equal(hydrated.score, 84);
+      assert.equal(hydrated.num_comments, 16);
+      assert.equal(hydrated.upvote_ratio, 0.96);
+      assert.equal(hydrated.total_awards_received, 1);
+      assert.equal(hydrated.num_crossposts, 2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 
