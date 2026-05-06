@@ -76,6 +76,9 @@ async function flushLiveYouTubeStats() {
   releaseIds.forEach((id) => pendingYouTubeReleaseIds.delete(id));
   const missingIds = releaseIds.filter((id) => !liveYouTubeStatsCache.has(id));
   if (missingIds.length === 0) {
+    if (pendingYouTubeReleaseIds.size > 0) {
+      scheduleLiveYouTubeStatsFlush();
+    }
     return;
   }
 
@@ -106,6 +109,10 @@ async function flushLiveYouTubeStats() {
     }
   } catch {
     // Keep the server-rendered DB value or the normal badge fallback.
+  } finally {
+    if (pendingYouTubeReleaseIds.size > 0) {
+      scheduleLiveYouTubeStatsFlush();
+    }
   }
 }
 
