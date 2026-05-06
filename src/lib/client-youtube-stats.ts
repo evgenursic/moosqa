@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { isYouTubeFirstMetricInput, type ReleaseMetricInput } from "@/lib/release-metrics";
+import { type ReleaseMetricInput } from "@/lib/release-metrics";
 
 export type LiveYouTubeStats = {
   youtubeViewCount: number | null;
@@ -15,10 +15,11 @@ let liveYouTubeStatsFlushScheduled = false;
 
 export function useLiveYouTubeStats(
   releaseId: string | null | undefined,
-  metricInput: ReleaseMetricInput,
+  _metricInput: ReleaseMetricInput,
 ) {
+  void _metricInput;
   const safeReleaseId = sanitizeReleaseId(releaseId);
-  const shouldTrack = Boolean(safeReleaseId && isYouTubeFirstMetricInput(metricInput));
+  const shouldTrack = Boolean(safeReleaseId);
   const stats = useSyncExternalStore(
     (onStoreChange) => subscribeLiveYouTubeStats(shouldTrack ? safeReleaseId : null, onStoreChange),
     () => (shouldTrack && safeReleaseId ? liveYouTubeStatsCache.get(safeReleaseId) ?? null : null),

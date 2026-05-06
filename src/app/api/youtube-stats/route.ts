@@ -5,7 +5,11 @@ import {
   withRateLimitHeaders,
 } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
-import { fetchYouTubeVideoMetricsByIds, isYouTubeDataApiConfigured } from "@/lib/youtube-data-api";
+import {
+  discoverYouTubeVideoMetric,
+  fetchYouTubeVideoMetricsByIds,
+  isYouTubeDataApiConfigured,
+} from "@/lib/youtube-data-api";
 import {
   hasYouTubeMetadataSource,
   shouldRefreshVisibleYouTubeStats,
@@ -18,6 +22,11 @@ const YOUTUBE_STATS_RATE_LIMIT = {
   max: 40,
 } as const;
 const MAX_RELEASE_IDS = 36;
+const MAX_DISCOVERY_PER_REQUEST = readPositiveInt(
+  process.env.YOUTUBE_VISIBLE_DISCOVERY_MAX_PER_REQUEST,
+  6,
+);
+const DISCOVERY_RETRY_INTERVAL_MS = 1000 * 60 * 60 * 12;
 
 export async function POST(request: Request) {
   const rateLimit = takeMemoryRateLimit(YOUTUBE_STATS_RATE_LIMIT, getRateLimitIdentity(request));
@@ -39,6 +48,9 @@ export async function POST(request: Request) {
     },
     select: {
       id: true,
+      title: true,
+      artistName: true,
+      projectTitle: true,
       sourceUrl: true,
       youtubeUrl: true,
       youtubeMusicUrl: true,
@@ -51,23 +63,24 @@ export async function POST(request: Request) {
   const now = new Date();
   const byVideoId = new Map<string, typeof releases[number]>();
   const videoIdsToRefresh: string[] = [];
+  const discoveryCandidates: Array<typeof releases[number]> = [];
 
   for (const release of releases) {
-    if (!hasYouTubeMetadataSource(release)) {
-      continue;
-    }
-
     const videoId =
       extractYouTubeVideoId(release.youtubeUrl) ||
       extractYouTubeVideoId(release.youtubeMusicUrl) ||
       extractYouTubeVideoId(release.sourceUrl);
-    if (!videoId) {
+
+    if (videoId) {
+      byVideoId.set(videoId, release);
+      if (shouldRefreshVisibleYouTubeStats(release, now)) {
+        videoIdsToRefresh.push(videoId);
+      }
       continue;
     }
 
-    byVideoId.set(videoId, release);
-    if (shouldRefreshVisibleYouTubeStats(release, now)) {
-      videoIdsToRefresh.push(videoId);
+    if (shouldAttemptYouTubeDiscovery(release, now)) {
+      discoveryCandidates.push(release);
     }
   }
 
@@ -105,26 +118,35 @@ export async function POST(request: Request) {
 
     updatedByReleaseId.set(release.id, {
       releaseId: release.id,
+      youtubeUrl: nextYoutubeUrl,
       youtubeViewCount: nextViewCount,
       youtubePublishedAt: nextPublishedAt?.toISOString() || null,
       youtubeMetadataUpdatedAt: now.toISOString(),
     });
   }
 
-  const metrics = releases
-    .filter(hasYouTubeMetadataSource)
-    .map((release) => updatedByReleaseId.get(release.id) || {
-      releaseId: release.id,
-      youtubeViewCount: release.youtubeViewCount,
-      youtubePublishedAt: release.youtubePublishedAt?.toISOString() || null,
-      youtubeMetadataUpdatedAt: release.youtubeMetadataUpdatedAt?.toISOString() || null,
-    });
+  const discoveredMetrics = isYouTubeDataApiConfigured()
+    ? await discoverMissingYouTubeMetrics(discoveryCandidates.slice(0, MAX_DISCOVERY_PER_REQUEST), now)
+    : [];
+  for (const metric of discoveredMetrics) {
+    updatedByReleaseId.set(metric.releaseId, metric);
+  }
+
+  const metrics = releases.map((release) => updatedByReleaseId.get(release.id) || {
+    releaseId: release.id,
+    youtubeUrl: release.youtubeUrl,
+    youtubeViewCount: release.youtubeViewCount,
+    youtubePublishedAt: release.youtubePublishedAt?.toISOString() || null,
+    youtubeMetadataUpdatedAt: release.youtubeMetadataUpdatedAt?.toISOString() || null,
+  });
 
   return withRateLimitHeaders(Response.json({
     metrics,
     refreshed: refreshedMetrics.length,
+    discovered: discoveredMetrics.length,
     youtubeApiConfigured: isYouTubeDataApiConfigured(),
     refreshAttempted: videoIdsToRefresh.length,
+    discoveryAttempted: Math.min(discoveryCandidates.length, MAX_DISCOVERY_PER_REQUEST),
   }, {
     headers: { "Cache-Control": "no-store" },
   }), rateLimit);
@@ -132,10 +154,59 @@ export async function POST(request: Request) {
 
 type YouTubeStatsMetric = {
   releaseId: string;
+  youtubeUrl: string | null;
   youtubeViewCount: number | null;
   youtubePublishedAt: string | null;
   youtubeMetadataUpdatedAt: string | null;
 };
+
+async function discoverMissingYouTubeMetrics(
+  releases: Array<{
+    id: string;
+    title: string;
+    artistName: string | null;
+    projectTitle: string | null;
+  }>,
+  now: Date,
+) {
+  const metrics: YouTubeStatsMetric[] = [];
+
+  for (const release of releases) {
+    const discovered = await discoverYouTubeVideoMetric({
+      title: release.title,
+      artistName: release.artistName,
+      projectTitle: release.projectTitle,
+    });
+
+    if (!discovered) {
+      await prisma.release.update({
+        where: { id: release.id },
+        data: { youtubeMetadataUpdatedAt: now },
+      });
+      continue;
+    }
+
+    await prisma.release.update({
+      where: { id: release.id },
+      data: {
+        youtubeUrl: discovered.canonicalUrl,
+        youtubeViewCount: discovered.viewCount,
+        youtubePublishedAt: discovered.publishedAt,
+        youtubeMetadataUpdatedAt: now,
+      },
+    });
+
+    metrics.push({
+      releaseId: release.id,
+      youtubeUrl: discovered.canonicalUrl,
+      youtubeViewCount: discovered.viewCount,
+      youtubePublishedAt: discovered.publishedAt?.toISOString() || null,
+      youtubeMetadataUpdatedAt: now.toISOString(),
+    });
+  }
+
+  return metrics;
+}
 
 async function readJsonBody(request: Request) {
   try {
@@ -170,4 +241,37 @@ function sameDate(left: Date | null, right: Date | null) {
   }
 
   return left.getTime() === right.getTime();
+}
+
+function shouldAttemptYouTubeDiscovery(
+  release: {
+    youtubeViewCount: number | null;
+    youtubePublishedAt: Date | null;
+    youtubeMetadataUpdatedAt: Date | null;
+    metadataEnrichedAt: Date | null;
+    sourceUrl: string;
+    youtubeUrl: string | null;
+    youtubeMusicUrl: string | null;
+  },
+  now: Date,
+) {
+  if (release.youtubeViewCount && release.youtubePublishedAt) {
+    return false;
+  }
+
+  if (hasYouTubeMetadataSource(release)) {
+    return shouldRefreshVisibleYouTubeStats(release, now);
+  }
+
+  const lastAttempt = release.youtubeMetadataUpdatedAt || release.metadataEnrichedAt;
+  if (!lastAttempt) {
+    return true;
+  }
+
+  return now.getTime() - lastAttempt.getTime() > DISCOVERY_RETRY_INTERVAL_MS;
+}
+
+function readPositiveInt(value: string | undefined, fallback: number) {
+  const parsed = Number.parseInt(value || "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }

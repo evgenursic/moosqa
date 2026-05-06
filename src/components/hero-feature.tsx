@@ -87,6 +87,8 @@ export function HeroFeature({ release, fromHref = null, popularityMaxRaw = null 
           releaseId={release.id}
           sourceUrl={release.sourceUrl}
           outletName={release.outletName}
+          youtubeUrl={release.youtubeUrl}
+          youtubeMusicUrl={release.youtubeMusicUrl}
           youtubeViewCount={release.youtubeViewCount}
           redditUpvotes={release.score}
           redditComments={release.commentCount}

@@ -103,6 +103,8 @@ export function ReleaseCard({
             releaseId={release.id}
             sourceUrl={release.sourceUrl}
             outletName={release.outletName}
+            youtubeUrl={release.youtubeUrl}
+            youtubeMusicUrl={release.youtubeMusicUrl}
             youtubeViewCount={release.youtubeViewCount}
             redditUpvotes={release.score}
             redditComments={release.commentCount}

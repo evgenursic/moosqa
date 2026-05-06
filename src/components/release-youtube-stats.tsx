@@ -24,10 +24,6 @@ export function ReleaseYouTubeStats({
   const viewsLabel = formatYouTubeViews(liveStats?.youtubeViewCount ?? metricInput.youtubeViewCount);
   const publishedLabel = formatYouTubePublished(liveStats?.youtubePublishedAt ?? youtubePublishedAt);
 
-  if (!viewsLabel && !publishedLabel) {
-    return null;
-  }
-
   const stats = [
     { label: "YouTube views", value: viewsLabel ?? "/", aria: viewsLabel ? `${viewsLabel} YouTube views` : "YouTube views unavailable" },
     { label: "Published", value: publishedLabel ?? "/", aria: publishedLabel ? `Published on YouTube ${publishedLabel}` : "YouTube publish date unavailable" },

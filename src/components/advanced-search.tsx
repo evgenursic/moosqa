@@ -623,6 +623,8 @@ function SearchLiveResults({
                 releaseId={result.id}
                 sourceUrl={result.sourceUrl || null}
                 outletName={result.outletName || null}
+                youtubeUrl={result.youtubeUrl || null}
+                youtubeMusicUrl={result.youtubeMusicUrl || null}
                 youtubeViewCount={result.youtubeViewCount}
                 redditUpvotes={result.score}
                 redditComments={result.commentCount}
