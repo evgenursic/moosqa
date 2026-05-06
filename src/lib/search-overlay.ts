@@ -11,6 +11,7 @@ import { getPopularityMaxForReleases } from "@/lib/release-metrics";
 
 export type SearchOverlayIndexItem = {
   id: string;
+  sourceItemId: string;
   slug: string;
   title: string;
   artistName: string | null;
@@ -48,6 +49,7 @@ const SEARCH_OVERLAY_GENRE_LOOKBACK_DAYS = 365;
 
 const searchOverlaySelect = {
   id: true,
+  sourceItemId: true,
   slug: true,
   title: true,
   artistName: true,
@@ -94,6 +96,7 @@ export async function getSearchOverlayPayload(): Promise<SearchOverlayPayload> {
   const editedReleases = releases.map((release) => applyReleaseEditorialFields(release));
   const baseResults = editedReleases.map((editedRelease) => ({
     id: editedRelease.id,
+    sourceItemId: editedRelease.sourceItemId,
     slug: editedRelease.slug,
     title: editedRelease.title,
     artistName: editedRelease.artistName,

@@ -23,6 +23,7 @@ export type ReleaseSectionKey =
 
 export type ReleaseListingItem = {
   id: string;
+  sourceItemId: string;
   slug: string;
   title: string;
   artistName: string | null;
@@ -189,6 +190,7 @@ export function clearReleaseDataCaches() {
 
 const releaseListingSelect = {
   id: true,
+  sourceItemId: true,
   slug: true,
   title: true,
   artistName: true,
@@ -767,6 +769,7 @@ function prepareDisplayReleases(releases: ReleaseListingRow[]) {
 
         return {
           id: edited.id,
+          sourceItemId: edited.sourceItemId,
           slug: edited.slug,
           title: edited.title,
           artistName: edited.artistName,

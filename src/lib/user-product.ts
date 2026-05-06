@@ -71,6 +71,7 @@ export type ReleaseFollowTarget = {
 
 export type PersonalRadarRelease = {
   id: string;
+  sourceItemId: string;
   slug: string;
   title: string;
   artistName: string | null;
@@ -300,6 +301,7 @@ export async function getPersonalRadarForUser(userId: string) {
 
 const personalRadarReleaseSelect = {
   id: true,
+  sourceItemId: true,
   slug: true,
   title: true,
   artistName: true,

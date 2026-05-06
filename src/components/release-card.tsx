@@ -18,6 +18,7 @@ import {
 type ReleaseCardProps = {
   release: {
     id: string;
+    sourceItemId?: string | null;
     slug: string;
     title: string;
     artistName: string | null;
@@ -150,6 +151,8 @@ export function ReleaseCard({
         </div>
 
         <ReleaseRedditStats
+          redditId={release.sourceItemId}
+          slug={release.slug}
           upvotes={release.score}
           comments={release.commentCount}
           className="mt-4"

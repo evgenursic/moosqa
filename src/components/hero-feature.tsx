@@ -16,6 +16,7 @@ import {
 type HeroFeatureProps = {
   release: {
     id: string;
+    sourceItemId?: string | null;
     slug: string;
     title: string;
     artistName: string | null;
@@ -129,7 +130,13 @@ export function HeroFeature({ release, fromHref = null, popularityMaxRaw = null 
             {releaseDateLabel ? <span>{releaseDateLabel}</span> : null}
             {redditDateLabel ? <span>{redditDateLabel}</span> : null}
           </div>
-          <ReleaseRedditStats upvotes={release.score} comments={release.commentCount} className="mt-5" />
+          <ReleaseRedditStats
+            redditId={release.sourceItemId}
+            slug={release.slug}
+            upvotes={release.score}
+            comments={release.commentCount}
+            className="mt-5"
+          />
 
           <ListeningLinks release={release} />
 

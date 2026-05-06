@@ -148,6 +148,15 @@ export async function hydrateRedditEngagementMetrics(
   return hydrated;
 }
 
+export async function fetchRedditEngagementMetricsByIds(postIds: string[]) {
+  const metricsById = await fetchRedditInfoMetrics(postIds, getRedditHeaderVariants());
+  return [...metricsById.entries()].map(([id, metrics]) => ({
+    id,
+    upvotes: typeof metrics.score === "number" ? metrics.score : null,
+    comments: typeof metrics.num_comments === "number" ? metrics.num_comments : null,
+  }));
+}
+
 function hasRedditEngagementMetrics(post: RedditPost) {
   return typeof post.score === "number" && typeof post.num_comments === "number";
 }

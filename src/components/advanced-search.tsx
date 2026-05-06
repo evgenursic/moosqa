@@ -642,6 +642,8 @@ function SearchLiveResults({
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <ReleaseTypeRibbon releaseType={result.releaseType} compact tone="dark" />
                 <ReleaseRedditStats
+                  redditId={result.sourceItemId}
+                  slug={result.slug}
                   upvotes={result.score}
                   comments={result.commentCount}
                   compact

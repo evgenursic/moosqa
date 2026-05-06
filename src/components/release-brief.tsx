@@ -16,6 +16,7 @@ import {
 type ReleaseBriefProps = {
   release: {
     id: string;
+    sourceItemId?: string | null;
     slug: string;
     title: string;
     artistName: string | null;
@@ -113,7 +114,13 @@ export function ReleaseBrief({
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <ReleaseTypeRibbon releaseType={release.releaseType} compact />
-          <ReleaseRedditStats upvotes={release.score} comments={release.commentCount} compact />
+          <ReleaseRedditStats
+            redditId={release.sourceItemId}
+            slug={release.slug}
+            upvotes={release.score}
+            comments={release.commentCount}
+            compact
+          />
         </div>
 
         <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-black/52">

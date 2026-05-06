@@ -155,6 +155,8 @@ function RadarReleaseList({
                 <span>{formatRedditDateLabel(release.publishedAt)}</span>
               </div>
               <ReleaseRedditStats
+                redditId={release.sourceItemId}
+                slug={release.slug}
                 upvotes={release.score}
                 comments={release.commentCount}
                 compact
@@ -209,6 +211,8 @@ function RadarRecommendationList({ releases }: { releases: RadarRecommendation[]
                 <span>{formatRedditDateLabel(release.publishedAt)}</span>
               </div>
               <ReleaseRedditStats
+                redditId={release.sourceItemId}
+                slug={release.slug}
                 upvotes={release.redditUpvotes}
                 comments={release.redditComments}
                 compact

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 export type RadarRecommendation = {
   id: string;
+  sourceItemId: string;
   slug: string;
   title: string;
   artistName: string | null;
@@ -25,6 +26,7 @@ export type RadarRecommendation = {
 
 type RecommendationCandidate = {
   id: string;
+  sourceItemId: string;
   slug: string;
   title: string;
   artistName: string | null;
@@ -114,6 +116,7 @@ export async function getRecommendedReleasesForUser(userId: string) {
     take: 120,
     select: {
       id: true,
+      sourceItemId: true,
       slug: true,
       title: true,
       artistName: true,
@@ -267,6 +270,7 @@ export function scoreRecommendationCandidate(
 
   return {
     id: candidate.id,
+    sourceItemId: candidate.sourceItemId,
     slug: candidate.slug,
     title: candidate.title,
     artistName: candidate.artistName,

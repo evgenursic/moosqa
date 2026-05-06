@@ -1,8 +1,13 @@
+"use client";
+
+import { useEffect, useSyncExternalStore } from "react";
 import { cn, formatCompactWholeCount } from "@/lib/utils";
 
 type ReleaseRedditStatsProps = {
   upvotes?: number | string | null;
   comments?: number | string | null;
+  redditId?: string | null;
+  slug?: string | null;
   className?: string;
   compact?: boolean;
   tone?: "paper" | "dark";
@@ -11,12 +16,15 @@ type ReleaseRedditStatsProps = {
 export function ReleaseRedditStats({
   upvotes,
   comments,
+  redditId,
+  slug,
   className,
   compact = false,
   tone = "paper",
 }: ReleaseRedditStatsProps) {
-  const upvoteValue = coerceStat(upvotes);
-  const commentValue = coerceStat(comments);
+  const liveStats = useLiveRedditStats(redditId, slug);
+  const upvoteValue = liveStats?.upvotes ?? coerceStat(upvotes);
+  const commentValue = liveStats?.comments ?? coerceStat(comments);
   const upvoteLabel = formatRedditStat(upvoteValue);
   const commentLabel = formatRedditStat(commentValue);
   const stats = [
@@ -58,6 +66,132 @@ export function ReleaseRedditStats({
       ))}
     </div>
   );
+}
+
+type LiveRedditStats = {
+  upvotes: number | null;
+  comments: number | null;
+};
+
+const liveStatsCache = new Map<string, LiveRedditStats>();
+const liveStatsListeners = new Map<string, Set<() => void>>();
+const pendingLiveStatIds = new Set<string>();
+let liveStatsFlushScheduled = false;
+
+function useLiveRedditStats(
+  redditId: string | null | undefined,
+  slug: string | null | undefined,
+) {
+  const safeId = sanitizeRedditId(redditId) ?? extractRedditIdFromSlug(slug);
+  const stats = useSyncExternalStore(
+    (onStoreChange) => subscribeLiveStats(safeId, onStoreChange),
+    () => (safeId ? liveStatsCache.get(safeId) ?? null : null),
+    () => null,
+  );
+
+  useEffect(() => {
+    if (safeId && !liveStatsCache.has(safeId)) {
+      pendingLiveStatIds.add(safeId);
+      scheduleLiveStatsFlush();
+    }
+  }, [safeId]);
+
+  return stats;
+}
+
+function subscribeLiveStats(id: string | null, onStoreChange: () => void) {
+  if (!id) {
+    return () => undefined;
+  }
+
+  let listeners = liveStatsListeners.get(id);
+  if (!listeners) {
+    listeners = new Set();
+    liveStatsListeners.set(id, listeners);
+  }
+
+  listeners.add(onStoreChange);
+
+  return () => {
+    listeners?.delete(onStoreChange);
+    if (listeners?.size === 0) {
+      liveStatsListeners.delete(id);
+    }
+  };
+}
+
+function sanitizeRedditId(value: string | null | undefined) {
+  const id = value?.trim();
+  return id && /^[a-z0-9]+$/i.test(id) ? id : null;
+}
+
+function extractRedditIdFromSlug(slug: string | null | undefined) {
+  const id = slug?.match(/-([a-z0-9]{5,12})$/i)?.[1] ?? null;
+  return sanitizeRedditId(id);
+}
+
+function scheduleLiveStatsFlush() {
+  if (liveStatsFlushScheduled) {
+    return;
+  }
+
+  liveStatsFlushScheduled = true;
+  window.setTimeout(() => {
+    liveStatsFlushScheduled = false;
+    void flushLiveStats();
+  }, 40);
+}
+
+async function flushLiveStats() {
+  const ids = [...pendingLiveStatIds].slice(0, 100);
+  ids.forEach((id) => pendingLiveStatIds.delete(id));
+  const missingIds = ids.filter((id) => !liveStatsCache.has(id));
+  if (missingIds.length === 0) {
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `/api/reddit-stats?ids=${missingIds.join(",")}`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      return;
+    }
+
+    const payload = (await response.json()) as RedditInfoPayload;
+    for (const metric of payload.metrics ?? []) {
+      const id = metric.id;
+      if (!id) {
+        continue;
+      }
+
+      notifyLiveStats(id, {
+        upvotes: coerceStat(metric.upvotes),
+        comments: coerceStat(metric.comments),
+      });
+    }
+  } catch {
+    // Keep the server-rendered DB value or "/" fallback if Reddit blocks the browser request.
+  }
+}
+
+type RedditInfoPayload = {
+  metrics?: Array<{
+    id?: string;
+    upvotes?: number | string | null;
+    comments?: number | string | null;
+  }>;
+};
+
+function notifyLiveStats(id: string, stats: LiveRedditStats) {
+  liveStatsCache.set(id, stats);
+  const listeners = liveStatsListeners.get(id);
+  if (!listeners) {
+    return;
+  }
+
+  listeners.forEach((listener) => listener());
 }
 
 function buildAriaLabel(value: string, label: "upvotes" | "comments") {
