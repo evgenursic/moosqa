@@ -88,6 +88,7 @@ export function ReleaseBrief({
           imageClassName="h-full"
         />
         <ReleaseMetricBadge
+          releaseId={release.id}
           sourceUrl={release.sourceUrl}
           outletName={release.outletName}
           youtubeViewCount={release.youtubeViewCount}

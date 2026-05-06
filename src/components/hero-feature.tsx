@@ -84,6 +84,7 @@ export function HeroFeature({ release, fromHref = null, popularityMaxRaw = null 
           priority
         />
         <ReleaseMetricBadge
+          releaseId={release.id}
           sourceUrl={release.sourceUrl}
           outletName={release.outletName}
           youtubeViewCount={release.youtubeViewCount}

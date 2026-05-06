@@ -57,6 +57,8 @@ Do not claim migration success unless `db:inspect` shows the required tables on 
 ## YouTube Metadata Refresh
 
 - Public cards read stored `Release.youtubeViewCount` and `Release.youtubePublishedAt`; they must not fetch YouTube data during page or card rendering.
+- Visible YouTube-first card badges also enqueue one batched same-origin `/api/youtube-stats` refresh after page load. The endpoint reads persisted releases, refreshes only missing/stale YouTube rows, writes the database, and returns updated badge values. It does not block the server-rendered page.
+- Set `YOUTUBE_API_KEY` in Vercel Production to enable reliable YouTube Data API refreshes. Optional `YOUTUBE_VISIBLE_STATS_REFRESH_MINUTES` controls the visible-card freshness window and is clamped to at least 10 minutes; default is 30 minutes.
 - `Release.youtubeMetadataUpdatedAt` records the last pipeline/manual attempt to refresh YouTube metadata.
 - Front-card metric badges use persisted public signals only. YouTube-source releases prefer YouTube views when available; other cards prefer a relative Popularity percentage from Reddit response (`round((upvotes + comments) / max(upvotes + comments in the current visible set) * 100)`), then Reddit upvotes, YouTube views, Reddit comments, trusted/editor-entered Bandcamp supporter/follower counts, and a small release-type fallback when no numeric metric exists. Treat this as a MooSQA/Reddit-relative signal, not universal internet popularity.
 - Bandcamp supporter/follower fields are manual/editorial overrides unless a reliable provider is added later. Do not add runtime Bandcamp scraping to page renders.

@@ -2,6 +2,10 @@ import { detectPlatform } from "@/lib/listening-links";
 
 export const YOUTUBE_METADATA_REFRESH_INTERVAL_MS = 1000 * 60 * 60 * 24 * 7;
 export const YOUTUBE_METADATA_RETRY_INTERVAL_MS = 1000 * 60 * 15;
+export const YOUTUBE_VISIBLE_STATS_REFRESH_INTERVAL_MS = readRefreshIntervalMs(
+  process.env.YOUTUBE_VISIBLE_STATS_REFRESH_MINUTES,
+  30,
+);
 
 type YouTubeMetadataState = {
   sourceUrl?: string | null;
@@ -53,4 +57,26 @@ export function coerceMetadataDate(value: Date | string | null | undefined) {
 
   const parsed = value instanceof Date ? value : new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function shouldRefreshVisibleYouTubeStats(
+  input: YouTubeMetadataState,
+  now: Date = new Date(),
+) {
+  if (!hasYouTubeMetadataSource(input)) {
+    return false;
+  }
+
+  const lastAttempt = coerceMetadataDate(input.youtubeMetadataUpdatedAt);
+  if (!lastAttempt || !input.youtubeViewCount || !input.youtubePublishedAt) {
+    return true;
+  }
+
+  return now.getTime() - lastAttempt.getTime() > YOUTUBE_VISIBLE_STATS_REFRESH_INTERVAL_MS;
+}
+
+function readRefreshIntervalMs(value: string | undefined, fallbackMinutes: number) {
+  const parsed = Number.parseInt(value || "", 10);
+  const minutes = Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackMinutes;
+  return Math.max(10, minutes) * 60 * 1000;
 }

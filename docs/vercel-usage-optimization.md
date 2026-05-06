@@ -44,6 +44,7 @@ These routes are blocked in `robots.txt` and/or expose `robots: { index: false, 
 ## External API Policy
 
 - Public page renders must not call YouTube, Reddit, Bandcamp, MusicBrainz, OpenAI, or arbitrary source metadata fetches.
+- YouTube-first cards may trigger a single batched `/api/youtube-stats` request after hydration. That route refreshes only missing/stale persisted YouTube rows, is rate-limited, and requires `YOUTUBE_API_KEY` for reliable external refreshes.
 - YouTube/Reddit metrics on cards come from persisted database fields.
 - Missing metrics degrade to stored fallback badge labels.
 - External source/artwork metadata refresh belongs in sync, enrichment, repair, or bounded `/api/artwork` behavior, not the main page render path.

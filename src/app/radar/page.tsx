@@ -131,6 +131,7 @@ function RadarReleaseList({
               className="relative block border border-[var(--color-soft-line)] bg-[var(--color-paper)] p-4 pt-12 transition hover:border-[var(--color-accent-strong)] sm:pr-32 sm:pt-4"
             >
               <ReleaseMetricBadge
+                releaseId={release.id}
                 sourceUrl={release.sourceUrl}
                 outletName={release.outletName}
                 youtubeViewCount={release.youtubeViewCount}
@@ -187,6 +188,7 @@ function RadarRecommendationList({ releases }: { releases: RadarRecommendation[]
               className="relative block border border-[var(--color-soft-line)] bg-[var(--color-paper)] p-4 pt-12 transition hover:border-[var(--color-accent-strong)] sm:pr-32 sm:pt-4"
             >
               <ReleaseMetricBadge
+                releaseId={release.id}
                 sourceUrl={release.sourceUrl}
                 outletName={release.outletName}
                 youtubeViewCount={release.youtubeViewCount}

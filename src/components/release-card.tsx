@@ -100,6 +100,7 @@ export function ReleaseCard({
             priority={priority}
           />
           <ReleaseMetricBadge
+            releaseId={release.id}
             sourceUrl={release.sourceUrl}
             outletName={release.outletName}
             youtubeViewCount={release.youtubeViewCount}

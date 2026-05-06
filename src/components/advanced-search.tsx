@@ -620,6 +620,7 @@ function SearchLiveResults({
                 imageClassName="aspect-[4/3] md:aspect-[16/10]"
               />
               <ReleaseMetricBadge
+                releaseId={result.id}
                 sourceUrl={result.sourceUrl || null}
                 outletName={result.outletName || null}
                 youtubeViewCount={result.youtubeViewCount}
