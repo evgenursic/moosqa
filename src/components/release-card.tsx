@@ -4,8 +4,8 @@ import { ReleaseCardActions } from "@/components/release-card-actions";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
 import { ReleaseMetricBadge } from "@/components/release-metric-badge";
-import { ReleaseRedditStats } from "@/components/release-reddit-stats";
 import { ReleaseTypeRibbon } from "@/components/release-type-ribbon";
+import { ReleaseYouTubeStats } from "@/components/release-youtube-stats";
 import { TopRatedVisual } from "@/components/top-rated-visual";
 import {
   formatContextualReleaseDateLabel,
@@ -151,11 +151,14 @@ export function ReleaseCard({
           </ReleaseLink>
         </div>
 
-        <ReleaseRedditStats
-          redditId={release.sourceItemId}
-          slug={release.slug}
-          upvotes={release.score}
-          comments={release.commentCount}
+        <ReleaseYouTubeStats
+          releaseId={release.id}
+          sourceUrl={release.sourceUrl}
+          outletName={release.outletName}
+          youtubeUrl={release.youtubeUrl}
+          youtubeMusicUrl={release.youtubeMusicUrl}
+          youtubeViewCount={release.youtubeViewCount}
+          youtubePublishedAt={release.youtubePublishedAt}
           className="mt-4"
           compact={compact}
         />

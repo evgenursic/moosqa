@@ -81,7 +81,10 @@ export type PersonalRadarRelease = {
   outletName: string | null;
   sourceUrl: string;
   publishedAt: Date;
+  youtubeUrl: string | null;
+  youtubeMusicUrl: string | null;
   youtubeViewCount: number | null;
+  youtubePublishedAt: Date | null;
   score: number | null;
   commentCount: number | null;
   bandcampSupporterCount: number | null;
@@ -311,7 +314,10 @@ const personalRadarReleaseSelect = {
   outletName: true,
   sourceUrl: true,
   publishedAt: true,
+  youtubeUrl: true,
+  youtubeMusicUrl: true,
   youtubeViewCount: true,
+  youtubePublishedAt: true,
   score: true,
   commentCount: true,
   bandcampSupporterCount: true,

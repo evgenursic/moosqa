@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import type { ReactNode } from "react";
 
 import { ReleaseMetricBadge } from "@/components/release-metric-badge";
-import { ReleaseRedditStats } from "@/components/release-reddit-stats";
+import { ReleaseYouTubeStats } from "@/components/release-youtube-stats";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getRecommendedReleasesForUser, type RadarRecommendation } from "@/lib/recommendations";
@@ -155,11 +155,14 @@ function RadarReleaseList({
                 {release.labelName ? <span>{release.labelName}</span> : null}
                 <span>{formatRedditDateLabel(release.publishedAt)}</span>
               </div>
-              <ReleaseRedditStats
-                redditId={release.sourceItemId}
-                slug={release.slug}
-                upvotes={release.score}
-                comments={release.commentCount}
+              <ReleaseYouTubeStats
+                releaseId={release.id}
+                sourceUrl={release.sourceUrl}
+                outletName={release.outletName}
+                youtubeUrl={release.youtubeUrl}
+                youtubeMusicUrl={release.youtubeMusicUrl}
+                youtubeViewCount={release.youtubeViewCount}
+                youtubePublishedAt={release.youtubePublishedAt}
                 compact
                 className="mt-3"
               />
@@ -212,11 +215,14 @@ function RadarRecommendationList({ releases }: { releases: RadarRecommendation[]
                 {release.labelName ? <span>{release.labelName}</span> : null}
                 <span>{formatRedditDateLabel(release.publishedAt)}</span>
               </div>
-              <ReleaseRedditStats
-                redditId={release.sourceItemId}
-                slug={release.slug}
-                upvotes={release.redditUpvotes}
-                comments={release.redditComments}
+              <ReleaseYouTubeStats
+                releaseId={release.id}
+                sourceUrl={release.sourceUrl}
+                outletName={release.outletName}
+                youtubeUrl={release.youtubeUrl}
+                youtubeMusicUrl={release.youtubeMusicUrl}
+                youtubeViewCount={release.youtubeViewCount}
+                youtubePublishedAt={release.youtubePublishedAt}
                 compact
                 className="mt-3"
               />

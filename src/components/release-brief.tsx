@@ -3,8 +3,8 @@ import { getListeningLinks } from "@/lib/listening-links";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
 import { ReleaseMetricBadge } from "@/components/release-metric-badge";
-import { ReleaseRedditStats } from "@/components/release-reddit-stats";
 import { ReleaseTypeRibbon } from "@/components/release-type-ribbon";
+import { ReleaseYouTubeStats } from "@/components/release-youtube-stats";
 import {
   cn,
   formatContextualReleaseDateLabel,
@@ -115,11 +115,14 @@ export function ReleaseBrief({
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <ReleaseTypeRibbon releaseType={release.releaseType} compact />
-          <ReleaseRedditStats
-            redditId={release.sourceItemId}
-            slug={release.slug}
-            upvotes={release.score}
-            comments={release.commentCount}
+          <ReleaseYouTubeStats
+            releaseId={release.id}
+            sourceUrl={release.sourceUrl}
+            outletName={release.outletName}
+            youtubeUrl={release.youtubeUrl}
+            youtubeMusicUrl={release.youtubeMusicUrl}
+            youtubeViewCount={release.youtubeViewCount}
+            youtubePublishedAt={release.youtubePublishedAt}
             compact
           />
         </div>

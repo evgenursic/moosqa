@@ -8,7 +8,7 @@ import {
 } from "../../src/lib/release-metrics";
 
 describe("release metric badge helpers", () => {
-  it("prefers Reddit upvotes over YouTube and Bandcamp signals", () => {
+  it("prefers YouTube views over public Reddit metrics", () => {
     assert.deepEqual(
       buildBestReleaseMetricSignal({
         sourceUrl: "https://www.reddit.com/r/indieheads/comments/test",
@@ -18,27 +18,26 @@ describe("release metric badge helpers", () => {
         bandcampSupporterCount: 320,
       }),
       {
-        kind: "reddit-upvotes",
-        label: "84 upvotes",
-        ariaLabel: "84 Reddit upvotes",
+        kind: "youtube",
+        label: "12.4K views",
+        ariaLabel: "12.4K YouTube views",
       },
     );
   });
 
-  it("shows relative popularity when a visible set max is available", () => {
+  it("does not expose Reddit popularity as the public card badge", () => {
     assert.deepEqual(
       buildBestReleaseMetricSignal({
         sourceUrl: "https://www.reddit.com/r/indieheads/comments/test",
-        youtubeViewCount: 12400,
         redditUpvotes: 84,
         redditComments: 16,
         popularityMaxRaw: 200,
         bandcampSupporterCount: 320,
       }),
       {
-        kind: "popularity",
-        label: "50% popular",
-        ariaLabel: "50% popular relative to this MooSQA set",
+        kind: "bandcamp-supporters",
+        label: "320 supporters",
+        ariaLabel: "320 Bandcamp supporters",
       },
     );
   });
@@ -70,22 +69,22 @@ describe("release metric badge helpers", () => {
     );
   });
 
-  it("falls back to Reddit upvotes and comments without showing fake zeroes", () => {
+  it("does not fall back to Reddit upvotes or comments", () => {
     assert.equal(
       buildBestReleaseMetricSignal({
         youtubeViewCount: null,
         redditUpvotes: 84,
         redditComments: 16,
-      })?.label,
-      "84 upvotes",
+      }),
+      null,
     );
     assert.equal(
       buildBestReleaseMetricSignal({
         youtubeViewCount: 0,
         redditUpvotes: 0,
         redditComments: 16,
-      })?.label,
-      "16 comments",
+      }),
+      null,
     );
     assert.equal(buildBestReleaseMetricSignal({ youtubeViewCount: 0, redditUpvotes: 0, redditComments: 0 }), null);
   });

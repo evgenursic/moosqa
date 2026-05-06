@@ -24,6 +24,7 @@ export type SearchOverlayIndexItem = {
   youtubeUrl: string | null;
   youtubeMusicUrl: string | null;
   youtubeViewCount: number | null;
+  youtubePublishedAt: string | null;
   bandcampUrl: string | null;
   bandcampSupporterCount: number | null;
   bandcampFollowerCount: number | null;
@@ -62,6 +63,7 @@ const searchOverlaySelect = {
   youtubeUrl: true,
   youtubeMusicUrl: true,
   youtubeViewCount: true,
+  youtubePublishedAt: true,
   bandcampUrl: true,
   bandcampSupporterCount: true,
   bandcampFollowerCount: true,
@@ -109,6 +111,7 @@ export async function getSearchOverlayPayload(): Promise<SearchOverlayPayload> {
     youtubeUrl: editedRelease.youtubeUrl,
     youtubeMusicUrl: editedRelease.youtubeMusicUrl,
     youtubeViewCount: editedRelease.youtubeViewCount,
+    youtubePublishedAt: editedRelease.youtubePublishedAt?.toISOString() || null,
     bandcampUrl: editedRelease.bandcampUrl,
     bandcampSupporterCount: editedRelease.bandcampSupporterCount,
     bandcampFollowerCount: editedRelease.bandcampFollowerCount,

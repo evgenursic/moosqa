@@ -7,8 +7,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ReleaseArtwork } from "@/components/release-artwork";
 import { ReleaseLink } from "@/components/release-link";
 import { ReleaseMetricBadge } from "@/components/release-metric-badge";
-import { ReleaseRedditStats } from "@/components/release-reddit-stats";
 import { ReleaseTypeRibbon } from "@/components/release-type-ribbon";
+import { ReleaseYouTubeStats } from "@/components/release-youtube-stats";
 import { loadSearchIndex, readCachedSearchIndex } from "@/lib/client-search-index";
 import { type SearchOverlayIndexItem } from "@/lib/search-overlay";
 import { getPopularityMaxForReleases } from "@/lib/release-metrics";
@@ -642,11 +642,14 @@ function SearchLiveResults({
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <ReleaseTypeRibbon releaseType={result.releaseType} compact tone="dark" />
-                <ReleaseRedditStats
-                  redditId={result.sourceItemId}
-                  slug={result.slug}
-                  upvotes={result.score}
-                  comments={result.commentCount}
+                <ReleaseYouTubeStats
+                  releaseId={result.id}
+                  sourceUrl={result.sourceUrl || null}
+                  outletName={result.outletName || null}
+                  youtubeUrl={result.youtubeUrl || null}
+                  youtubeMusicUrl={result.youtubeMusicUrl || null}
+                  youtubeViewCount={result.youtubeViewCount}
+                  youtubePublishedAt={result.youtubePublishedAt}
                   compact
                   tone="dark"
                 />

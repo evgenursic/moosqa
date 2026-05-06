@@ -1,4 +1,4 @@
-import { formatCompactUtcDate, formatDiscussionShare, formatWholeCount } from "@/lib/utils";
+import { formatCompactUtcDate, formatWholeCount } from "@/lib/utils";
 
 type ReleasePublicCountersProps = {
   youtubeViewCount?: number | null | undefined;
@@ -17,8 +17,6 @@ type ReleasePublicCountersProps = {
 export function ReleasePublicCounters({
   youtubeViewCount,
   youtubePublishedAt,
-  redditUpvotes,
-  redditComments,
   bandcampSupporterCount,
   bandcampFollowerCount,
   openCount,
@@ -33,26 +31,20 @@ export function ReleasePublicCounters({
   const safePositiveReactionCount = sanitizeMetric(positiveReactionCount);
   const safeNegativeReactionCount = sanitizeMetric(negativeReactionCount);
   const safeYouTubeViewCount = sanitizeMetric(youtubeViewCount);
-  const safeRedditUpvotes = sanitizeMetric(redditUpvotes);
-  const safeRedditComments = sanitizeMetric(redditComments);
   const safeBandcampSupporterCount = sanitizeMetric(bandcampSupporterCount);
   const safeBandcampFollowerCount = sanitizeMetric(bandcampFollowerCount);
-  const discussionShare = formatDiscussionShare(safeRedditUpvotes, safeRedditComments);
   const compactYouTubePublishedAt = formatCompactUtcDate(youtubePublishedAt);
   const items = [
     ...(safeYouTubeViewCount > 0 ? [{ label: "YouTube views", value: formatWholeCount(safeYouTubeViewCount) }] : []),
     ...(compactYouTubePublishedAt
       ? [{ label: "YouTube published", value: compactYouTubePublishedAt }]
       : []),
-    ...(safeRedditUpvotes > 0 ? [{ label: "Upvotes", value: formatWholeCount(safeRedditUpvotes) }] : []),
-    ...(safeRedditComments > 0 ? [{ label: "Comments", value: formatWholeCount(safeRedditComments) }] : []),
     ...(safeBandcampSupporterCount > 0
       ? [{ label: "Bandcamp supporters", value: formatWholeCount(safeBandcampSupporterCount) }]
       : []),
     ...(safeBandcampFollowerCount > 0
       ? [{ label: "Bandcamp followers", value: formatWholeCount(safeBandcampFollowerCount) }]
       : []),
-    ...(discussionShare !== null ? [{ label: "Discussion share", value: `${discussionShare}%` }] : []),
     ...(safeOpenCount > 0 ? [{ label: "MooSQA opens", value: formatWholeCount(safeOpenCount) }] : []),
     ...(safeListenClickCount > 0 ? [{ label: "Listen clicks", value: formatWholeCount(safeListenClickCount) }] : []),
     ...(safeShareCount > 0 ? [{ label: "Shares", value: formatWholeCount(safeShareCount) }] : []),
