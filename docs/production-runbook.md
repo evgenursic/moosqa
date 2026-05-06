@@ -103,6 +103,8 @@ Rotate these after any credential exposure, provider incident, teammate offboard
 - `RESEND_API_KEY`
 - `ALERT_EMAIL_FROM`
 - `ALERT_EMAIL_TO`
+- `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET` are optional but recommended for production Reddit metrics. Without them, MooSQA falls back to anonymous Reddit endpoints; Vercel may receive empty metric responses from Reddit and public cards will show `/` until a successful sync or live stats lookup is available.
+- `REDDIT_USER_AGENT` should identify the app and contact/home URL when Reddit OAuth is configured.
 
 Rotation order:
 

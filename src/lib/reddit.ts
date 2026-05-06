@@ -18,6 +18,8 @@ const REDDIT_PAGE_LIMIT = 100;
 const REDDIT_LOOKBACK_DAYS = 4;
 const REDDIT_MAX_PAGES = 8;
 const REDDIT_DETAIL_METRIC_LIMIT = 80;
+const REDDIT_OAUTH_TOKEN_URL = "https://www.reddit.com/api/v1/access_token";
+const REDDIT_OAUTH_API_BASE = "https://oauth.reddit.com";
 
 type RedditListing = {
   data?: {
@@ -208,6 +210,11 @@ async function fetchRedditInfoMetrics(
     return metricsById;
   }
 
+  const oauthMetrics = await fetchRedditInfoMetricsWithOAuth(ids);
+  if (oauthMetrics.size > 0) {
+    return oauthMetrics;
+  }
+
   const urls = [
     `https://api.reddit.com/api/info?id=${ids.map((id) => `t3_${id}`).join(",")}&raw_json=1`,
     `https://www.reddit.com/api/info.json?id=${ids.map((id) => `t3_${id}`).join(",")}&raw_json=1`,
@@ -246,6 +253,104 @@ async function fetchRedditInfoMetrics(
   }
 
   return metricsById;
+}
+
+async function fetchRedditInfoMetricsWithOAuth(postIds: string[]) {
+  const metricsById = new Map<string, RedditPostMetrics>();
+  const token = await getRedditOAuthToken();
+  if (!token) {
+    return metricsById;
+  }
+
+  try {
+    const response = await fetch(
+      `${REDDIT_OAUTH_API_BASE}/api/info?id=${postIds.map((id) => `t3_${id}`).join(",")}&raw_json=1`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "User-Agent": process.env.REDDIT_USER_AGENT || USER_AGENT,
+          Accept: "application/json,text/plain,*/*",
+        },
+        cache: "no-store",
+        next: { revalidate: 0 },
+        signal: AbortSignal.timeout(REDDIT_DETAIL_FETCH_TIMEOUT_MS),
+      },
+    );
+
+    if (!response.ok) {
+      return metricsById;
+    }
+
+    const payload = (await response.json()) as RedditInfoPayload;
+    for (const child of payload.data?.children ?? []) {
+      const metrics = child.data;
+      if (metrics?.id && hasMetricValue(metrics)) {
+        metricsById.set(metrics.id, metrics);
+      }
+    }
+  } catch {
+    return metricsById;
+  }
+
+  return metricsById;
+}
+
+type RedditOAuthTokenState = {
+  token: string;
+  expiresAt: number;
+};
+
+declare global {
+  var __moosqaRedditOAuthToken: RedditOAuthTokenState | undefined;
+}
+
+async function getRedditOAuthToken() {
+  const cached = globalThis.__moosqaRedditOAuthToken;
+  if (cached && cached.expiresAt > Date.now() + 60_000) {
+    return cached.token;
+  }
+
+  const clientId = process.env.REDDIT_CLIENT_ID?.trim();
+  const clientSecret = process.env.REDDIT_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(REDDIT_OAUTH_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": process.env.REDDIT_USER_AGENT || USER_AGENT,
+      },
+      body: "grant_type=client_credentials",
+      cache: "no-store",
+      next: { revalidate: 0 },
+      signal: AbortSignal.timeout(REDDIT_DETAIL_FETCH_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as {
+      access_token?: string;
+      expires_in?: number;
+    };
+    if (!payload.access_token) {
+      return null;
+    }
+
+    globalThis.__moosqaRedditOAuthToken = {
+      token: payload.access_token,
+      expiresAt: Date.now() + Math.max(60, payload.expires_in ?? 3600) * 1000,
+    };
+
+    return payload.access_token;
+  } catch {
+    return null;
+  }
 }
 
 function applyRedditPostMetrics(post: RedditPost, metrics: RedditPostMetrics) {
