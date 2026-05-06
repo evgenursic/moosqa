@@ -120,11 +120,24 @@ export async function hydrateRedditEngagementMetrics(
   headerVariants = getRedditHeaderVariants(),
 ) {
   let remainingLookups = REDDIT_DETAIL_METRIC_LIMIT;
+  const missingMetricPosts = posts
+    .filter((post) => !hasRedditEngagementMetrics(post))
+    .slice(0, REDDIT_DETAIL_METRIC_LIMIT);
+  const infoMetrics = await fetchRedditInfoMetrics(
+    missingMetricPosts.map((post) => post.id),
+    headerVariants,
+  );
   const hydrated: RedditPost[] = [];
 
   for (const post of posts) {
     if (hasRedditEngagementMetrics(post) || remainingLookups <= 0) {
       hydrated.push(post);
+      continue;
+    }
+
+    const metrics = infoMetrics.get(post.id);
+    if (metrics) {
+      hydrated.push(applyRedditPostMetrics(post, metrics));
       continue;
     }
 
@@ -167,14 +180,7 @@ async function fetchRedditPostEngagement(
         continue;
       }
 
-      return {
-        ...post,
-        score: metrics.score ?? post.score,
-        num_comments: metrics.num_comments ?? post.num_comments,
-        upvote_ratio: metrics.upvote_ratio ?? post.upvote_ratio,
-        total_awards_received: metrics.total_awards_received ?? post.total_awards_received,
-        num_crossposts: metrics.num_crossposts ?? post.num_crossposts,
-      };
+      return applyRedditPostMetrics(post, metrics);
     } catch {
       // RSS fallback should keep sync resilient even when a detail lookup fails.
     }
@@ -183,13 +189,90 @@ async function fetchRedditPostEngagement(
   return post;
 }
 
+async function fetchRedditInfoMetrics(
+  postIds: string[],
+  headerVariants: Array<Record<string, string>>,
+) {
+  const ids = [...new Set(postIds.filter(Boolean))];
+  const metricsById = new Map<string, RedditPostMetrics>();
+  if (ids.length === 0) {
+    return metricsById;
+  }
+
+  const urls = [
+    `https://api.reddit.com/api/info?id=${ids.map((id) => `t3_${id}`).join(",")}&raw_json=1`,
+    `https://www.reddit.com/api/info.json?id=${ids.map((id) => `t3_${id}`).join(",")}&raw_json=1`,
+  ];
+
+  for (const url of urls) {
+    for (const headers of headerVariants) {
+      try {
+        const response = await fetch(url, {
+          headers,
+          cache: "no-store",
+          next: { revalidate: 0 },
+          signal: AbortSignal.timeout(REDDIT_DETAIL_FETCH_TIMEOUT_MS),
+        });
+
+        if (!response.ok) {
+          continue;
+        }
+
+        const payload = (await response.json()) as RedditInfoPayload;
+        const children = payload.data?.children ?? [];
+        for (const child of children) {
+          const metrics = child.data;
+          if (metrics?.id && hasMetricValue(metrics)) {
+            metricsById.set(metrics.id, metrics);
+          }
+        }
+
+        if (metricsById.size > 0) {
+          return metricsById;
+        }
+      } catch {
+        // Fall back to the next endpoint/header variant or per-post detail lookups.
+      }
+    }
+  }
+
+  return metricsById;
+}
+
+function applyRedditPostMetrics(post: RedditPost, metrics: RedditPostMetrics) {
+  return {
+    ...post,
+    score: metrics.score ?? post.score,
+    num_comments: metrics.num_comments ?? post.num_comments,
+    upvote_ratio: metrics.upvote_ratio ?? post.upvote_ratio,
+    total_awards_received: metrics.total_awards_received ?? post.total_awards_received,
+    num_crossposts: metrics.num_crossposts ?? post.num_crossposts,
+  };
+}
+
+function hasMetricValue(metrics: RedditPostMetrics) {
+  return typeof metrics.score === "number" || typeof metrics.num_comments === "number";
+}
+
+type RedditPostMetrics = Pick<
+  RedditPost,
+  "score" | "num_comments" | "upvote_ratio" | "total_awards_received" | "num_crossposts"
+> & {
+  id?: string;
+};
+
+type RedditInfoPayload = {
+  data?: {
+    children?: Array<{
+      data?: RedditPostMetrics;
+    }>;
+  };
+};
+
 type RedditPostDetailPayload = Array<{
   data?: {
     children?: Array<{
-      data?: Pick<
-        RedditPost,
-        "score" | "num_comments" | "upvote_ratio" | "total_awards_received" | "num_crossposts"
-      >;
+      data?: RedditPostMetrics;
     }>;
   };
 }>;

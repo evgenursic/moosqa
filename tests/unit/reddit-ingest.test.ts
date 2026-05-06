@@ -154,25 +154,24 @@ describe("reddit ingest release matching", () => {
     });
 
     globalThis.fetch = async (input) => {
-      assert.equal(String(input), "https://www.reddit.com/r/indieheads/comments/rss1/fresh_fixture/.json?raw_json=1");
+      assert.equal(String(input), "https://api.reddit.com/api/info?id=t3_rss1&raw_json=1");
       return new Response(
-        JSON.stringify([
-          {
-            data: {
-              children: [
-                {
-                  data: {
-                    score: 84,
-                    num_comments: 16,
-                    upvote_ratio: 0.96,
-                    total_awards_received: 1,
-                    num_crossposts: 2,
-                  },
+        JSON.stringify({
+          data: {
+            children: [
+              {
+                data: {
+                  id: "rss1",
+                  score: 84,
+                  num_comments: 16,
+                  upvote_ratio: 0.96,
+                  total_awards_received: 1,
+                  num_crossposts: 2,
                 },
-              ],
-            },
+              },
+            ],
           },
-        ]),
+        }),
         { status: 200, headers: { "content-type": "application/json" } },
       );
     };
