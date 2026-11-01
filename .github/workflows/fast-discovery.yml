@@ -1,0 +1,57 @@
+name: Fast music discovery
+
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/fast-discovery.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: moosqa-fast-discovery
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Discover and publish source-backed releases
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET}" ]; then
+            echo '::error::Repository CRON_SECRET is missing. No request was sent.'
+            exit 1
+          fi
+          RESPONSE_FILE="$(mktemp)"
+          trap 'rm -f "$RESPONSE_FILE"' EXIT
+          curl --fail-with-body --silent --show-error \
+            --request POST --max-time 65 --connect-timeout 10 \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            --output "${RESPONSE_FILE}" \
+            https://moosqa.vercel.app/api/internal/discover
+          python3 - "${RESPONSE_FILE}" <<'PY'
+          import json
+          import sys
+          with open(sys.argv[1], encoding='utf-8') as handle:
+              result = json.load(handle)
+          if result.get('error'):
+              raise SystemExit('Discovery endpoint failed')
+          print('Inserted: {}, published: {}, linked sources: {}'.format(
+              result.get('inserted', 0), result.get('published', 0), result.get('linkedSources', 0)))
+          if result.get('skipped'):
+              print('A recent run already owns this discovery interval.')
+          for source in result.get('sources', []):
+              print('{}: {}; last success: {}'.format(source['source'], source['status'], source.get('lastSuccessAt', 'none')))
+          failures = [s for s in result.get('sources', []) if s['status'] == 'unavailable']
+          if failures:
+              raise SystemExit('A source is unavailable; available sources were still processed. See Editor tools for status.')
+          PY
+
