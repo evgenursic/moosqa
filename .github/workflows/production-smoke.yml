@@ -4,12 +4,15 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "docs/**"
+      - ".github/workflows/fast-discovery.yml"
   workflow_dispatch:
     inputs:
       base_url:
         description: "Base URL to smoke test"
         required: false
-        default: "https://moosqa-ci4e.vercel.app"
+        default: "https://moosqa.vercel.app"
 
 permissions:
   contents: read
@@ -42,7 +45,7 @@ jobs:
           if [ -n "${INPUT_BASE_URL}" ]; then
             echo "base_url=${INPUT_BASE_URL}" >> "${GITHUB_OUTPUT}"
           else
-            echo "base_url=https://moosqa-ci4e.vercel.app" >> "${GITHUB_OUTPUT}"
+            echo "base_url=https://moosqa.vercel.app" >> "${GITHUB_OUTPUT}"
           fi
 
       - name: Wait for Vercel deployment
@@ -51,7 +54,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           COMMIT_SHA: ${{ github.sha }}
-          VERCEL_CONTEXT: Vercel – moosqa-ci4e
+          VERCEL_CONTEXT: Vercel – moosqa
         run: |
           set -euo pipefail
           node <<'NODE'
@@ -84,6 +87,9 @@ jobs:
             console.log(`${vercelContext}: ${state} - ${description}`);
 
             if (state === "success") {
+              if (/Canceled by Ignored Build Step/i.test(description)) {
+                console.log("No application deployment was requested; checking the current production alias.");
+              }
               process.exit(0);
             }
             if (state !== "pending" && state !== "missing") {
@@ -140,7 +146,7 @@ jobs:
           TRIGGER: ${{ github.event_name }}
         run: |
           set +e
-          npm run smoke:prod
+          npm run smoke:prod -- --config=playwright.smoke.config.ts
           EXIT_CODE=$?
           if [ "${EXIT_CODE}" -eq 0 ]; then
             DETAILS="baseUrl=${MOOSQA_SMOKE_BASE_URL}, tests=passed, trigger=${TRIGGER}"
@@ -154,7 +160,7 @@ jobs:
         if: always()
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          STATUS_URL: https://moosqa-ci4e.vercel.app/api/internal/workflow-status
+          STATUS_URL: https://moosqa.vercel.app/api/internal/workflow-status
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           JOB_STATUS: ${{ job.status }}
           BRANCH_NAME: ${{ github.ref_name }}
@@ -178,7 +184,7 @@ jobs:
           }
           print(json.dumps(payload))
           PY
-          curl --fail --show-error --silent \
+          curl --fail --show-error --silent --connect-timeout 10 --max-time 30 \
             --request POST \
             --header "Authorization: Bearer ${CRON_SECRET}" \
             --header "Content-Type: application/json" \
