@@ -1,8 +1,8 @@
 name: Fast music discovery
 
 on:
-  schedule:
-    - cron: "7,22,37,52 * * * *"
+  # Automatic scheduling moved to Supabase Cron on 3 November 2026.
+  # Keep this authenticated, code-free workflow as a manual recovery tool.
   workflow_dispatch:
   push:
     branches: [main]
@@ -54,4 +54,3 @@ jobs:
           if failures:
               raise SystemExit('A source is unavailable; available sources were still processed. See Editor tools for status.')
           PY
-
